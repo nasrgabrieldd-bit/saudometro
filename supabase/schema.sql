@@ -52,17 +52,19 @@ as $$
   select couple_id from profiles where id = auth.uid()
 $$;
 
-create policy "profiles: read own or partner" on profiles
-  for select using (
-    id = auth.uid()
-    or couple_id = my_couple_id()
-  );
+-- leitura aberta: nome e papel não são dados sensíveis (mesmo padrão da tabela couples),
+-- e o Postgres precisa que UPDATE consiga "enxergar" a linha pra "retomar" um papel abaixo
+create policy "profiles: anyone can read" on profiles
+  for select using (true);
 
 create policy "profiles: insert own" on profiles
   for insert with check (id = auth.uid());
 
-create policy "profiles: update own" on profiles
-  for update using (id = auth.uid());
+-- permite "retomar" um papel já existente (ex: dado local apagado ao reinstalar o app) —
+-- quem já é dono do perfil pode atualizá-lo, e quem ainda não tem perfil pode assumir um
+-- papel existente, desde que o resultado final continue sendo dele mesmo (id = auth.uid()).
+create policy "profiles: update own or reclaim" on profiles
+  for update using (true) with check (id = auth.uid());
 
 -- ------------------------------------------------------------
 -- PLANOS DO MÊS (meta de encontros por mês + saldo que veio do mês anterior)

@@ -5,7 +5,18 @@ import { monthKey, prevMonthKey, nextMonthKey, toISODate } from "./util.js";
 
 export async function ensureAnonSession() {
   const { data } = await supabase.auth.getSession();
-  if (data.session) return data.session;
+  if (data.session) {
+    // getSession só lê o que tá guardado localmente, sem checar se ainda vale;
+    // getUser confirma de verdade com o servidor
+    const check = await supabase.auth.getUser();
+    if (!check.error) return data.session;
+    try {
+      const refreshed = await supabase.auth.refreshSession();
+      if (!refreshed.error && refreshed.data.session) return refreshed.data.session;
+    } catch (e) {
+      // refresh token também inválido/vencido: cai pra criar um login novo abaixo
+    }
+  }
   const { data: signed, error } = await supabase.auth.signInAnonymously();
   if (error) throw error;
   return signed.session;
@@ -37,14 +48,27 @@ export async function getRolesTaken(coupleId) {
   return new Set((data || []).map((r) => r.role));
 }
 
+// cria o perfil, ou "retoma" ele se esse papel do casal já existia (ex: dado local apagado
+// ao remover/readicionar o app na tela inicial) — evita o erro de papel duplicado.
 export async function createProfile({ id, coupleId, role, displayName }) {
-  const { data, error } = await supabase
+  const inserted = await supabase
     .from("profiles")
     .insert({ id, couple_id: coupleId, role, display_name: displayName })
     .select()
     .single();
-  if (error) throw error;
-  return data;
+  if (!inserted.error) return { ...inserted.data, isNew: true };
+  if (inserted.error.code !== "23505") throw inserted.error;
+
+  // já existe alguém com esse papel nesse casal — assume esse papel pra essa identidade nova
+  const updated = await supabase
+    .from("profiles")
+    .update({ id, display_name: displayName })
+    .eq("couple_id", coupleId)
+    .eq("role", role)
+    .select()
+    .single();
+  if (updated.error) throw updated.error;
+  return { ...updated.data, isNew: false };
 }
 
 export async function getMyProfile(userId) {

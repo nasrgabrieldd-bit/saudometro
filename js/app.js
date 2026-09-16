@@ -177,11 +177,6 @@ function startJoinFlow() {
         return;
       }
       const taken = await db.getRolesTaken(couple.id);
-      if (taken.size >= 2) {
-        $("#onboarding-error").textContent = "Esse casal já tem os dois perfis preenchidos.";
-        setBusy("#btn-check-code", false);
-        return;
-      }
       renderJoinStep2(couple, taken);
     } catch (e) {
       $("#onboarding-error").textContent = "Deu ruim: " + (e.message || e);
@@ -205,7 +200,7 @@ function renderJoinStep2(couple, taken) {
     setBusy("#confirm-join", true);
     try {
       const profile = await db.createProfile({ id: State.userId, coupleId: couple.id, role, displayName: name });
-      await db.addCoinTransaction(couple.id, role, 10, "saldo inicial");
+      if (profile.isNew) await db.addCoinTransaction(couple.id, role, 10, "saldo inicial");
       await enterApp(profile);
     } catch (e) {
       $("#onboarding-error").textContent = "Não deu pra entrar: " + (e.message || e);
@@ -217,9 +212,9 @@ function renderJoinStep2(couple, taken) {
 
 function roleButtonsHTML(takenSet) {
   return ["gabriel", "tata"].map((r) => `
-    <button class="role-btn" data-role="${r}" ${takenSet.has(r) ? "disabled" : ""}>
+    <button class="role-btn" data-role="${r}">
       <span class="role-emoji">${ROLE_EMOJI[r]}</span>
-      <span>${ROLE_LABEL[r]}${takenSet.has(r) ? " (ocupado)" : ""}</span>
+      <span>${ROLE_LABEL[r]}${takenSet.has(r) ? " (já em uso)" : ""}</span>
     </button>
   `).join("");
 }
