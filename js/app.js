@@ -965,15 +965,7 @@ async function renderProfile() {
         </div>
       `).join("")}</div>` : `<div class="empty-state"><span class="emoji">🪙</span>Nada ainda.</div>`}
     </div>
-
-    <button class="btn btn-ghost btn-block" id="btn-signout">Sair deste dispositivo</button>
   `;
-
-  $("#btn-signout").addEventListener("click", async () => {
-    if (!confirm("Isso desconecta esse celular do casal. Você vai precisar do código pra entrar de novo. Continuar?")) return;
-    await supabase.auth.signOut();
-    location.reload();
-  });
 }
 
 // ---------------- start ----------------
