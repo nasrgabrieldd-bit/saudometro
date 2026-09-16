@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "saudometro-demo",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [".claude/dev-server.js"],
+      "port": 8765
+    }
+  ]
+}

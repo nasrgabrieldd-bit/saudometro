@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Saudômetro: prévia de design</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <style>
+    body { flex-direction: column; align-items: center; }
+    .demo-banner {
+      width: 100%; max-width: 480px; background: #222; color: #fff; font-size: 12px;
+      text-align: center; padding: 6px; font-family: sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <div class="demo-banner">👀 PRÉVIA DE DESIGN: dados fictícios, nada aqui é salvo</div>
+  <div id="app-shell">
+    <div id="screen-app" style="display:flex; flex-direction:column; flex:1;">
+      <header class="topbar">
+        <div>
+          <div class="greeting-eyebrow" id="greeting-eyebrow">Bom dia</div>
+          <h1 id="greeting-name">Gabriel</h1>
+        </div>
+        <div class="topbar-actions">
+          <button class="theme-toggle" title="Trocar tema claro/escuro">🌙</button>
+          <div class="avatar" id="avatar-badge">G</div>
+        </div>
+      </header>
+
+      <main id="view-container"></main>
+
+      <nav class="bottom-nav">
+        <button class="nav-btn" data-tab="home"><span class="nav-icon">🏠</span><span class="nav-label">Hoje</span></button>
+        <button class="nav-btn" data-tab="calendar"><span class="nav-icon">📅</span><span class="nav-label">Encontros</span></button>
+        <button class="nav-btn" data-tab="mood"><span class="nav-icon">🥰</span><span class="nav-label">Humor</span></button>
+        <button class="nav-btn" data-tab="invites"><span class="nav-icon">✉️</span><span class="nav-label">Convites</span></button>
+        <button class="nav-btn" data-tab="profile"><span class="nav-icon">⚙️</span><span class="nav-label">Perfil</span></button>
+      </nav>
+    </div>
+
+    <div id="modal-root">
+      <div class="modal-overlay" id="modal-overlay"></div>
+      <div class="modal-sheet" id="modal-sheet"></div>
+    </div>
+  </div>
+
+  <script type="module" src="js/demo.js"></script>
+</body>
+</html>

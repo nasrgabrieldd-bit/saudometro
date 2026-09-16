@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <title>Saudômetro</title>
+  <meta name="description" content="O encontrômetro do casal. Combine os encontros do mês, registre o humor do dia e mande sinais de saudade." />
+  <meta name="theme-color" content="#ff6f91" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💗</text></svg>" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div id="app-shell">
+
+    <!-- tela de configuração pendente (falta preencher supabaseClient.js) -->
+    <div id="screen-setup" style="display:none;" class="stack" style="padding:32px 24px;">
+      <div style="text-align:center; padding-top: 40px;">
+        <div class="logo" style="font-size:48px;">🛠️</div>
+        <h1>Falta configurar o Supabase</h1>
+        <p class="tagline">Abra <code>js/supabaseClient.js</code> e cole a URL e a chave "anon" do seu projeto Supabase. Veja o passo a passo no README.md.</p>
+      </div>
+    </div>
+
+    <!-- onboarding: criar ou entrar num casal -->
+    <div id="screen-onboarding" style="display:none;"></div>
+
+    <!-- app principal -->
+    <div id="screen-app" style="display:none; flex:1; display:flex; flex-direction:column;">
+      <header class="topbar">
+        <div>
+          <div class="greeting-eyebrow" id="greeting-eyebrow">Oi</div>
+          <h1 id="greeting-name">Saudômetro</h1>
+        </div>
+        <div class="topbar-actions">
+          <button class="theme-toggle" title="Trocar tema claro/escuro">🌙</button>
+          <div class="avatar" id="avatar-badge">?</div>
+        </div>
+      </header>
+
+      <main id="view-container"></main>
+
+      <nav class="bottom-nav">
+        <button class="nav-btn" data-tab="home"><span class="nav-icon">🏠</span><span class="nav-label">Hoje</span></button>
+        <button class="nav-btn" data-tab="calendar"><span class="nav-icon">📅</span><span class="nav-label">Encontros</span></button>
+        <button class="nav-btn" data-tab="mood"><span class="nav-icon">🥰</span><span class="nav-label">Humor</span></button>
+        <button class="nav-btn" data-tab="invites"><span class="nav-icon">✉️</span><span class="nav-label">Convites</span></button>
+        <button class="nav-btn" data-tab="profile"><span class="nav-icon">⚙️</span><span class="nav-label">Perfil</span></button>
+      </nav>
+    </div>
+
+    <div id="modal-root">
+      <div class="modal-overlay" id="modal-overlay"></div>
+      <div class="modal-sheet" id="modal-sheet"></div>
+    </div>
+
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
