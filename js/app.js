@@ -4,7 +4,7 @@ import * as db from "./db.js";
 import { MOODS, MOOD_BY_ID, TALK_OPTIONS, TALK_BY_ID } from "./moods.js";
 import {
   toISODate, monthKey, parseISODate, addDays, addMonths, startOfMonth,
-  daysInMonth, mondayIndex, mondayOfWeek, fridayOfWeekend, humanDateLong,
+  daysInMonth, mondayIndex, mondayOfWeek, fridayOfWeekend, fridayOfWeekContaining, humanDateLong,
   humanDateShort, weekdayAbbrev, monthLabel, isSameDate, todayISO, genCoupleCode,
 } from "./util.js";
 
@@ -141,6 +141,7 @@ function startCreateFlow() {
     try {
       const couple = await db.createCouple(code);
       const profile = await db.createProfile({ id: State.userId, coupleId: couple.id, role, displayName: name });
+      await db.addCoinTransaction(couple.id, role, 10, "saldo inicial");
       await enterApp(profile);
     } catch (e) {
       $("#onboarding-error").textContent = e.code === "23505"
@@ -204,6 +205,7 @@ function renderJoinStep2(couple, taken) {
     setBusy("#confirm-join", true);
     try {
       const profile = await db.createProfile({ id: State.userId, coupleId: couple.id, role, displayName: name });
+      await db.addCoinTransaction(couple.id, role, 10, "saldo inicial");
       await enterApp(profile);
     } catch (e) {
       $("#onboarding-error").textContent = "Não deu pra entrar: " + (e.message || e);
@@ -316,14 +318,15 @@ async function renderHome() {
       ` : `<p class="center-note" style="padding:6px 0;">Nada marcado ainda. Que tal combinar um? 💕</p>`}
     </div>
 
-    <div class="card">
+    <div class="card" id="weekend-card" style="cursor:pointer;">
       <div class="switch-row">
         <div>
           <div class="card-title" style="font-size:15px;">🔋 Fim de semana de recarregar</div>
           <div class="card-sub" style="margin-bottom:0;">${humanDateShort(nextWeekendFriday)} a ${humanDateShort(addDays(nextWeekendFriday, 2))}. ${myWeekendOn ? "Você está reclusa(o) recarregando" : "Tudo normal pra você"}${partnerWeekendOn ? `. ${ROLE_LABEL[State.partner?.role]} também recarregando` : ""}.</div>
         </div>
-        <button class="switch ${myWeekendOn ? "on" : ""}" id="toggle-weekend"></button>
+        <span class="switch ${myWeekendOn ? "on" : ""}" style="pointer-events:none;"></span>
       </div>
+      <p class="hint-text" style="margin-top:8px;">Toca aqui pra escolher outro fim de semana</p>
     </div>
 
     <div class="card">
@@ -337,11 +340,51 @@ async function renderHome() {
   `;
 
   $("#btn-goto-define")?.addEventListener("click", () => setActiveTab("calendar"));
-  $("#toggle-weekend")?.addEventListener("click", async () => {
-    await db.setWeekendRecharge(State.coupleId, toISODate(nextWeekendFriday), State.role, !myWeekendOn);
-    renderHome();
-  });
+  $("#weekend-card")?.addEventListener("click", () => openWeekendModal(nextWeekendFriday));
   $("#btn-saudade")?.addEventListener("click", openSaudadeModal);
+}
+
+function openWeekendModal(defaultDate) {
+  openModal(`
+    <h3 class="modal-title">🔋 Recarregar a bateria</h3>
+    <p class="card-sub">Escolhe um dia daquele fim de semana. Enquanto tiver ativo, ${ROLE_LABEL[otherRole()]} sabe que você quer ficar tranquila, sem compromisso.</p>
+    <label class="field-label">Data</label>
+    <input type="date" id="recharge-date" value="${toISODate(defaultDate)}" />
+    <p class="hint-text" id="recharge-range" style="margin-top:8px;"></p>
+    <button class="btn btn-warm btn-block" style="margin-top:16px;" id="btn-toggle-recharge">Ativar</button>
+  `);
+
+  const dateInput = $("#recharge-date");
+  const btn = $("#btn-toggle-recharge");
+
+  async function refresh() {
+    const picked = parseISODate(dateInput.value);
+    const friday = fridayOfWeekContaining(picked);
+    $("#recharge-range").textContent = `Fim de semana de ${humanDateShort(friday)} a ${humanDateShort(addDays(friday, 2))}`;
+    const rows = await db.getWeekendRecharge(State.coupleId, monthKey(friday));
+    const active = rows.some((r) => r.week_start === toISODate(friday) && r.role === State.role && r.active);
+    btn.textContent = active ? "Desativar" : "Ativar";
+    btn.className = active ? "btn btn-danger btn-block" : "btn btn-warm btn-block";
+    btn.dataset.friday = toISODate(friday);
+    btn.dataset.active = active ? "1" : "0";
+  }
+
+  dateInput.addEventListener("change", refresh);
+  refresh();
+
+  btn.addEventListener("click", async () => {
+    const friday = btn.dataset.friday;
+    const nowActive = btn.dataset.active === "1";
+    setBusy("#btn-toggle-recharge", true);
+    try {
+      await db.setWeekendRecharge(State.coupleId, friday, State.role, !nowActive);
+      closeModal();
+      renderActiveTab();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#btn-toggle-recharge", false);
+    }
+  });
 }
 
 function progressDots(happened, target) {
@@ -409,10 +452,6 @@ function iconFor(e) {
   return "✉️";
 }
 
-function isSaudadeSignal(e) {
-  return e?.title?.startsWith("🥺 Sinal de saudade");
-}
-
 // respeita a semana de recarregar: recusar um convite que cai nela nunca custa moeda
 async function isRechargeExemptForDate(dateISO, role) {
   const friday = fridayOfWeekend(parseISODate(dateISO));
@@ -431,23 +470,22 @@ async function spendCoinIfAvailable(role, amount, reason) {
   return false;
 }
 
-// aceitar/recusar/cancelar um convite (fora dos 2 encontros oficiais do mês) e seus efeitos em moedas
+// aceitar/recusar/cancelar um convite (fora dos 2 encontros oficiais do mês) e seus efeitos em moedas.
+// mandar qualquer convite já custou 1 moeda de quem mandou (ver openSaudadeModal / renderInvites).
 async function respondToConvite(entry, decision) {
   if (decision === "accept") {
     await db.updateEncounterStatus(entry.id, "confirmado");
     await db.addCoinTransaction(State.coupleId, State.role, 1, "aceitou um convite");
   } else if (decision === "decline") {
     await db.updateEncounterStatus(entry.id, "recusado");
-    if (isSaudadeSignal(entry)) {
-      await db.addCoinTransaction(State.coupleId, entry.created_by, 1, "reembolso: sinal recusado");
-    }
+    // recusar "devolve" a moeda pra quem convidou — quem recusou fica devendo, tenta cobrar dela
+    await db.addCoinTransaction(State.coupleId, entry.created_by, 1, "convite recusado: reembolso");
     const exempt = await isRechargeExemptForDate(entry.start_date, State.role);
     if (!exempt) await spendCoinIfAvailable(State.role, 1, "recusou um convite");
   } else if (decision === "cancel") {
     await db.updateEncounterStatus(entry.id, "recusado");
-    if (isSaudadeSignal(entry)) {
-      await db.addCoinTransaction(State.coupleId, State.role, 1, "reembolso: cancelou o próprio pedido");
-    }
+    // cancelar o próprio convite antes de resposta devolve a moeda de quem mandou
+    await db.addCoinTransaction(State.coupleId, State.role, 1, "cancelou o próprio convite: reembolso");
   }
 }
 
@@ -477,7 +515,7 @@ function openSaudadeModal() {
   const minDate = todayISO();
   openModal(`
     <h3 class="modal-title">🥺 Sinal de saudade</h3>
-    <p class="card-sub">Escolhe um dia pra tentar se ver. Isso não mexe na meta do mês, é só um pedido especial pra ${ROLE_LABEL[otherRole()]} aprovar.</p>
+    <p class="card-sub">Escolhe um dia pra tentar se ver. Isso não mexe na meta do mês, é só um pedido especial pra ${ROLE_LABEL[otherRole()]} aprovar. Se ela recusar, a moeda volta pra você.</p>
     <label class="field-label">Que dia?</label>
     <input type="date" id="saudade-date" min="${minDate}" value="${minDate}" />
     <label class="field-label">Mensagem (opcional)</label>
@@ -646,7 +684,7 @@ function entryItemHTML(e) {
       : `
         <button class="btn btn-success btn-sm" data-act="accept" data-id="${e.id}">Aceitar 🪙+1</button>
         <button class="btn btn-danger btn-sm" data-act="decline" data-id="${e.id}">Recusar</button>
-        <div class="hint-text" style="flex-basis:100%; margin-top:4px;">recusar custa 1🪙 (de graça se for na sua semana de recarregar)</div>
+        <div class="hint-text" style="flex-basis:100%; margin-top:4px;">recusar devolve a moeda pra ${ROLE_LABEL[e.created_by]} e custa 1🪙 sua (de graça se for na sua semana de recarregar)</div>
       `;
   }
   return `
@@ -847,10 +885,11 @@ function escapeHTML(s) {
 
 async function renderInvites() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
-  const all = await db.listAllInvites(State.coupleId);
+  const [all, coins] = await Promise.all([db.listAllInvites(State.coupleId), db.getCoinBalances(State.coupleId)]);
   const pendingForMe = all.filter((e) => e.status === "pendente" && e.created_by !== State.role);
   const sentByMe = all.filter((e) => e.created_by === State.role);
   const history = all.filter((e) => e.status !== "pendente" && e.created_by !== State.role);
+  const myCoins = coins[State.role] || 0;
 
   view.innerHTML = `
     ${pendingForMe.length ? `
@@ -864,7 +903,11 @@ async function renderInvites() {
       <input type="text" id="invite-title" placeholder="pra onde vamos?" />
       <label class="field-label">Data</label>
       <input type="date" id="invite-date" value="${todayISO()}" />
-      <button class="btn btn-primary btn-block" style="margin-top:14px;" id="send-invite">Enviar convite</button>
+      <div class="row" style="align-items:center; margin-top:14px;">
+        <span class="pill pill-coin">🪙 você tem ${myCoins}</span>
+        <button class="btn btn-primary" id="send-invite" ${myCoins < 1 ? "disabled" : ""}>Enviar convite (🪙 -1)</button>
+      </div>
+      <p class="hint-text" style="margin-top:8px;">Se ela recusar, a moeda volta pra você.</p>
     </div>
 
     <div class="section-title">Enviados por você</div>
@@ -883,6 +926,7 @@ async function renderInvites() {
     if (!title) { alert("Escreve um título pro convite :)"); return; }
     setBusy("#send-invite", true);
     try {
+      await db.addCoinTransaction(State.coupleId, State.role, -1, "enviou um convite");
       await db.createEncounter({
         coupleId: State.coupleId, startDate: parseISODate($("#invite-date").value),
         title, kind: "convite", createdBy: State.role, status: "pendente",
@@ -947,9 +991,9 @@ async function renderProfile() {
         <span class="pill pill-coin">🦋 Tata: ${coins.tata || 0}</span>
       </div>
       <div class="stack" style="margin-top:12px; font-size:13px; color:var(--text-muted);">
-        <div>🟢 <strong style="color:var(--text);">Ganha:</strong> encontro combinado do mês acontece (+1 pra cada um) · sequência de 7 dias registrando humor (+1) · aceitar um convite (+1)</div>
-        <div>🔴 <strong style="color:var(--text);">Gasta:</strong> mandar um sinal de saudade fora da agenda (-1) · recusar um convite fora da agenda (-1, de graça se for na sua semana de recarregar)</div>
-        <div>Recusar nunca fica bloqueado por falta de moeda. É só um joguinho por cima, ninguém é obrigado a nada.</div>
+        <div>🟢 <strong style="color:var(--text);">Ganha:</strong> encontro combinado do mês acontece (+1 pra cada um) · sequência de 7 dias registrando humor (+1) · aceitar um convite (+1) · convite que você mandou foi recusado, a moeda volta (+1)</div>
+        <div>🔴 <strong style="color:var(--text);">Gasta:</strong> mandar qualquer convite, de saudade ou combinado na hora (-1) · recusar um convite de alguém (-1, de graça se for na sua semana de recarregar)</div>
+        <div>Todo mundo começa com 10 moedas. Recusar nunca fica bloqueado por falta de moeda. É só um joguinho por cima, ninguém é obrigado a nada.</div>
       </div>
     </div>
 

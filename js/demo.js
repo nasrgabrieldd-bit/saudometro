@@ -82,7 +82,7 @@ function entryItemHTML(e) {
       : `
         <button class="btn btn-success btn-sm">Aceitar 🪙+1</button>
         <button class="btn btn-danger btn-sm">Recusar</button>
-        <div class="hint-text" style="flex-basis:100%; margin-top:4px;">recusar custa 1🪙 (de graça se for na sua semana de recarregar)</div>
+        <div class="hint-text" style="flex-basis:100%; margin-top:4px;">recusar devolve a moeda pra ${ROLE_LABEL[e.created_by]} e custa 1🪙 sua (de graça se for na sua semana de recarregar)</div>
       `;
   }
   return `
@@ -329,9 +329,9 @@ function renderProfile() {
     <div class="card">
       <div class="row"><span class="pill pill-coin">🦁 Gabriel: ${SAMPLE_COINS.gabriel}</span><span class="pill pill-coin">🦋 Tata: ${SAMPLE_COINS.tata}</span></div>
       <div class="stack" style="margin-top:12px; font-size:13px; color:var(--text-muted);">
-        <div>🟢 <strong style="color:var(--text);">Ganha:</strong> encontro combinado do mês acontece (+1 pra cada um) · sequência de 7 dias registrando humor (+1) · aceitar um convite (+1)</div>
-        <div>🔴 <strong style="color:var(--text);">Gasta:</strong> mandar um sinal de saudade fora da agenda (-1) · recusar um convite fora da agenda (-1, de graça se for na sua semana de recarregar)</div>
-        <div>Recusar nunca fica bloqueado por falta de moeda. É só um joguinho por cima, ninguém é obrigado a nada.</div>
+        <div>🟢 <strong style="color:var(--text);">Ganha:</strong> encontro combinado do mês acontece (+1 pra cada um) · sequência de 7 dias registrando humor (+1) · aceitar um convite (+1) · convite que você mandou foi recusado, a moeda volta (+1)</div>
+        <div>🔴 <strong style="color:var(--text);">Gasta:</strong> mandar qualquer convite, de saudade ou combinado na hora (-1) · recusar um convite de alguém (-1, de graça se for na sua semana de recarregar)</div>
+        <div>Todo mundo começa com 10 moedas. Recusar nunca fica bloqueado por falta de moeda. É só um joguinho por cima, ninguém é obrigado a nada.</div>
       </div>
     </div>
     <div class="section-title">Histórico de moedas</div>

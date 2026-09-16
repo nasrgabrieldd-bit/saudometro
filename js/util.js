@@ -57,6 +57,11 @@ export function fridayOfWeekend(d) {
   return null;
 }
 
+// dado qualquer dia da semana, retorna a sexta-feira do fim de semana daquela mesma semana
+export function fridayOfWeekContaining(d) {
+  return addDays(mondayOfWeek(d), 4);
+}
+
 const DIAS_SEMANA = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
 const MESES = [
   "janeiro", "fevereiro", "março", "abril", "maio", "junho",
