@@ -359,6 +359,65 @@ export async function listCoinHistory(coupleId, limit = 20) {
   return data || [];
 }
 
+// ---------- recadinhos fofos ----------
+
+export async function sendSweetNote(coupleId, role, message) {
+  const { data, error } = await supabase
+    .from("sweet_notes")
+    .insert({ couple_id: coupleId, role, message })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function listRecentSweetNotes(coupleId, limit = 10) {
+  const { data, error } = await supabase
+    .from("sweet_notes")
+    .select("*")
+    .eq("couple_id", coupleId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+// ---------- sequência de uso do app ----------
+
+export async function recordAppOpen(coupleId, role, dayISO) {
+  const { error } = await supabase
+    .from("app_opens")
+    .upsert({ couple_id: coupleId, role, day: dayISO }, { onConflict: "couple_id,role,day" });
+  if (error) throw error;
+}
+
+export async function getAppOpenDays(coupleId, role, sinceISO) {
+  const { data, error } = await supabase
+    .from("app_opens")
+    .select("day")
+    .eq("couple_id", coupleId)
+    .eq("role", role)
+    .gte("day", sinceISO);
+  if (error) throw error;
+  return (data || []).map((r) => r.day);
+}
+
+export async function getStreakFreezeDays(coupleId, role, sinceISO) {
+  const { data, error } = await supabase
+    .from("streak_freezes")
+    .select("day")
+    .eq("couple_id", coupleId)
+    .eq("role", role)
+    .gte("day", sinceISO);
+  if (error) throw error;
+  return (data || []).map((r) => r.day);
+}
+
+export async function addStreakFreeze(coupleId, role, dayISO) {
+  const { error } = await supabase.from("streak_freezes").insert({ couple_id: coupleId, role, day: dayISO });
+  if (error) throw error;
+}
+
 // ---------- lojinha ----------
 
 export async function listShopRedemptions(coupleId, limit = 30) {

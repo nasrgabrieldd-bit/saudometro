@@ -86,6 +86,98 @@ async function enterApp(profile) {
   State.unsubscribe = db.subscribeCoupleChanges(State.coupleId, () => renderActiveTab());
 
   setActiveTab("home");
+  updateStreakBadge();
+}
+
+// dá moeda com 10% de chance de vir em dobro ("dia da sorte")
+async function earnCoins(role, amount, reason) {
+  const lucky = Math.random() < 0.1;
+  const finalAmount = lucky ? amount * 2 : amount;
+  await db.addCoinTransaction(State.coupleId, role, finalAmount, lucky ? `${reason} (🍀 dia da sorte, dobrado!)` : reason);
+  if (lucky) alert(`🍀 Dia da sorte! Você ganhou o dobro: +${finalAmount} moedas em vez de +${amount}.`);
+  return finalAmount;
+}
+
+// registra que o app foi aberto hoje, calcula a sequência de dias seguidos (com freezes contando)
+// e mostra o selo discreto no topo. Também oferece "congelar" se faltou só ontem.
+async function updateStreakBadge() {
+  const sinceISO = toISODate(addDays(new Date(), -60));
+  const todayIso = todayISO();
+  await db.recordAppOpen(State.coupleId, State.role, todayIso);
+  const [openDays, freezeDays] = await Promise.all([
+    db.getAppOpenDays(State.coupleId, State.role, sinceISO),
+    db.getStreakFreezeDays(State.coupleId, State.role, sinceISO),
+  ]);
+  const validDays = new Set([...openDays, ...freezeDays]);
+
+  let streak = 0;
+  let cursor = new Date();
+  while (validDays.has(toISODate(cursor))) {
+    streak++;
+    cursor = addDays(cursor, -1);
+  }
+
+  const badge = document.getElementById("streak-badge");
+  if (badge) {
+    if (streak > 1) {
+      badge.hidden = false;
+      badge.textContent = `🔥${streak}`;
+    } else {
+      badge.hidden = true;
+    }
+  }
+
+  await maybeAwardLoginMilestone(streak);
+
+  const yesterday = toISODate(addDays(new Date(), -1));
+  const dayBeforeYesterday = toISODate(addDays(new Date(), -2));
+  const missedYesterday = !validDays.has(yesterday) && validDays.has(dayBeforeYesterday);
+  if (missedYesterday) offerStreakFreeze(yesterday);
+}
+
+async function maybeAwardLoginMilestone(streak) {
+  if (streak !== 15 && streak !== 30) return;
+  const reason = `sequência de uso: ${streak} dias`;
+  const recent = await db.listCoinHistory(State.coupleId, 200);
+  const already = recent.some((r) => r.role === State.role && r.reason.startsWith(reason));
+  if (already) return;
+  const amount = streak === 15 ? 10 : 25;
+  await earnCoins(State.role, amount, reason);
+  alert(`🔥 ${streak} dias seguidos usando o app! +${amount} moedas de bônus.`);
+}
+
+function offerStreakFreeze(missedDayISO) {
+  const key = "freezeOffered:" + missedDayISO + ":" + State.role;
+  if (sessionStorage.getItem(key)) return;
+  try { sessionStorage.setItem(key, "1"); } catch (e) { /* ok */ }
+
+  openModal(`
+    <h3 class="modal-title">❄️ Quase perdeu a sequência!</h3>
+    <p class="card-sub">Parece que ontem vocês não abriram o app. Quer gastar 1 moeda pra proteger sua sequência de dias?</p>
+    <div class="row" style="margin-top:16px;">
+      <button class="btn btn-ghost" id="btn-skip-freeze">Deixa quebrar</button>
+      <button class="btn btn-primary" id="btn-do-freeze">Usar 1 moeda 🪙</button>
+    </div>
+  `);
+  $("#btn-skip-freeze").addEventListener("click", closeModal);
+  $("#btn-do-freeze").addEventListener("click", async () => {
+    setBusy("#btn-do-freeze", true);
+    try {
+      const balances = await db.getCoinBalances(State.coupleId);
+      if ((balances[State.role] || 0) < 1) {
+        alert("Você não tem moeda suficiente pra isso ainda.");
+        closeModal();
+        return;
+      }
+      await db.addCoinTransaction(State.coupleId, State.role, -1, "usou freeze de sequência");
+      await db.addStreakFreeze(State.coupleId, State.role, missedDayISO);
+      closeModal();
+      await updateStreakBadge();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      closeModal();
+    }
+  });
 }
 
 function setActiveTab(tab) {
@@ -153,7 +245,7 @@ function startCreateFlow() {
     try {
       const couple = await db.createCouple(code);
       const profile = await db.createProfile({ id: State.userId, coupleId: couple.id, role, displayName: name });
-      await db.addCoinTransaction(couple.id, role, 10, "saldo inicial");
+      await db.addCoinTransaction(couple.id, role, 25, "saldo inicial");
       await enterApp(profile);
     } catch (e) {
       $("#onboarding-error").textContent = e.code === "23505"
@@ -212,7 +304,7 @@ function renderJoinStep2(couple, taken) {
     setBusy("#confirm-join", true);
     try {
       const profile = await db.createProfile({ id: State.userId, coupleId: couple.id, role, displayName: name });
-      if (profile.isNew) await db.addCoinTransaction(couple.id, role, 10, "saldo inicial");
+      if (profile.isNew) await db.addCoinTransaction(couple.id, role, 25, "saldo inicial");
       await enterApp(profile);
     } catch (e) {
       $("#onboarding-error").textContent = "Não deu pra entrar: " + (e.message || e);
@@ -265,12 +357,16 @@ function setBusy(sel, busy) {
 async function renderHome() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const mk = monthKey(new Date());
-  const [plan, encounters, coins, stats] = await Promise.all([
+  const [plan, encounters, coins, stats, sweetNotes] = await Promise.all([
     db.ensureMonthPlan(State.coupleId, mk),
     db.listEncountersForMonth(State.coupleId, mk),
     db.getCoinBalances(State.coupleId),
     db.getCoupleStats(State.coupleId),
+    db.listRecentSweetNotes(State.coupleId, 10),
   ]);
+  const todayStr = todayISO();
+  const iSentToday = sweetNotes.some((n) => n.role === State.role && n.created_at.slice(0, 10) === todayStr);
+  const theirNoteToday = sweetNotes.find((n) => n.role !== State.role && n.created_at.slice(0, 10) === todayStr);
 
   const target = plan.base_target + plan.carry_in;
   const planejados = encounters.filter((e) => e.kind === "planejado");
@@ -353,10 +449,18 @@ async function renderHome() {
         <button class="btn btn-warm" id="btn-saudade" ${((coins[State.role] || 0) < 1) ? "disabled" : ""}>🥺 Mandar sinal</button>
       </div>
     </div>
+
+    <div class="card">
+      <div class="card-title" style="font-size:15px;">💌 Recadinho fofo</div>
+      ${theirNoteToday ? `<div class="entry-meta" style="margin-bottom:10px;">"${escapeHTML(theirNoteToday.message)}" — ${ROLE_LABEL[otherRole()]}</div>` : ""}
+      <div class="card-sub">${iSentToday ? "Você já mandou um hoje. Pode mandar outro, mas a moeda já foi." : "Manda um oi fofo. O primeiro do dia já ganha 1 moeda 🪙."}</div>
+      <button class="btn btn-secondary btn-block" id="btn-send-note">💌 Mandar recadinho</button>
+    </div>
   `;
 
   $("#btn-goto-define")?.addEventListener("click", () => setActiveTab("calendar"));
   $("#weekend-card")?.addEventListener("click", () => openWeekendModal(nextWeekendFriday));
+  $("#btn-send-note")?.addEventListener("click", () => openSweetNoteModal(iSentToday));
   $("#btn-saudade")?.addEventListener("click", openSaudadeModal);
   $("#kiss-card")?.addEventListener("click", () => openKissModal(stats?.last_kiss_at));
 
@@ -538,7 +642,7 @@ async function spendCoinIfAvailable(role, amount, reason) {
 async function respondToConvite(entry, decision) {
   if (decision === "accept") {
     await db.updateEncounterStatus(entry.id, "confirmado");
-    await db.addCoinTransaction(State.coupleId, State.role, 1, "aceitou um convite");
+    await earnCoins(State.role, 1, "aceitou um convite");
   } else if (decision === "decline") {
     await db.updateEncounterStatus(entry.id, "recusado");
     // recusar "devolve" a moeda pra quem convidou — quem recusou fica devendo, tenta cobrar dela
@@ -567,11 +671,34 @@ async function maybeAwardMoodStreak() {
 
   const reason = `sequência de humor: ${streak} dias`;
   const recent = await db.listCoinHistory(State.coupleId, 15);
-  const alreadyAwarded = recent.some((r) => r.role === State.role && r.reason === reason && r.created_at.slice(0, 10) === todayISO());
+  const alreadyAwarded = recent.some((r) => r.role === State.role && r.reason.startsWith(reason) && r.created_at.slice(0, 10) === todayISO());
   if (alreadyAwarded) return 0;
 
-  await db.addCoinTransaction(State.coupleId, State.role, 1, reason);
+  await earnCoins(State.role, 5, reason);
   return streak;
+}
+
+function openSweetNoteModal(alreadyEarnedToday) {
+  openModal(`
+    <h3 class="modal-title">💌 Recadinho fofo</h3>
+    <p class="card-sub">${alreadyEarnedToday ? "Você já ganhou a moeda de hoje, mas manda quantos quiser." : "O primeiro recadinho do dia já dá 1 moeda pra você."}</p>
+    <textarea id="sweet-note-text" rows="3" placeholder="tô pensando em você..."></textarea>
+    <button class="btn btn-primary btn-block" style="margin-top:16px;" id="btn-send-sweet-note">Mandar</button>
+  `);
+  $("#btn-send-sweet-note").addEventListener("click", async () => {
+    const message = $("#sweet-note-text").value.trim();
+    if (!message) { alert("Escreve alguma coisa fofa primeiro :)"); return; }
+    setBusy("#btn-send-sweet-note", true);
+    try {
+      await db.sendSweetNote(State.coupleId, State.role, message);
+      if (!alreadyEarnedToday) await earnCoins(State.role, 1, "mandou uma mensagem fofa");
+      closeModal();
+      await renderHome();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#btn-send-sweet-note", false);
+    }
+  });
 }
 
 function openSaudadeModal() {
@@ -781,8 +908,8 @@ function wireEntryActions() {
           await db.updateEncounterStatus(id, "aconteceu");
           const entry = State.calendarEncounters.find((e) => e.id === id);
           if (entry?.kind === "planejado") {
-            await db.addCoinTransaction(State.coupleId, "gabriel", 1, "encontro combinado aconteceu");
-            await db.addCoinTransaction(State.coupleId, "tata", 1, "encontro combinado aconteceu");
+            await earnCoins("gabriel", 1, "encontro combinado aconteceu");
+            await earnCoins("tata", 1, "encontro combinado aconteceu");
           }
         } else if (act === "missed") {
           await db.updateEncounterStatus(id, "nao_aconteceu");
@@ -935,9 +1062,11 @@ async function renderMood() {
     if (!selectedMood) { alert("Escolhe um humor primeiro :)"); return; }
     setBusy("#save-mood", true);
     try {
+      const isFirstToday = !mine;
       await db.upsertMood(State.coupleId, today, State.role, selectedMood, selectedTalk, $("#mood-note").value.trim());
+      if (isFirstToday) await earnCoins(State.role, 1, "registrou o humor do dia");
       const streak = await maybeAwardMoodStreak();
-      if (streak) alert(`🎉 ${streak} dias seguidos registrando o humor! +1 moeda pra você.`);
+      if (streak) alert(`🎉 ${streak} dias seguidos registrando o humor! +5 moedas de bônus.`);
       await renderMood();
     } catch (e) {
       alert("Não deu: " + (e.message || e));
@@ -952,7 +1081,7 @@ async function renderMood() {
     try {
       const saved = await db.saveWeeklyAnswer(State.coupleId, weekIndex, State.role, answer);
       if (saved.isNew) {
-        await db.addCoinTransaction(State.coupleId, State.role, 1, "respondeu a pergunta da semana");
+        await earnCoins(State.role, 1, "respondeu a pergunta da semana");
         alert("💭 Resposta salva! +1 moeda pra você.");
       }
       await renderMood();
@@ -1202,9 +1331,10 @@ async function renderProfile() {
         <span class="pill pill-coin">🦋 Tata: ${coins.tata || 0}</span>
       </div>
       <div class="stack" style="margin-top:12px; font-size:13px; color:var(--text-muted);">
-        <div>🟢 <strong style="color:var(--text);">Ganha:</strong> encontro combinado do mês acontece (+1 pra cada um) · sequência de 7 dias registrando humor (+1) · responder a pergunta da semana (+1) · aceitar um convite (+1) · convite que você mandou foi recusado, a moeda volta (+1)</div>
-        <div>🔴 <strong style="color:var(--text);">Gasta:</strong> mandar qualquer convite, de saudade ou combinado na hora (-1) · recusar um convite de alguém (-1, de graça se for na sua semana de recarregar)</div>
-        <div>Todo mundo começa com 10 moedas. Recusar nunca fica bloqueado por falta de moeda. É só um joguinho por cima, ninguém é obrigado a nada.</div>
+        <div>🟢 <strong style="color:var(--text);">Ganha:</strong> encontro combinado do mês acontece (+1 pra cada um) · registrar o humor do dia (+1, uma vez por dia) · sequência de 7 dias de humor (+5 de bônus) · mandar uma mensagem fofa (+1, uma vez por dia) · responder a pergunta da semana (+1) · aceitar um convite (+1) · 15 dias seguidos usando o app (+10, uma vez) · 30 dias seguidos (+25, uma vez) · convite que você mandou foi recusado, a moeda volta (+1)</div>
+        <div>🔴 <strong style="color:var(--text);">Gasta:</strong> mandar qualquer convite, de saudade ou combinado na hora (-1) · recusar um convite de alguém (-1, de graça se for na sua semana de recarregar) · usar o freeze pra proteger a sequência de dias (-1)</div>
+        <div>🍀 De vez em quando (1 em cada 10), uma recompensa vem em dobro — é o "dia da sorte".</div>
+        <div>Todo mundo começa com 25 moedas. Recusar nunca fica bloqueado por falta de moeda. É só um joguinho por cima, ninguém é obrigado a nada.</div>
       </div>
     </div>
 

@@ -239,6 +239,53 @@ create policy "couple_stats: couple access" on couple_stats
   for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
 
 -- ------------------------------------------------------------
+-- RECADINHOS FOFOS
+-- ------------------------------------------------------------
+create table if not exists sweet_notes (
+  id uuid primary key default gen_random_uuid(),
+  couple_id uuid not null references couples(id) on delete cascade,
+  role text not null check (role in ('gabriel', 'tata')),
+  message text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table sweet_notes enable row level security;
+
+create policy "sweet_notes: couple access" on sweet_notes
+  for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
+
+-- ------------------------------------------------------------
+-- SEQUÊNCIA DE USO DO APP (o "🔥 N dias" estilo Duolingo)
+-- ------------------------------------------------------------
+create table if not exists app_opens (
+  couple_id uuid not null references couples(id) on delete cascade,
+  role text not null check (role in ('gabriel', 'tata')),
+  day date not null,
+  created_at timestamptz not null default now(),
+  primary key (couple_id, role, day)
+);
+
+alter table app_opens enable row level security;
+
+create policy "app_opens: couple access" on app_opens
+  for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
+
+-- dias "congelados" com moeda pra não perder a sequência de uso
+create table if not exists streak_freezes (
+  id uuid primary key default gen_random_uuid(),
+  couple_id uuid not null references couples(id) on delete cascade,
+  role text not null check (role in ('gabriel', 'tata')),
+  day date not null,
+  created_at timestamptz not null default now(),
+  unique (couple_id, role, day)
+);
+
+alter table streak_freezes enable row level security;
+
+create policy "streak_freezes: couple access" on streak_freezes
+  for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
+
+-- ------------------------------------------------------------
 -- Habilitar Realtime nas tabelas que o app escuta ao vivo
 -- ------------------------------------------------------------
 alter publication supabase_realtime add table encounters;
@@ -248,4 +295,7 @@ alter publication supabase_realtime add table couple_stats;
 alter publication supabase_realtime add table coin_ledger;
 alter publication supabase_realtime add table profiles;
 alter publication supabase_realtime add table weekly_answers;
+alter publication supabase_realtime add table sweet_notes;
+alter publication supabase_realtime add table app_opens;
+alter publication supabase_realtime add table streak_freezes;
 alter publication supabase_realtime add table shop_redemptions;
