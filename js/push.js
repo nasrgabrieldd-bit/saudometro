@@ -14,6 +14,20 @@ export function pushSupported() {
   return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 }
 
+export function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+
+// no iPhone, notificação só funciona se o site foi aberto pelo ícone
+// adicionado à tela de início (não pelo Safari direto)
+export function isStandalone() {
+  return window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+export function needsHomeScreenFirst() {
+  return isIOS() && !isStandalone();
+}
+
 export function permissionState() {
   if (!pushSupported()) return "unsupported";
   return Notification.permission; // "default" | "granted" | "denied"

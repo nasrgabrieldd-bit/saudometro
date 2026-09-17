@@ -3,7 +3,7 @@ import { supabase, isConfigured } from "./supabaseClient.js";
 import * as db from "./db.js";
 import { MOODS, MOOD_BY_ID, TALK_OPTIONS, TALK_BY_ID } from "./moods.js";
 import { weekIndexSince, questionForWeek } from "./questions.js";
-import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush } from "./push.js";
+import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush, needsHomeScreenFirst } from "./push.js";
 import { PERKS, PERK_BY_ID } from "./perks.js";
 import {
   toISODate, monthKey, parseISODate, addDays, addMonths, startOfMonth,
@@ -1118,7 +1118,10 @@ async function renderProfile() {
 
     <div class="section-title">Notificações 🔔</div>
     <div class="card">
-      ${pushPerm === "unsupported" ? `
+      ${needsHomeScreenFirst() ? `
+        <p class="card-sub">No iPhone, notificação só funciona depois de adicionar o Saudômetro à tela de início.</p>
+        <p class="hint-text">Toca no ícone de compartilhar do Safari (⬆️) → "Adicionar à Tela de Início" → abre o app por esse ícone novo, aí sim ativa as notificações por aqui.</p>
+      ` : pushPerm === "unsupported" ? `
         <p class="hint-text">Esse navegador não suporta notificações. Tenta pelo Chrome ou pelo app já adicionado à tela inicial.</p>
       ` : alreadySubscribed ? `
         <p class="card-sub" style="margin-bottom:0;">✅ Ativadas nesse dispositivo. Você recebe aviso quando ${ROLE_LABEL[otherRole()]} atualizar o humor, mandar convite ou responder a pergunta da semana.</p>
@@ -1157,15 +1160,23 @@ async function renderProfile() {
     </div>
   `;
 
-  $("#btn-enable-push")?.addEventListener("click", async () => {
-    setBusy("#btn-enable-push", true);
-    try {
-      await subscribeToPush(State.coupleId, State.role);
-      await renderProfile();
-    } catch (e) {
-      alert("Não deu: " + (e.message || e));
-      setBusy("#btn-enable-push", false);
-    }
+  $("#btn-enable-push")?.addEventListener("click", () => {
+    openModal(`
+      <h3 class="modal-title">🔔 Ativar notificações</h3>
+      <p class="card-sub">O seu celular vai pedir uma permissão agora — é só aceitar (geralmente aparece "Permitir"). Depois disso, você recebe aviso quando ${ROLE_LABEL[otherRole()]} atualizar o humor, mandar um convite ou responder a pergunta da semana.</p>
+      <button class="btn btn-primary btn-block" style="margin-top:16px;" id="btn-confirm-push">Continuar</button>
+    `);
+    $("#btn-confirm-push").addEventListener("click", async () => {
+      setBusy("#btn-confirm-push", true);
+      try {
+        await subscribeToPush(State.coupleId, State.role);
+        closeModal();
+        await renderProfile();
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        closeModal();
+      }
+    });
   });
   $("#btn-disable-push")?.addEventListener("click", async () => {
     setBusy("#btn-disable-push", true);
