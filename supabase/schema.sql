@@ -18,13 +18,12 @@ create table if not exists couples (
 
 alter table couples enable row level security;
 
--- qualquer pessoa autenticada (inclusive anônima) pode procurar um casal pelo código,
--- e pode criar um casal novo. O código funciona como "senha" de entrada.
-create policy "couples: anyone can read" on couples
-  for select using (true);
-
+-- qualquer pessoa autenticada (inclusive anônima) pode criar um casal novo.
 create policy "couples: anyone can create" on couples
   for insert with check (true);
+
+-- a policy de leitura ("couples: members can read own") fica logo depois da
+-- função my_couple_id() mais abaixo, porque depende dela existir primeiro.
 
 -- ------------------------------------------------------------
 -- PERFIS (um por dispositivo/pessoa, ligado a auth.uid())
@@ -51,6 +50,27 @@ stable
 as $$
   select couple_id from profiles where id = auth.uid()
 $$;
+
+-- só quem já é membro pode listar o próprio casal (evita que qualquer pessoa
+-- consiga listar todos os códigos cadastrados no banco). Procurar um casal
+-- pra entrar usa a função find_couple_by_code() abaixo, que só devolve UM
+-- resultado exato — nunca uma lista.
+create policy "couples: members can read own" on couples
+  for select using (id = my_couple_id());
+
+-- busca um casal pelo código exato, sem expor os outros. security definer
+-- pra rodar sem RLS (senão cairia na mesma restrição da policy acima).
+create or replace function find_couple_by_code(p_code text)
+returns table (id uuid, code text)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select id, code from couples where code = p_code
+$$;
+
+grant execute on function find_couple_by_code(text) to anon, authenticated;
 
 -- leitura aberta: nome e papel não são dados sensíveis (mesmo padrão da tabela couples),
 -- e o Postgres precisa que UPDATE consiga "enxergar" a linha pra "retomar" um papel abaixo

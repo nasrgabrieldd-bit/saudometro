@@ -23,13 +23,9 @@ export async function ensureAnonSession() {
 }
 
 export async function findCoupleByCode(code) {
-  const { data, error } = await supabase
-    .from("couples")
-    .select("id, code")
-    .eq("code", code.trim().toUpperCase())
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("find_couple_by_code", { p_code: code.trim().toUpperCase() });
   if (error) throw error;
-  return data;
+  return data?.[0] || null;
 }
 
 export async function getCoupleMeta(coupleId) {
