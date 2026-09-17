@@ -206,7 +206,7 @@ function clearKissTimer() {
 function renderActiveTab() {
   if (!State.coupleId) return;
   clearKissTimer();
-  const map = { home: renderHome, calendar: renderCalendar, mood: renderMood, invites: renderInvites, shop: renderShop, profile: renderProfile };
+  const map = { home: renderHome, calendar: renderCalendar, mood: renderMood, invites: renderInvites, notes: renderNotes, shop: renderShop, profile: renderProfile };
   (map[State.activeTab] || renderHome)();
 }
 
@@ -748,7 +748,7 @@ function openSweetNoteModal(alreadyEarnedToday) {
       await db.sendSweetNote(State.coupleId, State.role, message);
       if (!alreadyEarnedToday) await earnCoins(State.role, 1, "mandou uma mensagem fofa");
       closeModal();
-      await renderHome();
+      await renderActiveTab();
     } catch (e) {
       alert("Não deu: " + (e.message || e));
       setBusy("#btn-send-sweet-note", false);
@@ -1271,6 +1271,46 @@ async function renderInvites() {
       }
     });
   });
+}
+
+// ================= RECADINHOS =================
+
+async function renderNotes() {
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const notes = await db.listRecentSweetNotes(State.coupleId, 500);
+  const todayStr = todayISO();
+  const iSentToday = notes.some((n) => n.role === State.role && n.created_at.slice(0, 10) === todayStr);
+
+  view.innerHTML = `
+    <div class="section-title">💌 Recadinhos fofos</div>
+    <div class="card">
+      <div class="card-sub">${iSentToday ? "Você já mandou um hoje. Pode mandar outro, mas a moeda já foi." : "O primeiro recadinho do dia já dá 1 moeda pra você."}</div>
+      <button class="btn btn-primary btn-block" style="margin-top:12px;" id="btn-send-note">💌 Mandar recadinho</button>
+    </div>
+
+    <div class="section-title">Histórico</div>
+    <div class="card">
+      ${notes.length ? `<div class="stack">${notes.map((n) => `
+        <div class="entry-item">
+          <div class="entry-icon">${ROLE_EMOJI[n.role]}</div>
+          <div class="entry-body">
+            <div class="entry-title">${ROLE_LABEL[n.role]}</div>
+            <div class="entry-meta">"${escapeHTML(n.message)}"</div>
+            <div class="entry-meta" style="opacity:.7; margin-top:2px;">${formatNoteTimestamp(n.created_at)}</div>
+          </div>
+        </div>
+      `).join("")}</div>` : `<div class="empty-state"><span class="emoji">💌</span>Nenhum recadinho ainda. Manda o primeiro!</div>`}
+    </div>
+  `;
+
+  $("#btn-send-note")?.addEventListener("click", () => openSweetNoteModal(iSentToday));
+}
+
+function formatNoteTimestamp(iso) {
+  const d = new Date(iso);
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${humanDateShort(d)} · ${hh}:${mm}`;
 }
 
 // ================= LOJINHA =================
