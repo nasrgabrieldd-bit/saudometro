@@ -400,9 +400,14 @@ async function renderHome() {
 
     <div class="card" id="kiss-card" style="cursor:pointer; text-align:center;">
       <div class="card-title" style="font-size:15px;">⏱️ Sem se beijar</div>
-      <div id="kiss-counter" style="font-family:'Baloo 2'; font-weight:700; font-size:26px; color:var(--accent-strong); margin:8px 0; letter-spacing:0.02em;">
-        ${stats?.last_kiss_at ? "calculando..." : "—"}
-      </div>
+      ${stats?.last_kiss_at ? `
+        <div class="flip-clock" id="kiss-counter">
+          <div class="flip-unit"><span class="flip-value" data-unit="d">00</span><span class="flip-label">dias</span></div>
+          <div class="flip-unit"><span class="flip-value" data-unit="h">00</span><span class="flip-label">hrs</span></div>
+          <div class="flip-unit"><span class="flip-value" data-unit="m">00</span><span class="flip-label">min</span></div>
+          <div class="flip-unit"><span class="flip-value" data-unit="s">00</span><span class="flip-label">seg</span></div>
+        </div>
+      ` : `<div class="card-sub" style="margin:10px 0;">—</div>`}
       <p class="hint-text">Toca aqui pra ${stats?.last_kiss_at ? "atualizar" : "registrar"} a hora do último beijo</p>
     </div>
 
@@ -468,6 +473,10 @@ async function renderHome() {
   if (stats?.last_kiss_at) {
     const target = new Date(stats.last_kiss_at).getTime();
     const counterEl = $("#kiss-counter");
+    const dEl = counterEl.querySelector("[data-unit='d']");
+    const hEl = counterEl.querySelector("[data-unit='h']");
+    const mEl = counterEl.querySelector("[data-unit='m']");
+    const sEl = counterEl.querySelector("[data-unit='s']");
     const tick = () => {
       const diff = Math.max(0, Date.now() - target);
       const totalSec = Math.floor(diff / 1000);
@@ -475,7 +484,10 @@ async function renderHome() {
       const hours = Math.floor((totalSec % 86400) / 3600);
       const mins = Math.floor((totalSec % 3600) / 60);
       const secs = totalSec % 60;
-      counterEl.textContent = `${days}d ${String(hours).padStart(2, "0")}h ${String(mins).padStart(2, "0")}m ${String(secs).padStart(2, "0")}s`;
+      dEl.textContent = String(days).padStart(2, "0");
+      hEl.textContent = String(hours).padStart(2, "0");
+      mEl.textContent = String(mins).padStart(2, "0");
+      sEl.textContent = String(secs).padStart(2, "0");
     };
     tick();
     kissTimerInterval = setInterval(tick, 1000);

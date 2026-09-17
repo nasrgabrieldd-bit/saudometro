@@ -263,6 +263,7 @@ button, input, textarea, select {
   padding: 13px 20px;
   font-weight: 800;
   font-size: 15px;
+  line-height: 1.2;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -270,6 +271,7 @@ button, input, textarea, select {
   gap: 8px;
   transition: transform 0.12s ease, opacity 0.12s ease;
 }
+.btn * { line-height: 1.2; }
 .btn:active { transform: scale(0.96); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
@@ -289,9 +291,11 @@ button, input, textarea, select {
   padding: 6px 12px;
   border-radius: 999px;
   font-size: 13px;
+  line-height: 1.2;
   font-weight: 800;
   background: var(--surface-alt);
   color: var(--accent-strong);
+  white-space: nowrap;
 }
 .pill-coin { background: var(--coin-soft); color: #8a6100; }
 .pill-success { background: var(--success-soft); color: var(--success); }
@@ -490,6 +494,53 @@ button, input, textarea, select {
 .history-strip { display: flex; gap: 8px; justify-content: space-between; margin-top: 8px; }
 .history-day { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 10px; color: var(--text-faint); }
 .history-day .dot { font-size: 18px; }
+
+/* ---------- relógio flip (cronômetro do último beijo) ---------- */
+
+.flip-clock {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+.flip-unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.flip-value {
+  position: relative;
+  display: block;
+  min-width: 44px;
+  padding: 10px 6px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: white;
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  line-height: 1;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  box-shadow: var(--shadow-tap);
+}
+.flip-value::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 50%;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.22);
+}
+.flip-label {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
 
 textarea, input[type="text"], input[type="date"], input[type="time"] {
   width: 100%;
