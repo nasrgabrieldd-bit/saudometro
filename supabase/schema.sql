@@ -187,6 +187,44 @@ create policy "weekly_answers: couple access" on weekly_answers
   for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
 
 -- ------------------------------------------------------------
+-- INSCRIÇÕES DE NOTIFICAÇÃO PUSH (uma por dispositivo)
+-- ------------------------------------------------------------
+create table if not exists push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  couple_id uuid not null references couples(id) on delete cascade,
+  role text not null check (role in ('gabriel', 'tata')),
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table push_subscriptions enable row level security;
+
+create policy "push_subscriptions: couple access" on push_subscriptions
+  for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
+
+-- ------------------------------------------------------------
+-- LOJINHA (trocar moedas por recompensas)
+-- ------------------------------------------------------------
+create table if not exists shop_redemptions (
+  id uuid primary key default gen_random_uuid(),
+  couple_id uuid not null references couples(id) on delete cascade,
+  role text not null check (role in ('gabriel', 'tata')), -- quem resgatou
+  perk_id text not null,
+  title text not null,
+  cost int not null,
+  status text not null default 'pendente' check (status in ('pendente', 'cumprido')),
+  created_at timestamptz not null default now(),
+  fulfilled_at timestamptz
+);
+
+alter table shop_redemptions enable row level security;
+
+create policy "shop_redemptions: couple access" on shop_redemptions
+  for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
+
+-- ------------------------------------------------------------
 -- Habilitar Realtime nas tabelas que o app escuta ao vivo
 -- ------------------------------------------------------------
 alter publication supabase_realtime add table encounters;
@@ -195,3 +233,4 @@ alter publication supabase_realtime add table weekend_recharge;
 alter publication supabase_realtime add table coin_ledger;
 alter publication supabase_realtime add table profiles;
 alter publication supabase_realtime add table weekly_answers;
+alter publication supabase_realtime add table shop_redemptions;

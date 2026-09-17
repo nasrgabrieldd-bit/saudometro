@@ -341,6 +341,38 @@ export async function listCoinHistory(coupleId, limit = 20) {
   return data || [];
 }
 
+// ---------- lojinha ----------
+
+export async function listShopRedemptions(coupleId, limit = 30) {
+  const { data, error } = await supabase
+    .from("shop_redemptions")
+    .select("*")
+    .eq("couple_id", coupleId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function redeemPerk(coupleId, role, perk) {
+  await addCoinTransaction(coupleId, role, -perk.cost, `resgatou: ${perk.title}`);
+  const { data, error } = await supabase
+    .from("shop_redemptions")
+    .insert({ couple_id: coupleId, role, perk_id: perk.id, title: perk.title, cost: perk.cost, status: "pendente" })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function markRedemptionFulfilled(id) {
+  const { error } = await supabase
+    .from("shop_redemptions")
+    .update({ status: "cumprido", fulfilled_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
 // ---------- realtime ----------
 
 export function subscribeCoupleChanges(coupleId, onChange) {

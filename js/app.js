@@ -3,6 +3,8 @@ import { supabase, isConfigured } from "./supabaseClient.js";
 import * as db from "./db.js";
 import { MOODS, MOOD_BY_ID, TALK_OPTIONS, TALK_BY_ID } from "./moods.js";
 import { weekIndexSince, questionForWeek } from "./questions.js";
+import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush } from "./push.js";
+import { PERKS, PERK_BY_ID } from "./perks.js";
 import {
   toISODate, monthKey, parseISODate, addDays, addMonths, startOfMonth,
   daysInMonth, mondayIndex, mondayOfWeek, fridayOfWeekend, fridayOfWeekContaining, humanDateLong,
@@ -94,7 +96,7 @@ function setActiveTab(tab) {
 
 function renderActiveTab() {
   if (!State.coupleId) return;
-  const map = { home: renderHome, calendar: renderCalendar, mood: renderMood, invites: renderInvites, profile: renderProfile };
+  const map = { home: renderHome, calendar: renderCalendar, mood: renderMood, invites: renderInvites, shop: renderShop, profile: renderProfile };
   (map[State.activeTab] || renderHome)();
 }
 
@@ -995,6 +997,96 @@ async function renderInvites() {
   });
 }
 
+// ================= LOJINHA =================
+
+async function renderShop() {
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const [coins, redemptions] = await Promise.all([
+    db.getCoinBalances(State.coupleId),
+    db.listShopRedemptions(State.coupleId),
+  ]);
+  const myCoins = coins[State.role] || 0;
+  const pending = redemptions.filter((r) => r.status === "pendente");
+  const fulfilled = redemptions.filter((r) => r.status === "cumprido");
+
+  function redemptionItemHTML(r) {
+    const perk = PERK_BY_ID[r.perk_id];
+    return `
+      <div class="entry-item">
+        <div class="entry-icon">${perk?.emoji || "🎁"}</div>
+        <div class="entry-body">
+          <div class="entry-title">${r.title}</div>
+          <div class="entry-meta">resgatado por ${ROLE_LABEL[r.role]} · ${r.cost}🪙</div>
+          ${r.status === "pendente" ? `<div class="entry-actions"><button class="btn btn-success btn-sm" data-act="fulfill" data-id="${r.id}">Marcar como cumprido ✅</button></div>` : `<div class="entry-meta">cumprido ✅</div>`}
+        </div>
+      </div>
+    `;
+  }
+
+  view.innerHTML = `
+    <div class="card">
+      <div class="card-title" style="font-size:15px;">Sua carteira</div>
+      <div class="row" style="margin-top:8px;">
+        <span class="pill pill-coin">🪙 você tem ${myCoins}</span>
+        <span class="pill pill-muted">${ROLE_LABEL[otherRole()]}: ${coins[otherRole()] || 0}🪙</span>
+      </div>
+    </div>
+
+    <div class="section-title">Trocar moedas por</div>
+    <div class="stack">
+      ${PERKS.map((p) => `
+        <div class="card">
+          <div class="row" style="align-items:flex-start;">
+            <div style="flex:0 0 auto; font-size:30px;">${p.emoji}</div>
+            <div style="flex:1;">
+              <div class="card-title" style="font-size:15px;">${p.title}</div>
+              <div class="card-sub">${p.desc}</div>
+            </div>
+          </div>
+          <button class="btn ${myCoins >= p.cost ? "btn-warm" : "btn-secondary"} btn-block" data-act="redeem" data-perk="${p.id}" ${myCoins < p.cost ? "disabled" : ""}>Resgatar (🪙 ${p.cost})</button>
+        </div>
+      `).join("")}
+    </div>
+
+    ${pending.length ? `
+      <div class="section-title">Pendentes</div>
+      <div class="card"><div class="stack">${pending.map(redemptionItemHTML).join("")}</div></div>
+    ` : ""}
+
+    ${fulfilled.length ? `
+      <div class="section-title">Histórico</div>
+      <div class="card"><div class="stack">${fulfilled.map(redemptionItemHTML).join("")}</div></div>
+    ` : ""}
+  `;
+
+  view.querySelectorAll("[data-act='redeem']").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const perk = PERK_BY_ID[btn.dataset.perk];
+      if (!confirm(`Resgatar "${perk.title}" por ${perk.cost} moedas?`)) return;
+      btn.disabled = true;
+      try {
+        await db.redeemPerk(State.coupleId, State.role, perk);
+        await renderShop();
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        btn.disabled = false;
+      }
+    });
+  });
+  view.querySelectorAll("[data-act='fulfill']").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      try {
+        await db.markRedemptionFulfilled(btn.dataset.id);
+        await renderShop();
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
 // ================= PERFIL =================
 
 async function renderProfile() {
@@ -1004,6 +1096,8 @@ async function renderProfile() {
     db.listCoinHistory(State.coupleId, 12),
     supabase.from("couples").select("code").eq("id", State.coupleId).single(),
   ]);
+  const pushPerm = permissionState();
+  const alreadySubscribed = await isSubscribed();
 
   view.innerHTML = `
     <div class="card">
@@ -1020,6 +1114,20 @@ async function renderProfile() {
       <div class="card-title" style="font-size:15px;">Código do casal</div>
       <div class="card-sub">Use em outro celular pra entrar como ${ROLE_LABEL[otherRole()]} (ou reinstalar).</div>
       <div class="onboarding-code" style="font-size:24px; padding:12px;">${couple.data?.code || "----"}</div>
+    </div>
+
+    <div class="section-title">Notificações 🔔</div>
+    <div class="card">
+      ${pushPerm === "unsupported" ? `
+        <p class="hint-text">Esse navegador não suporta notificações. Tenta pelo Chrome ou pelo app já adicionado à tela inicial.</p>
+      ` : alreadySubscribed ? `
+        <p class="card-sub" style="margin-bottom:0;">✅ Ativadas nesse dispositivo. Você recebe aviso quando ${ROLE_LABEL[otherRole()]} atualizar o humor, mandar convite ou responder a pergunta da semana.</p>
+        <button class="btn btn-ghost btn-block" style="margin-top:12px;" id="btn-disable-push">Desativar nesse dispositivo</button>
+      ` : `
+        <p class="card-sub">Receba um aviso no celular quando ${ROLE_LABEL[otherRole()]} atualizar o humor, mandar um convite ou responder a pergunta da semana.</p>
+        <button class="btn btn-primary btn-block" id="btn-enable-push">🔔 Ativar notificações</button>
+        ${pushPerm === "denied" ? `<p class="error-text" style="margin-top:8px;">Você bloqueou notificações antes. Precisa liberar de novo nas configurações do navegador/celular.</p>` : ""}
+      `}
     </div>
 
     <div class="section-title">Moedas 🪙</div>
@@ -1048,6 +1156,27 @@ async function renderProfile() {
       `).join("")}</div>` : `<div class="empty-state"><span class="emoji">🪙</span>Nada ainda.</div>`}
     </div>
   `;
+
+  $("#btn-enable-push")?.addEventListener("click", async () => {
+    setBusy("#btn-enable-push", true);
+    try {
+      await subscribeToPush(State.coupleId, State.role);
+      await renderProfile();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#btn-enable-push", false);
+    }
+  });
+  $("#btn-disable-push")?.addEventListener("click", async () => {
+    setBusy("#btn-disable-push", true);
+    try {
+      await unsubscribeFromPush();
+      await renderProfile();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#btn-disable-push", false);
+    }
+  });
 }
 
 // ---------------- start ----------------
