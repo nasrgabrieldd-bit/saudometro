@@ -5,6 +5,7 @@ import { MOODS, MOOD_BY_ID, TALK_OPTIONS, TALK_BY_ID } from "./moods.js";
 import { weekIndexSince, questionForWeek } from "./questions.js";
 import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush, needsHomeScreenFirst } from "./push.js";
 import { PERKS, PERK_BY_ID } from "./perks.js";
+import { pickSaudadeNudge } from "./nudges.js";
 import {
   toISODate, monthKey, parseISODate, addDays, addMonths, startOfMonth,
   daysInMonth, mondayIndex, mondayOfWeek, fridayOfWeekend, fridayOfWeekContaining, humanDateLong,
@@ -13,6 +14,7 @@ import {
 
 const ROLE_LABEL = { gabriel: "Gabriel", tata: "Tata" };
 const ROLE_EMOJI = { gabriel: "🦁", tata: "🦋" };
+const NEEDS_CARE_MOODS = new Set(["saudade", "cansada", "estressada", "mal"]);
 
 const State = {
   userId: null,
@@ -98,24 +100,34 @@ async function earnCoins(role, amount, reason) {
   return finalAmount;
 }
 
-// registra que o app foi aberto hoje, calcula a sequência de dias seguidos (com freezes contando)
-// e mostra o selo discreto no topo. Também oferece "congelar" se faltou só ontem.
-async function updateStreakBadge() {
+// conta quantos dias seguidos (terminando hoje) um conjunto de datas ISO cobre
+function countConsecutiveDays(daySet) {
+  let streak = 0;
+  let cursor = new Date();
+  while (daySet.has(toISODate(cursor))) {
+    streak++;
+    cursor = addDays(cursor, -1);
+  }
+  return streak;
+}
+
+// calcula a sequência de uso do app (dias abertos + freezes), sem registrar nem mexer na tela
+async function computeLoginStreak() {
   const sinceISO = toISODate(addDays(new Date(), -60));
-  const todayIso = todayISO();
-  await db.recordAppOpen(State.coupleId, State.role, todayIso);
   const [openDays, freezeDays] = await Promise.all([
     db.getAppOpenDays(State.coupleId, State.role, sinceISO),
     db.getStreakFreezeDays(State.coupleId, State.role, sinceISO),
   ]);
   const validDays = new Set([...openDays, ...freezeDays]);
+  return { streak: countConsecutiveDays(validDays), validDays };
+}
 
-  let streak = 0;
-  let cursor = new Date();
-  while (validDays.has(toISODate(cursor))) {
-    streak++;
-    cursor = addDays(cursor, -1);
-  }
+// registra que o app foi aberto hoje, calcula a sequência de dias seguidos (com freezes contando)
+// e mostra o selo discreto no topo. Também oferece "congelar" se faltou só ontem.
+async function updateStreakBadge() {
+  const todayIso = todayISO();
+  await db.recordAppOpen(State.coupleId, State.role, todayIso);
+  const { streak, validDays } = await computeLoginStreak();
 
   const badge = document.getElementById("streak-badge");
   if (badge) {
@@ -156,7 +168,7 @@ function offerStreakFreeze(missedDayISO) {
     <p class="card-sub">Parece que ontem vocês não abriram o app. Quer gastar 1 moeda pra proteger sua sequência de dias?</p>
     <div class="row" style="margin-top:16px;">
       <button class="btn btn-ghost" id="btn-skip-freeze">Deixa quebrar</button>
-      <button class="btn btn-primary" id="btn-do-freeze">Usar 1 moeda 🪙</button>
+      <button class="btn btn-primary" id="btn-do-freeze">Usar 1 moeda 💰</button>
     </div>
   `);
   $("#btn-skip-freeze").addEventListener("click", closeModal);
@@ -357,12 +369,13 @@ function setBusy(sel, busy) {
 async function renderHome() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const mk = monthKey(new Date());
-  const [plan, encounters, coins, stats, sweetNotes] = await Promise.all([
+  const [plan, encounters, coins, stats, sweetNotes, recentMoods] = await Promise.all([
     db.ensureMonthPlan(State.coupleId, mk),
     db.listEncountersForMonth(State.coupleId, mk),
     db.getCoinBalances(State.coupleId),
     db.getCoupleStats(State.coupleId),
     db.listRecentSweetNotes(State.coupleId, 10),
+    db.getMoodHistory(State.coupleId, toISODate(addDays(new Date(), -2))),
   ]);
   const todayStr = todayISO();
   const iSentToday = sweetNotes.some((n) => n.role === State.role && n.created_at.slice(0, 10) === todayStr);
@@ -387,14 +400,23 @@ async function renderHome() {
   const myWeekendOn = weekendRows.some((r) => r.week_start === toISODate(nextWeekendFriday) && r.role === State.role && r.active);
   const partnerWeekendOn = weekendRows.some((r) => r.week_start === toISODate(nextWeekendFriday) && r.role !== State.role && r.active);
 
+  const partnerRecentMood = recentMoods.filter((m) => m.role !== State.role).sort((a, b) => a.day < b.day ? 1 : -1)[0];
+  const partnerNeedsCare = NEEDS_CARE_MOODS.has(partnerRecentMood?.mood);
+  const daysSinceKiss = stats?.last_kiss_at ? Math.floor((Date.now() - new Date(stats.last_kiss_at).getTime()) / 86400000) : null;
+  const nudgeText = pickSaudadeNudge({
+    role: State.role,
+    todayISO: todayStr,
+    partnerName: ROLE_LABEL[otherRole()],
+    partnerNeedsCare,
+    daysSinceKiss,
+    weekHasSomething,
+  });
+
   view.innerHTML = `
-    ${State.role === "tata" && !weekHasSomething ? `
+    ${nudgeText ? `
       <div class="banner banner-warm">
         <div class="banner-icon">🥹</div>
-        <div class="banner-text">
-          <strong>Semana sem encontro marcado...</strong>
-          Fica esperta que o Gabriel já tá com saudade! Manda um oizinho fofo pra ele hoje 🫂
-        </div>
+        <div class="banner-text">${nudgeText}</div>
       </div>
     ` : ""}
 
@@ -448,9 +470,9 @@ async function renderHome() {
 
     <div class="card">
       <div class="card-title" style="font-size:15px;">Mandar sinal de saudade</div>
-      <div class="card-sub">Gasta 1 moeda 🪙 e manda um pedido de visita pra ${ROLE_LABEL[otherRole()]} aprovar.</div>
+      <div class="card-sub">Gasta 1 moeda 💰 e manda um pedido de visita pra ${ROLE_LABEL[otherRole()]} aprovar.</div>
       <div class="row" style="align-items:center;">
-        <span class="pill pill-coin">🪙 você tem ${coins[State.role] || 0}</span>
+        <span class="pill pill-coin">💰 você tem ${coins[State.role] || 0}</span>
         <button class="btn btn-warm" id="btn-saudade" ${((coins[State.role] || 0) < 1) ? "disabled" : ""}>🥺 Mandar sinal</button>
       </div>
     </div>
@@ -458,7 +480,7 @@ async function renderHome() {
     <div class="card">
       <div class="card-title" style="font-size:15px;">💌 Recadinho fofo</div>
       ${theirNoteToday ? `<div class="entry-meta" style="margin-bottom:10px;">"${escapeHTML(theirNoteToday.message)}" — ${ROLE_LABEL[otherRole()]}</div>` : ""}
-      <div class="card-sub">${iSentToday ? "Você já mandou um hoje. Pode mandar outro, mas a moeda já foi." : "Manda um oi fofo. O primeiro do dia já ganha 1 moeda 🪙."}</div>
+      <div class="card-sub">${iSentToday ? "Você já mandou um hoje. Pode mandar outro, mas a moeda já foi." : "Manda um oi fofo. O primeiro do dia já ganha 1 moeda 💰."}</div>
       <button class="btn btn-secondary btn-block" id="btn-send-note">💌 Mandar recadinho</button>
     </div>
   `;
@@ -492,6 +514,28 @@ async function renderHome() {
     tick();
     kissTimerInterval = setInterval(tick, 1000);
   }
+
+  maybeShowKissMilestone(daysSinceKiss, stats?.last_kiss_at);
+}
+
+// mostra uma animação de susto fofo quando o contador de beijo bate um múltiplo de 15 dias
+// (uma vez só por marco, guardado no localStorage pra não repetir toda vez que abrir o app)
+function maybeShowKissMilestone(daysSinceKiss, lastKissAt) {
+  if (!lastKissAt || !daysSinceKiss || daysSinceKiss < 15 || daysSinceKiss % 15 !== 0) return;
+  const key = `kissMilestoneShown:${State.role}:${lastKissAt}:${daysSinceKiss}`;
+  try {
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(key, "1");
+  } catch (e) { /* ok, só não vai lembrar entre sessões */ }
+
+  openModal(`
+    <div class="milestone-icon">😱</div>
+    <h3 class="modal-title" style="text-align:center;">Meu Deus...</h3>
+    <div class="milestone-days">${daysSinceKiss} dias</div>
+    <p class="card-sub" style="text-align:center;">...já fazem ${daysSinceKiss} dias que vocês não se beijam! Que tal já ir combinando um encontro? 🥺💗</p>
+    <button class="btn btn-primary btn-block" style="margin-top:16px;" id="btn-milestone-ok">Bora combinar</button>
+  `);
+  $("#btn-milestone-ok")?.addEventListener("click", () => { closeModal(); setActiveTab("calendar"); });
 }
 
 function toLocalDatetimeInputValue(d) {
@@ -619,14 +663,13 @@ function defaultTitle(e) {
 }
 
 function iconFor(e) {
-  if (e.kind === "planejado") {
-    if (e.status === "aconteceu") return "✅";
-    if (e.status === "nao_aconteceu") return "⚪";
-    return "💗";
-  }
+  // "aconteceu de verdade" tem prioridade sobre qualquer outro estado, de qualquer tipo
+  if (e.status === "aconteceu") return "✅";
+  if (e.status === "nao_aconteceu") return "⚪";
+  if (e.kind === "planejado") return "💗";
   if (e.kind === "saudade") return "🫂";
   if (e.status === "pendente") return "✉️";
-  if (e.status === "confirmado") return "✅";
+  if (e.status === "confirmado") return "📅"; // aceito/agendado, mas ainda não aconteceu de verdade
   if (e.status === "recusado") return "✖️";
   return "✉️";
 }
@@ -668,17 +711,17 @@ async function respondToConvite(entry, decision) {
   }
 }
 
+// conta a sequência de dias seguidos registrando humor (terminando hoje) a partir do histórico já carregado
+function countMoodStreakFromHistory(history, role) {
+  const mine = new Set(history.filter((h) => h.role === role).map((h) => h.day));
+  return countConsecutiveDays(mine);
+}
+
 // verifica sequência de dias seguidos registrando humor; premia a cada múltiplo de 7
 async function maybeAwardMoodStreak() {
   const since = toISODate(addDays(new Date(), -60));
   const history = await db.getMoodHistory(State.coupleId, since);
-  const mine = new Set(history.filter((h) => h.role === State.role).map((h) => h.day));
-  let streak = 0;
-  let cursor = new Date();
-  while (mine.has(toISODate(cursor))) {
-    streak++;
-    cursor = addDays(cursor, -1);
-  }
+  const streak = countMoodStreakFromHistory(history, State.role);
   if (streak === 0 || streak % 7 !== 0) return 0;
 
   const reason = `sequência de humor: ${streak} dias`;
@@ -722,7 +765,7 @@ function openSaudadeModal() {
     <input type="date" id="saudade-date" min="${minDate}" value="${minDate}" />
     <label class="field-label">Mensagem (opcional)</label>
     <textarea id="saudade-msg" rows="2" placeholder="tô com saudade, será que dá pra gente se ver?"></textarea>
-    <button class="btn btn-warm btn-block" style="margin-top:16px;" id="send-saudade">Enviar sinal (🪙 -1)</button>
+    <button class="btn btn-warm btn-block" style="margin-top:16px;" id="send-saudade">Enviar sinal (💰 -1)</button>
   `);
   $("#send-saudade").addEventListener("click", async () => {
     setBusy("#send-saudade", true);
@@ -752,10 +795,12 @@ function openSaudadeModal() {
 async function renderCalendar() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const mk = monthKey(State.calendarMonth);
-  const [plan, encounters, weekend] = await Promise.all([
+  const moodSince = toISODate(addDays(new Date(), -60));
+  const [plan, encounters, weekend, moodHistory] = await Promise.all([
     db.ensureMonthPlan(State.coupleId, mk),
     db.listEncountersForMonth(State.coupleId, mk),
     db.getWeekendRecharge(State.coupleId, mk),
+    db.getMoodHistory(State.coupleId, moodSince),
   ]);
   State.calendarPlan = plan;
   State.calendarEncounters = encounters;
@@ -765,11 +810,27 @@ async function renderCalendar() {
   const planejadosCount = encounters.filter((e) => e.kind === "planejado").length;
   const happened = encounters.filter((e) => e.kind === "planejado" && e.status === "aconteceu").length;
 
+  const myMoodStreak = countMoodStreakFromHistory(moodHistory, State.role);
+  const myMoodDays = moodHistory.filter((h) => h.role === State.role).map((h) => h.day).sort();
+  const lastMoodDay = myMoodDays[myMoodDays.length - 1];
+  const daysSinceMood = lastMoodDay ? Math.round((parseISODate(todayISO()) - parseISODate(lastMoodDay)) / 86400000) : null;
+  const moodStreakText = myMoodStreak > 1
+    ? `🔥 ${myMoodStreak} dias seguidos atualizando seu humor diário`
+    : lastMoodDay === todayISO()
+    ? "💛 Você já atualizou seu humor diário hoje"
+    : daysSinceMood != null
+    ? `💛 Você atualizou seu humor diário pela última vez há ${daysSinceMood} dia${daysSinceMood === 1 ? "" : "s"}`
+    : "💛 Ainda não tem humor diário registrado por aqui";
+
   view.innerHTML = `
     <div class="month-nav">
       <button id="prev-month">‹</button>
       <h2>${monthLabel(mk)}</h2>
       <button id="next-month">›</button>
+    </div>
+
+    <div class="card" style="text-align:center; background:var(--accent-soft);">
+      <div style="font-size:15px; font-weight:800; color:var(--accent-strong);">${moodStreakText}</div>
     </div>
 
     <div class="card">
@@ -786,7 +847,7 @@ async function renderCalendar() {
       <div class="weekday-row"><span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span></div>
       <div class="day-grid" id="day-grid"></div>
       <div class="legend">
-        <span>💗 combinado</span><span>✅ aconteceu</span><span>🫂 saudade</span><span>✉️ convite</span><span>🔋 recarregando</span>
+        <span>💗 combinado</span><span>✅ aconteceu</span><span>📅 aceito</span><span>🫂 saudade</span><span>✉️ convite</span><span>🔋 recarregando</span>
       </div>
     </div>
 
@@ -880,13 +941,18 @@ function entryItemHTML(e) {
     `;
   } else if (e.kind === "saudade" && e.status !== "aconteceu" && e.status !== "nao_aconteceu") {
     actions = `<button class="btn btn-success btn-sm" data-act="happened" data-id="${e.id}">Aconteceu</button>`;
+  } else if (e.kind === "convite" && e.status === "confirmado") {
+    actions = `
+      <button class="btn btn-success btn-sm" data-act="happened" data-id="${e.id}">Aconteceu ✅</button>
+      <button class="btn btn-ghost btn-sm" data-act="missed" data-id="${e.id}">Não rolou</button>
+    `;
   } else if (e.kind === "convite" && e.status === "pendente") {
     actions = mine
       ? `<span class="pill pill-muted">Esperando resposta de ${ROLE_LABEL[otherRole()]}</span> <button class="btn btn-ghost btn-sm" data-act="cancel" data-id="${e.id}">Cancelar</button>`
       : `
-        <button class="btn btn-success btn-sm" data-act="accept" data-id="${e.id}">Aceitar 🪙+1</button>
+        <button class="btn btn-success btn-sm" data-act="accept" data-id="${e.id}">Aceitar 💰+1</button>
         <button class="btn btn-danger btn-sm" data-act="decline" data-id="${e.id}">Recusar</button>
-        <div class="hint-text" style="flex-basis:100%; margin-top:4px;">recusar devolve a moeda pra ${ROLE_LABEL[e.created_by]} e custa 1🪙 sua (de graça se for na sua semana de recarregar)</div>
+        <div class="hint-text" style="flex-basis:100%; margin-top:4px;">recusar devolve a moeda pra ${ROLE_LABEL[e.created_by]} e custa 1💰 sua (de graça se for na sua semana de recarregar)</div>
       `;
   }
   return `
@@ -982,8 +1048,9 @@ async function renderMood() {
   const mine = todays.find((m) => m.role === State.role);
   const theirs = todays.find((m) => m.role !== State.role);
 
-  const since = toISODate(addDays(new Date(), -6));
+  const since = toISODate(addDays(new Date(), -60));
   const history = await db.getMoodHistory(State.coupleId, since);
+  const myMoodStreak = countMoodStreakFromHistory(history, State.role);
 
   const weekIndex = weekIndexSince(State.coupleCreatedAt);
   const question = questionForWeek(weekIndex);
@@ -994,6 +1061,7 @@ async function renderMood() {
   view.innerHTML = `
     <div class="card">
       <div class="card-title">Como você tá hoje?</div>
+      ${myMoodStreak > 1 ? `<p class="hint-text" style="margin:2px 0 12px;">🔥 ${myMoodStreak} dias seguidos registrando seu humor</p>` : ""}
       <div class="mood-grid" id="mood-grid">
         ${MOODS.map((m) => `
           <button class="mood-btn ${mine?.mood === m.id ? "selected" : ""}" data-mood="${m.id}">
@@ -1040,7 +1108,7 @@ async function renderMood() {
     <div class="card">
       <div class="card-sub" style="font-size:15px; color:var(--text); font-weight:700;">${question}</div>
       <textarea id="weekly-answer" rows="3" style="margin-top:10px;" placeholder="escreve sua resposta...">${myAnswer?.answer || ""}</textarea>
-      <button class="btn btn-primary btn-block" style="margin-top:12px;" id="save-weekly">${myAnswer ? "Atualizar resposta" : "Responder (🪙+1)"}</button>
+      <button class="btn btn-primary btn-block" style="margin-top:12px;" id="save-weekly">${myAnswer ? "Atualizar resposta" : "Responder (💰+1)"}</button>
       ${theirAnswer ? `
         <div class="entry-item" style="margin-top:14px;">
           <div class="entry-icon">💬</div>
@@ -1051,6 +1119,7 @@ async function renderMood() {
         </div>
       ` : `<p class="hint-text" style="margin-top:12px;">${ROLE_LABEL[otherRole()]} ainda não respondeu essa semana.</p>`}
     </div>
+    <p class="hint-text" style="text-align:center; margin-top:-8px;">🔮 Semana que vem: "${questionForWeek(weekIndex + 1)}"</p>
   `;
 
   let selectedMood = mine?.mood || null;
@@ -1147,8 +1216,8 @@ async function renderInvites() {
       <label class="field-label">Data</label>
       <input type="date" id="invite-date" value="${todayISO()}" />
       <div class="row" style="align-items:center; margin-top:14px;">
-        <span class="pill pill-coin">🪙 você tem ${myCoins}</span>
-        <button class="btn btn-primary" id="send-invite" ${myCoins < 1 ? "disabled" : ""}>Enviar convite (🪙 -1)</button>
+        <span class="pill pill-coin">💰 você tem ${myCoins}</span>
+        <button class="btn btn-primary" id="send-invite" ${myCoins < 1 ? "disabled" : ""}>Enviar convite (💰 -1)</button>
       </div>
       <p class="hint-text" style="margin-top:8px;">Se ela recusar, a moeda volta pra você.</p>
     </div>
@@ -1190,6 +1259,10 @@ async function renderInvites() {
         if (act === "accept" || act === "decline" || act === "cancel") {
           const entry = all.find((e) => e.id === id);
           await respondToConvite(entry, act);
+        } else if (act === "happened") {
+          await db.updateEncounterStatus(id, "aconteceu");
+        } else if (act === "missed") {
+          await db.updateEncounterStatus(id, "nao_aconteceu");
         }
         await renderInvites();
       } catch (e) {
@@ -1219,7 +1292,7 @@ async function renderShop() {
         <div class="entry-icon">${perk?.emoji || "🎁"}</div>
         <div class="entry-body">
           <div class="entry-title">${r.title}</div>
-          <div class="entry-meta">resgatado por ${ROLE_LABEL[r.role]} · ${r.cost}🪙</div>
+          <div class="entry-meta">resgatado por ${ROLE_LABEL[r.role]} · ${r.cost}💰</div>
           ${r.status === "pendente" ? `<div class="entry-actions"><button class="btn btn-success btn-sm" data-act="fulfill" data-id="${r.id}">Marcar como cumprido ✅</button></div>` : `<div class="entry-meta">cumprido ✅</div>`}
         </div>
       </div>
@@ -1230,8 +1303,8 @@ async function renderShop() {
     <div class="card">
       <div class="card-title" style="font-size:15px;">Sua carteira</div>
       <div class="row" style="margin-top:8px;">
-        <span class="pill pill-coin">🪙 você tem ${myCoins}</span>
-        <span class="pill pill-muted">${ROLE_LABEL[otherRole()]}: ${coins[otherRole()] || 0}🪙</span>
+        <span class="pill pill-coin">💰 você tem ${myCoins}</span>
+        <span class="pill pill-muted">${ROLE_LABEL[otherRole()]}: ${coins[otherRole()] || 0}💰</span>
       </div>
     </div>
 
@@ -1246,7 +1319,7 @@ async function renderShop() {
               <div class="card-sub">${p.desc}</div>
             </div>
           </div>
-          <button class="btn ${myCoins >= p.cost ? "btn-warm" : "btn-secondary"} btn-block" data-act="redeem" data-perk="${p.id}" ${myCoins < p.cost ? "disabled" : ""}>Resgatar (🪙 ${p.cost})</button>
+          <button class="btn ${myCoins >= p.cost ? "btn-warm" : "btn-secondary"} btn-block" data-act="redeem" data-perk="${p.id}" ${myCoins < p.cost ? "disabled" : ""}>Resgatar (💰 ${p.cost})</button>
         </div>
       `).join("")}
     </div>
@@ -1294,11 +1367,16 @@ async function renderShop() {
 
 async function renderProfile() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
-  const [coins, history, couple] = await Promise.all([
+  const moodSince = toISODate(addDays(new Date(), -60));
+  const [coins, history, couple, loginStreakInfo, moodHistory] = await Promise.all([
     db.getCoinBalances(State.coupleId),
     db.listCoinHistory(State.coupleId, 12),
     supabase.from("couples").select("code").eq("id", State.coupleId).single(),
+    computeLoginStreak(),
+    db.getMoodHistory(State.coupleId, moodSince),
   ]);
+  const loginStreak = loginStreakInfo.streak;
+  const moodStreak = countMoodStreakFromHistory(moodHistory, State.role);
   const pushPerm = permissionState();
   const alreadySubscribed = await isSubscribed();
 
@@ -1311,6 +1389,15 @@ async function renderProfile() {
           <div class="card-sub" style="margin-bottom:0;">você é ${ROLE_LABEL[State.role]} · par de ${State.partner ? State.partner.display_name : "..."}</div>
         </div>
       </div>
+    </div>
+
+    <div class="section-title">Sequências 🔥</div>
+    <div class="card">
+      <div class="row">
+        <span class="pill">🔥 Uso do app: ${loginStreak} dia${loginStreak === 1 ? "" : "s"}</span>
+        <span class="pill">🥰 Humor: ${moodStreak} dia${moodStreak === 1 ? "" : "s"}</span>
+      </div>
+      <p class="hint-text" style="margin-top:10px;">Só passa a contar como sequência a partir de 2 dias seguidos. Abrir o app ou registrar o humor hoje garante o dia de amanhã.</p>
     </div>
 
     <div class="card">
@@ -1336,7 +1423,7 @@ async function renderProfile() {
       `}
     </div>
 
-    <div class="section-title">Moedas 🪙</div>
+    <div class="section-title">Moedas 💰</div>
     <div class="card">
       <div class="row">
         <span class="pill pill-coin">🦁 Gabriel: ${coins.gabriel || 0}</span>
@@ -1360,7 +1447,7 @@ async function renderProfile() {
             <div class="entry-meta">${h.reason}</div>
           </div>
         </div>
-      `).join("")}</div>` : `<div class="empty-state"><span class="emoji">🪙</span>Nada ainda.</div>`}
+      `).join("")}</div>` : `<div class="empty-state"><span class="emoji">💰</span>Nada ainda.</div>`}
     </div>
   `;
 

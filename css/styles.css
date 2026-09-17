@@ -113,6 +113,7 @@ html, body {
   color: var(--text);
   font-family: "Nunito", system-ui, sans-serif;
   -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
 }
 
 body {
@@ -142,6 +143,7 @@ button, input, textarea, select {
   display: flex;
   flex-direction: column;
   position: relative;
+  overflow-x: hidden;
 }
 
 /* ---------- topbar ---------- */
@@ -389,7 +391,7 @@ button, input, textarea, select {
 
 .weekday-row, .day-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 6px;
 }
 .weekday-row { margin-bottom: 6px; }
@@ -414,12 +416,14 @@ button, input, textarea, select {
   cursor: pointer;
   position: relative;
   padding: 2px;
+  overflow: hidden;
+  min-width: 0;
 }
 .day-cell.empty { background: transparent; cursor: default; }
 .day-cell .num { font-size: 13px; font-weight: 700; }
 .day-cell.today { outline: 2px solid var(--accent); outline-offset: -2px; }
 .day-cell.selected { background: var(--accent-soft); }
-.day-cell .dots { display: flex; gap: 2px; font-size: 9px; }
+.day-cell .dots { display: flex; gap: 2px; font-size: 9px; max-width: 100%; overflow: hidden; flex-wrap: wrap; justify-content: center; line-height: 1.2; }
 
 .legend {
   display: flex;
@@ -669,6 +673,31 @@ label.field-label:first-child { margin-top: 0; }
   animation: sheet-up 0.22s ease;
 }
 @keyframes sheet-up { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+.milestone-icon {
+  font-size: 56px;
+  text-align: center;
+  margin: 4px 0 10px;
+  animation: milestone-pulse 1.1s ease-in-out infinite;
+}
+@keyframes milestone-pulse {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  25% { transform: scale(1.15) rotate(-6deg); }
+  50% { transform: scale(1) rotate(0deg); }
+  75% { transform: scale(1.15) rotate(6deg); }
+}
+.milestone-days {
+  text-align: center;
+  font-family: "Baloo 2", sans-serif;
+  font-size: 40px;
+  font-weight: 700;
+  color: var(--accent-strong);
+  animation: milestone-pop 0.4s ease;
+}
+@keyframes milestone-pop {
+  from { transform: scale(0.6); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
 .modal-close {
   position: absolute;
   top: 16px;
