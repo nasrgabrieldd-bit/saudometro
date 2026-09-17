@@ -120,6 +120,7 @@ body {
   min-height: 100vh;
   display: flex;
   justify-content: center;
+  overflow-wrap: break-word;
 }
 
 h1, h2, h3, .display {
@@ -501,7 +502,8 @@ button, input, textarea, select {
   align-items: center;
   gap: 14px;
 }
-.partner-mood-card .emoji-big { font-size: 40px; }
+.partner-mood-card .emoji-big { font-size: 40px; flex: none; }
+.partner-mood-card > div { min-width: 0; }
 
 .history-strip { display: flex; gap: 8px; justify-content: space-between; margin-top: 8px; }
 .history-day { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 10px; color: var(--text-faint); }
@@ -738,4 +740,4 @@ label.field-label:first-child { margin-top: 0; }
 
 .stack { display: flex; flex-direction: column; gap: 10px; }
 .row { display: flex; gap: 10px; }
-.row > *:not(.avatar):not(.theme-toggle) { flex: 1; }
+.row > *:not(.avatar):not(.theme-toggle) { flex: 1; min-width: 0; }

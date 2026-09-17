@@ -447,7 +447,7 @@ async function renderHome() {
         <div class="entry-item" style="border:none; padding:6px 0;">
           <div class="entry-icon">${iconFor(upcoming)}</div>
           <div class="entry-body">
-            <div class="entry-title">${upcoming.title || defaultTitle(upcoming)}</div>
+            <div class="entry-title">${escapeHTML(upcoming.title) || defaultTitle(upcoming)}</div>
             <div class="entry-meta">${humanDateLong(parseISODate(upcoming.start_date))} · ${daysUntilLabel(parseISODate(upcoming.start_date))}</div>
           </div>
         </div>
@@ -952,7 +952,7 @@ function entryItemHTML(e) {
     <div class="entry-item">
       <div class="entry-icon">${iconFor(e)}</div>
       <div class="entry-body">
-        <div class="entry-title">${e.title || defaultTitle(e)}</div>
+        <div class="entry-title">${escapeHTML(e.title) || defaultTitle(e)}</div>
         <div class="entry-meta">${statusLabel(e)} · criado por ${ROLE_LABEL[e.created_by]}</div>
         <div class="entry-actions">${actions}</div>
       </div>
@@ -1108,7 +1108,7 @@ async function renderMood() {
       </div>
 
       <label class="field-label">Um recadinho (opcional)</label>
-      <textarea id="mood-note" rows="2" placeholder="algo que quer contar pra ele/ela...">${mine?.note || ""}</textarea>
+      <textarea id="mood-note" rows="2" placeholder="algo que quer contar pra ele/ela...">${escapeHTML(mine?.note || "")}</textarea>
 
       <button class="btn btn-primary btn-block" style="margin-top:16px;" id="save-mood">Salvar humor de hoje</button>
     </div>
@@ -1143,7 +1143,7 @@ async function renderMood() {
     <div class="section-title">💭 Pergunta da semana</div>
     <div class="card">
       <div class="card-sub" style="font-size:15px; color:var(--text); font-weight:700;">${question}</div>
-      <textarea id="weekly-answer" rows="3" style="margin-top:10px;" placeholder="escreve sua resposta...">${myAnswer?.answer || ""}</textarea>
+      <textarea id="weekly-answer" rows="3" style="margin-top:10px;" placeholder="escreve sua resposta...">${escapeHTML(myAnswer?.answer || "")}</textarea>
       <button class="btn btn-primary btn-block" style="margin-top:12px;" id="save-weekly">${myAnswer ? "Atualizar resposta" : "Responder (💰+1)"}</button>
       ${theirAnswer ? `
         <div class="entry-item" style="margin-top:14px;">
@@ -1234,7 +1234,7 @@ function historyStripHTML(history) {
 
 function escapeHTML(s) {
   const d = document.createElement("div");
-  d.textContent = s;
+  d.textContent = s ?? "";
   return d.innerHTML;
 }
 
@@ -1477,8 +1477,8 @@ async function renderProfile() {
       <div class="row" style="align-items:center;">
         <div class="avatar" style="width:56px;height:56px;font-size:22px;">${ROLE_EMOJI[State.role]}</div>
         <div>
-          <div class="card-title">${State.profile.display_name}</div>
-          <div class="card-sub" style="margin-bottom:0;">você é ${ROLE_LABEL[State.role]} · par de ${State.partner ? State.partner.display_name : "..."}</div>
+          <div class="card-title">${escapeHTML(State.profile.display_name)}</div>
+          <div class="card-sub" style="margin-bottom:0;">você é ${ROLE_LABEL[State.role]} · par de ${State.partner ? escapeHTML(State.partner.display_name) : "..."}</div>
         </div>
       </div>
     </div>
@@ -1495,7 +1495,7 @@ async function renderProfile() {
     <div class="card">
       <div class="card-title" style="font-size:15px;">Código do casal</div>
       <div class="card-sub">Use em outro celular pra entrar como ${ROLE_LABEL[otherRole()]} (ou reinstalar).</div>
-      <div class="onboarding-code" style="font-size:24px; padding:12px;">${couple.data?.code || "----"}</div>
+      <div class="onboarding-code" style="font-size:24px; padding:12px;">${escapeHTML(couple.data?.code || "") || "----"}</div>
     </div>
 
     <div class="section-title">Notificações 🔔</div>
