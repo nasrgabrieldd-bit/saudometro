@@ -239,6 +239,7 @@ function startCreateFlow() {
       <input type="text" id="couple-code" value="${suggestion}" maxlength="40" style="text-align:center; font-family:'Baloo 2'; font-size:20px; letter-spacing:0.04em;" />
       <p class="hint-text">Guarde ou manda pra ela(e), vai precisar dele pra entrar no app pelo outro celular.</p>
       <p class="field-label">Quem é você?</p>
+      <p class="hint-text" style="margin:-4px 0 10px;">🎁 O Gabriel foi o romântico que criou esse aplicativo pra Tata.</p>
       <div class="role-pick" id="role-pick">
         ${roleButtonsHTML(new Set())}
       </div>
@@ -306,6 +307,7 @@ function startJoinFlow() {
 function renderJoinStep2(couple, taken) {
   $("#join-step2").innerHTML = `
     <p class="field-label">Quem é você?</p>
+    <p class="hint-text" style="margin:-4px 0 10px;">🎁 O Gabriel foi o romântico que criou esse aplicativo pra Tata.</p>
     <div class="role-pick" id="role-pick">${roleButtonsHTML(taken)}</div>
     <label class="field-label">Seu nome (como quer aparecer)</label>
     <input type="text" id="display-name" placeholder="ex: Tata" />
