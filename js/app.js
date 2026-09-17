@@ -369,17 +369,14 @@ function setBusy(sel, busy) {
 async function renderHome() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const mk = monthKey(new Date());
-  const [plan, encounters, coins, stats, sweetNotes, recentMoods] = await Promise.all([
+  const [plan, encounters, coins, stats, recentMoods] = await Promise.all([
     db.ensureMonthPlan(State.coupleId, mk),
     db.listEncountersForMonth(State.coupleId, mk),
     db.getCoinBalances(State.coupleId),
     db.getCoupleStats(State.coupleId),
-    db.listRecentSweetNotes(State.coupleId, 10),
     db.getMoodHistory(State.coupleId, toISODate(addDays(new Date(), -2))),
   ]);
   const todayStr = todayISO();
-  const iSentToday = sweetNotes.some((n) => n.role === State.role && n.created_at.slice(0, 10) === todayStr);
-  const theirNoteToday = sweetNotes.find((n) => n.role !== State.role && n.created_at.slice(0, 10) === todayStr);
 
   const target = plan.base_target + plan.carry_in;
   const planejados = encounters.filter((e) => e.kind === "planejado");
@@ -476,18 +473,10 @@ async function renderHome() {
         <button class="btn btn-warm" id="btn-saudade" ${((coins[State.role] || 0) < 1) ? "disabled" : ""}>🥺 Mandar sinal</button>
       </div>
     </div>
-
-    <div class="card">
-      <div class="card-title" style="font-size:15px;">💌 Recadinho fofo</div>
-      ${theirNoteToday ? `<div class="entry-meta" style="margin-bottom:10px;">"${escapeHTML(theirNoteToday.message)}" — ${ROLE_LABEL[otherRole()]}</div>` : ""}
-      <div class="card-sub">${iSentToday ? "Você já mandou um hoje. Pode mandar outro, mas a moeda já foi." : "Manda um oi fofo. O primeiro do dia já ganha 1 moeda 💰."}</div>
-      <button class="btn btn-secondary btn-block" id="btn-send-note">💌 Mandar recadinho</button>
-    </div>
   `;
 
   $("#btn-goto-define")?.addEventListener("click", () => setActiveTab("calendar"));
   $("#weekend-card")?.addEventListener("click", () => openWeekendModal(nextWeekendFriday));
-  $("#btn-send-note")?.addEventListener("click", () => openSweetNoteModal(iSentToday));
   $("#btn-saudade")?.addEventListener("click", openSaudadeModal);
   $("#kiss-card")?.addEventListener("click", () => openKissModal(stats?.last_kiss_at));
 
@@ -933,13 +922,14 @@ function showDayDetail(iso) {
 
 function entryItemHTML(e) {
   const mine = e.created_by === State.role;
+  const isTerminal = e.status === "aconteceu" || e.status === "nao_aconteceu";
   let actions = "";
-  if (e.kind === "planejado" && e.status !== "aconteceu" && e.status !== "nao_aconteceu") {
+  if (e.kind === "planejado" && !isTerminal) {
     actions = `
       <button class="btn btn-success btn-sm" data-act="happened" data-id="${e.id}">Aconteceu ✅</button>
       <button class="btn btn-ghost btn-sm" data-act="missed" data-id="${e.id}">Não rolou</button>
     `;
-  } else if (e.kind === "saudade" && e.status !== "aconteceu" && e.status !== "nao_aconteceu") {
+  } else if (e.kind === "saudade" && !isTerminal) {
     actions = `<button class="btn btn-success btn-sm" data-act="happened" data-id="${e.id}">Aconteceu</button>`;
   } else if (e.kind === "convite" && e.status === "confirmado") {
     actions = `
@@ -954,7 +944,10 @@ function entryItemHTML(e) {
         <button class="btn btn-danger btn-sm" data-act="decline" data-id="${e.id}">Recusar</button>
         <div class="hint-text" style="flex-basis:100%; margin-top:4px;">recusar devolve a moeda pra ${ROLE_LABEL[e.created_by]} e custa 1💰 sua (de graça se for na sua semana de recarregar)</div>
       `;
+  } else if (isTerminal) {
+    actions = `<button class="btn btn-ghost btn-sm" data-act="undo" data-id="${e.id}">↩️ Desfazer</button>`;
   }
+  actions += `<button class="btn btn-ghost btn-sm" data-act="delete" data-id="${e.id}" title="Apagar">🗑️ Apagar</button>`;
   return `
     <div class="entry-item">
       <div class="entry-icon">${iconFor(e)}</div>
@@ -973,6 +966,25 @@ function statusLabel(e) {
     nao_aconteceu: "não aconteceu", pendente: "pendente", recusado: "recusado",
   };
   return map[e.status] || e.status;
+}
+
+// volta um encontro/convite marcado como aconteceu/não aconteceu pro estado "em andamento" de antes.
+// se tinha ganhado o bônus de encontro combinado, estorna as moedas pra não dar pra ficar
+// marcando/desmarcando de novo pra farmar moeda de graça.
+async function undoEntryStatus(entry) {
+  if (entry.status === "aconteceu" && entry.kind === "planejado") {
+    await db.addCoinTransaction(State.coupleId, "gabriel", -1, "desfez: encontro combinado aconteceu (estorno)");
+    await db.addCoinTransaction(State.coupleId, "tata", -1, "desfez: encontro combinado aconteceu (estorno)");
+  }
+  const previousStatus = entry.kind === "convite" ? "confirmado" : "agendado";
+  await db.updateEncounterStatus(entry.id, previousStatus);
+}
+
+async function deleteEntryWithConfirm(entry) {
+  const ok = confirm(`Apagar "${entry.title || defaultTitle(entry)}"? Isso não desfaz moedas já ganhas ou gastas por causa dele.`);
+  if (!ok) return false;
+  await db.deleteEncounter(entry.id);
+  return true;
 }
 
 function wireEntryActions() {
@@ -994,6 +1006,13 @@ function wireEntryActions() {
         } else if (act === "cancel" || act === "decline" || act === "accept") {
           const entry = State.calendarEncounters.find((e) => e.id === id);
           await respondToConvite(entry, act);
+        } else if (act === "undo") {
+          const entry = State.calendarEncounters.find((e) => e.id === id);
+          await undoEntryStatus(entry);
+        } else if (act === "delete") {
+          const entry = State.calendarEncounters.find((e) => e.id === id);
+          const deleted = await deleteEntryWithConfirm(entry);
+          if (!deleted) { btn.disabled = false; return; }
         }
         await renderCalendar();
         const selected = document.querySelector(".day-cell.selected");
@@ -1263,6 +1282,13 @@ async function renderInvites() {
           await db.updateEncounterStatus(id, "aconteceu");
         } else if (act === "missed") {
           await db.updateEncounterStatus(id, "nao_aconteceu");
+        } else if (act === "undo") {
+          const entry = all.find((e) => e.id === id);
+          await undoEntryStatus(entry);
+        } else if (act === "delete") {
+          const entry = all.find((e) => e.id === id);
+          const deleted = await deleteEntryWithConfirm(entry);
+          if (!deleted) { btn.disabled = false; return; }
         }
         await renderInvites();
       } catch (e) {
