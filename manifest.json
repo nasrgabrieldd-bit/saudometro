@@ -1,0 +1,16 @@
+{
+  "name": "Saudômetro",
+  "short_name": "Saudômetro",
+  "description": "O encontrômetro do casal. Combinem os encontros do mês, registrem o humor do dia e mandem sinais de saudade um pro outro.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fdf2f6",
+  "theme_color": "#ff6f91",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "icons/icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
