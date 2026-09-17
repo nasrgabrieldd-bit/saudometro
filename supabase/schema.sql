@@ -256,6 +256,77 @@ create policy "sweet_notes: couple access" on sweet_notes
   for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
 
 -- ------------------------------------------------------------
+-- CÁPSULA DO TEMPO
+-- ------------------------------------------------------------
+create table if not exists time_capsules (
+  id uuid primary key default gen_random_uuid(),
+  couple_id uuid not null references couples(id) on delete cascade,
+  from_role text not null check (from_role in ('gabriel', 'tata')),
+  message text not null,
+  open_on date not null,
+  created_at timestamptz not null default now()
+);
+
+alter table time_capsules enable row level security;
+
+create policy "time_capsules: couple access" on time_capsules
+  for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
+
+-- ------------------------------------------------------------
+-- DESAFIO DO DIA (banco de perguntas fica no código, só a resposta é salva)
+-- ------------------------------------------------------------
+create table if not exists daily_challenge_answers (
+  id uuid primary key default gen_random_uuid(),
+  couple_id uuid not null references couples(id) on delete cascade,
+  day date not null,
+  role text not null check (role in ('gabriel', 'tata')),
+  answer text not null,
+  created_at timestamptz not null default now(),
+  unique (couple_id, day, role)
+);
+
+alter table daily_challenge_answers enable row level security;
+
+create policy "daily_challenge_answers: couple access" on daily_challenge_answers
+  for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
+
+-- ------------------------------------------------------------
+-- DESEJOS SECRETOS
+-- ------------------------------------------------------------
+create table if not exists secret_wishes (
+  id uuid primary key default gen_random_uuid(),
+  couple_id uuid not null references couples(id) on delete cascade,
+  role text not null check (role in ('gabriel', 'tata')), -- dono do desejo
+  slot int not null check (slot in (1, 2, 3)),
+  text text not null default '',
+  updated_at timestamptz not null default now(),
+  unique (couple_id, role, slot)
+);
+
+alter table secret_wishes enable row level security;
+
+create policy "secret_wishes: couple access" on secret_wishes
+  for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
+
+-- cada resgate guarda o texto do desejo sorteado (mesmo que a lista mude depois),
+-- e só pode ser revelado na tela a partir de reveal_on — o resgate é às cegas
+create table if not exists wish_redemptions (
+  id uuid primary key default gen_random_uuid(),
+  couple_id uuid not null references couples(id) on delete cascade,
+  redeemed_by text not null check (redeemed_by in ('gabriel', 'tata')),
+  wish_owner text not null check (wish_owner in ('gabriel', 'tata')),
+  wish_text text not null,
+  reveal_on date not null,
+  fulfilled boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+alter table wish_redemptions enable row level security;
+
+create policy "wish_redemptions: couple access" on wish_redemptions
+  for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
+
+-- ------------------------------------------------------------
 -- SEQUÊNCIA DE USO DO APP (o "🔥 N dias" estilo Duolingo)
 -- ------------------------------------------------------------
 create table if not exists app_opens (
@@ -300,3 +371,7 @@ alter publication supabase_realtime add table sweet_notes;
 alter publication supabase_realtime add table app_opens;
 alter publication supabase_realtime add table streak_freezes;
 alter publication supabase_realtime add table shop_redemptions;
+alter publication supabase_realtime add table time_capsules;
+alter publication supabase_realtime add table daily_challenge_answers;
+alter publication supabase_realtime add table secret_wishes;
+alter publication supabase_realtime add table wish_redemptions;

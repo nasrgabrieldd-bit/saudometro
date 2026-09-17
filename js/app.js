@@ -3,6 +3,7 @@ import { supabase, isConfigured } from "./supabaseClient.js";
 import * as db from "./db.js";
 import { MOODS, MOOD_BY_ID, TALK_OPTIONS, TALK_BY_ID } from "./moods.js";
 import { weekIndexSince, questionForWeek } from "./questions.js";
+import { dayIndexSince, challengeForDay } from "./challenges.js";
 import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush, needsHomeScreenFirst } from "./push.js";
 import { PERKS, PERK_BY_ID } from "./perks.js";
 import { pickSaudadeNudge } from "./nudges.js";
@@ -15,6 +16,7 @@ import {
 const ROLE_LABEL = { gabriel: "Gabriel", tata: "Tata" };
 const ROLE_EMOJI = { gabriel: "🦁", tata: "🦋" };
 const NEEDS_CARE_MOODS = new Set(["saudade", "cansada", "estressada", "mal", "triste", "ansiosa", "brava", "assustada", "ciumenta"]);
+const WISH_COST = 3;
 
 const State = {
   userId: null,
@@ -1329,9 +1331,31 @@ async function renderInvites() {
 
 async function renderNotes() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
-  const notes = await db.listRecentSweetNotes(State.coupleId, 500);
   const todayStr = todayISO();
+  const since60 = toISODate(addDays(new Date(), -60));
+
+  const [notes, capsules, todayAnswers, challengeHistory, myWishes, redemptions, coins] = await Promise.all([
+    db.listRecentSweetNotes(State.coupleId, 500),
+    db.listTimeCapsules(State.coupleId),
+    db.getChallengeAnswersForDay(State.coupleId, todayStr),
+    db.listChallengeAnswersHistory(State.coupleId, since60),
+    db.getWishesForRole(State.coupleId, State.role),
+    db.listWishRedemptions(State.coupleId),
+    db.getCoinBalances(State.coupleId),
+  ]);
+
   const iSentToday = notes.some((n) => n.role === State.role && n.created_at.slice(0, 10) === todayStr);
+  const myCoins = coins[State.role] || 0;
+
+  const todayIdx = dayIndexSince(State.coupleCreatedAt);
+  const todayChallenge = challengeForDay(todayIdx);
+  const myAnswerToday = todayAnswers.find((a) => a.role === State.role);
+  const theirAnswerToday = todayAnswers.find((a) => a.role !== State.role);
+
+  const historyDays = [...new Set(challengeHistory.map((r) => r.day))]
+    .filter((d) => d !== todayStr)
+    .sort((a, b) => (a < b ? 1 : -1))
+    .slice(0, 10);
 
   view.innerHTML = `
     <div class="section-title">💌 Recadinhos fofos</div>
@@ -1340,7 +1364,76 @@ async function renderNotes() {
       <button class="btn btn-primary btn-block" style="margin-top:12px;" id="btn-send-note">💌 Mandar recadinho</button>
     </div>
 
-    <div class="section-title">Histórico</div>
+    <div class="section-title">🎯 Desafio do dia</div>
+    <div class="card" style="background:var(--warm-soft);">
+      <div class="card-title" style="font-size:15.5px; font-family:'Baloo 2', sans-serif;">"${todayChallenge}"</div>
+      ${myAnswerToday ? `
+        <div class="entry-meta" style="margin-top:8px; color:var(--text);">Você: "${escapeHTML(myAnswerToday.answer)}"</div>
+      ` : `
+        <textarea id="challenge-answer" rows="2" placeholder="escreve aqui..." style="margin-top:10px;"></textarea>
+        <button class="btn btn-warm btn-block" style="margin-top:10px;" id="btn-answer-challenge">Responder desafio (💰+1)</button>
+      `}
+      ${theirAnswerToday
+        ? `<div class="entry-meta" style="margin-top:8px; color:var(--text);">${ROLE_LABEL[otherRole()]}: "${escapeHTML(theirAnswerToday.answer)}"</div>`
+        : `<p class="hint-text" style="margin-top:8px;">${ROLE_LABEL[otherRole()]} ainda não respondeu hoje.</p>`}
+    </div>
+    ${historyDays.length ? `
+      <div class="card">
+        <div class="card-title" style="font-size:14px;">Desafios anteriores</div>
+        <div class="stack">${historyDays.map((day) => {
+          const dayAnswers = challengeHistory.filter((r) => r.day === day);
+          const prompt = challengeForDay(dayIndexSince(State.coupleCreatedAt, parseISODate(day)));
+          return `
+            <div class="entry-item">
+              <div class="entry-icon">🎯</div>
+              <div class="entry-body">
+                <div class="entry-title">${prompt}</div>
+                <div class="entry-meta">${humanDateShort(parseISODate(day))}</div>
+                ${dayAnswers.map((a) => `<div class="entry-meta" style="margin-top:4px; color:var(--text);">${ROLE_LABEL[a.role]}: "${escapeHTML(a.answer)}"</div>`).join("")}
+              </div>
+            </div>
+          `;
+        }).join("")}</div>
+      </div>
+    ` : ""}
+
+    <div class="section-title">🕰️ Cápsula do tempo</div>
+    <div class="card">
+      <div class="card-sub">Escreva algo agora — só pode ser aberta na data que você escolher.</div>
+      <textarea id="capsule-text" rows="3" placeholder="daqui uns anos, quero que você lembre que..."></textarea>
+      <label class="field-label">Abrir em</label>
+      <input type="date" id="capsule-date" min="${toISODate(addDays(new Date(), 1))}" value="${toISODate(addDays(new Date(), 30))}" />
+      <button class="btn btn-primary btn-block" style="margin-top:12px;" id="btn-seal-capsule">Selar cápsula 💌</button>
+    </div>
+    <div class="card">
+      ${capsules.length ? `<div class="stack">${capsules.map(capsuleItemHTML).join("")}</div>` : `<div class="empty-state"><span class="emoji">🕰️</span>Nenhuma cápsula ainda.</div>`}
+    </div>
+
+    <div class="section-title">🎁 Desejos secretos</div>
+    <div class="card">
+      <div class="card-sub">Até 3 desejos guardados só seus — ${ROLE_LABEL[otherRole()]} não vê o que você escreveu aqui.</div>
+      ${[1, 2, 3].map((slot) => {
+        const w = myWishes.find((x) => x.slot === slot);
+        return `<input type="text" class="wish-input" data-slot="${slot}" maxlength="120" style="margin-top:8px;" value="${escapeHTML(w?.text || "")}" placeholder="desejo ${slot}, ex: um dia de spa" />`;
+      }).join("")}
+      <button class="btn btn-secondary btn-block" style="margin-top:12px;" id="btn-save-wishes">Salvar meus desejos</button>
+    </div>
+    <div class="card">
+      <div class="card-title" style="font-size:15px;">Resgatar um desejo de ${ROLE_LABEL[otherRole()]}</div>
+      <div class="card-sub">Sorteia um às cegas — você só descobre qual foi amanhã.</div>
+      <div class="row" style="align-items:center;">
+        <span class="pill pill-coin">💰 você tem ${myCoins}</span>
+        <button class="btn btn-plum" id="btn-redeem-wish" ${myCoins < WISH_COST ? "disabled" : ""}>🎁 Resgatar às cegas (💰 -${WISH_COST})</button>
+      </div>
+    </div>
+    ${redemptions.length ? `
+      <div class="card">
+        <div class="card-title" style="font-size:14px;">Resgates</div>
+        <div class="stack">${redemptions.map(redemptionItemHTML).join("")}</div>
+      </div>
+    ` : ""}
+
+    <div class="section-title">Histórico de recadinhos</div>
     <div class="card">
       ${notes.length ? `<div class="stack">${notes.map((n) => `
         <div class="entry-item">
@@ -1356,6 +1449,121 @@ async function renderNotes() {
   `;
 
   $("#btn-send-note")?.addEventListener("click", () => openSweetNoteModal(iSentToday));
+
+  $("#btn-answer-challenge")?.addEventListener("click", async () => {
+    const answer = $("#challenge-answer").value.trim();
+    if (!answer) { alert("Escreve uma resposta primeiro :)"); return; }
+    setBusy("#btn-answer-challenge", true);
+    try {
+      await db.upsertChallengeAnswer(State.coupleId, todayStr, State.role, answer);
+      await earnCoins(State.role, 1, "respondeu o desafio do dia");
+      await renderNotes();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#btn-answer-challenge", false);
+    }
+  });
+
+  $("#btn-seal-capsule")?.addEventListener("click", async () => {
+    const message = $("#capsule-text").value.trim();
+    const openOn = $("#capsule-date").value;
+    if (!message) { alert("Escreve alguma coisa primeiro :)"); return; }
+    if (!openOn) { alert("Escolhe uma data pra abrir :)"); return; }
+    setBusy("#btn-seal-capsule", true);
+    try {
+      await db.createTimeCapsule(State.coupleId, State.role, message, openOn);
+      await renderNotes();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#btn-seal-capsule", false);
+    }
+  });
+
+  $("#btn-save-wishes")?.addEventListener("click", async () => {
+    setBusy("#btn-save-wishes", true);
+    try {
+      const inputs = document.querySelectorAll(".wish-input");
+      await Promise.all(Array.from(inputs).map((inp) => db.upsertWish(State.coupleId, State.role, Number(inp.dataset.slot), inp.value.trim())));
+      await renderNotes();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#btn-save-wishes", false);
+    }
+  });
+
+  $("#btn-redeem-wish")?.addEventListener("click", async () => {
+    setBusy("#btn-redeem-wish", true);
+    try {
+      const partnerWishes = await db.getWishesForRole(State.coupleId, otherRole());
+      const filled = partnerWishes.filter((w) => w.text && w.text.trim());
+      if (!filled.length) {
+        alert(`${ROLE_LABEL[otherRole()]} ainda não escreveu nenhum desejo.`);
+        setBusy("#btn-redeem-wish", false);
+        return;
+      }
+      const pick = filled[Math.floor(Math.random() * filled.length)];
+      await db.addCoinTransaction(State.coupleId, State.role, -WISH_COST, "resgatou um desejo às cegas");
+      const revealOn = toISODate(addDays(new Date(), 1));
+      await db.createWishRedemption(State.coupleId, State.role, otherRole(), pick.text, revealOn);
+      await renderNotes();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#btn-redeem-wish", false);
+    }
+  });
+
+  document.querySelectorAll('[data-act="fulfill-wish"]').forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      try {
+        await db.markWishFulfilled(btn.dataset.id);
+        await renderNotes();
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+function capsuleItemHTML(c) {
+  const mine = c.from_role === State.role;
+  const opensToday = c.open_on <= todayISO();
+  const canRead = mine || opensToday;
+  const timing = opensToday ? `Aberta em ${humanDateShort(parseISODate(c.open_on))}` : `Abre ${daysUntilLabel(parseISODate(c.open_on))}`;
+  return `
+    <div class="entry-item">
+      <div class="entry-icon">${canRead ? "🔓" : "🔒"}</div>
+      <div class="entry-body">
+        <div class="entry-title">De ${ROLE_LABEL[c.from_role]} ${mine ? `pra ${ROLE_LABEL[otherRole()]}` : "pra você"}</div>
+        <div class="entry-meta">${timing}</div>
+        ${canRead
+          ? `<div class="entry-meta" style="margin-top:6px; color:var(--text);">"${escapeHTML(c.message)}"</div>`
+          : `<div class="entry-meta" style="margin-top:6px; filter:blur(4px); user-select:none;">${"• ".repeat(18)}</div>`}
+      </div>
+    </div>
+  `;
+}
+
+function redemptionItemHTML(r) {
+  const ready = r.reveal_on <= todayISO();
+  const iAmRedeemer = r.redeemed_by === State.role;
+  const label = iAmRedeemer ? `Você resgatou de ${ROLE_LABEL[r.wish_owner]}` : `${ROLE_LABEL[r.redeemed_by]} resgatou um desejo seu`;
+  return `
+    <div class="entry-item">
+      <div class="entry-icon">${ready ? "🎁" : "🔒"}</div>
+      <div class="entry-body">
+        <div class="entry-title">${label}</div>
+        ${ready ? `
+          <div class="entry-meta" style="margin-top:4px; font-weight:800; color:var(--text);">"${escapeHTML(r.wish_text)}"</div>
+          ${iAmRedeemer ? (r.fulfilled
+            ? `<span class="pill pill-success" style="margin-top:8px;">Cumprido 🎉</span>`
+            : `<button class="btn btn-success btn-sm" style="margin-top:8px;" data-act="fulfill-wish" data-id="${r.id}">Marcar como cumprido ✅</button>`
+          ) : ""}
+        ` : `<div class="entry-meta" style="margin-top:4px;">Revela ${daysUntilLabel(parseISODate(r.reveal_on))}</div>`}
+      </div>
+    </div>
+  `;
 }
 
 function formatNoteTimestamp(iso) {
@@ -1522,8 +1730,9 @@ async function renderProfile() {
         <span class="pill pill-coin">🦋 Tata: ${coins.tata || 0}</span>
       </div>
       <div class="stack" style="margin-top:12px; font-size:13px; color:var(--text-muted);">
-        <div>🟢 <strong style="color:var(--text);">Ganha:</strong> encontro combinado do mês acontece (+1 pra cada um) · registrar o humor do dia (+1, uma vez por dia) · sequência de 7 dias de humor (+5 de bônus) · mandar uma mensagem fofa (+1, uma vez por dia) · responder a pergunta da semana (+1) · aceitar um convite (+1) · 15 dias seguidos usando o app (+10, uma vez) · 30 dias seguidos (+25, uma vez) · convite que você mandou foi recusado, a moeda volta (+1)</div>
-        <div>🔴 <strong style="color:var(--text);">Gasta:</strong> mandar qualquer convite, de saudade ou combinado na hora (-1) · recusar um convite de alguém (-1, de graça se for na sua semana de recarregar) · usar o freeze pra proteger a sequência de dias (-1)</div>
+        <div>🟢 <strong style="color:var(--text);">Ganha:</strong> encontro combinado do mês acontece (+1 pra cada um) · registrar o humor do dia (+1, uma vez por dia) · sequência de 7 dias de humor (+5 de bônus) · mandar uma mensagem fofa (+1, uma vez por dia) · responder a pergunta da semana (+1) · responder o desafio do dia (+1, uma vez por dia) · aceitar um convite (+1) · 15 dias seguidos usando o app (+10, uma vez) · 30 dias seguidos (+25, uma vez) · convite que você mandou foi recusado, a moeda volta (+1)</div>
+        <div>🔴 <strong style="color:var(--text);">Gasta:</strong> mandar qualquer convite, de saudade ou combinado na hora (-1) · recusar um convite de alguém (-1, de graça se for na sua semana de recarregar) · usar o freeze pra proteger a sequência de dias (-1) · resgatar um desejo secreto às cegas (-${WISH_COST})</div>
+        <div>🕰️ A cápsula do tempo é de graça — não gasta nem dá moeda, é só pra guardar um recado pro futuro.</div>
         <div>🍀 De vez em quando (1 em cada 10), uma recompensa vem em dobro — é o "dia da sorte".</div>
         <div>Todo mundo começa com 25 moedas. Recusar nunca fica bloqueado por falta de moeda. É só um joguinho por cima, ninguém é obrigado a nada.</div>
       </div>

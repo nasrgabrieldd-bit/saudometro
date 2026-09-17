@@ -284,6 +284,7 @@ button, input, textarea, select {
 .btn-success { background: var(--success); color: white; }
 .btn-danger { background: var(--danger-soft); color: var(--danger); }
 .btn-ghost { background: transparent; color: var(--text-muted); }
+.btn-plum { background: var(--plum); color: white; }
 .btn-block { width: 100%; }
 .btn-sm { padding: 9px 14px; font-size: 13px; }
 

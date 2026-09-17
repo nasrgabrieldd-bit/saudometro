@@ -382,6 +382,115 @@ export async function listRecentSweetNotes(coupleId, limit = 10) {
   return data || [];
 }
 
+// ---------- cápsula do tempo ----------
+
+export async function createTimeCapsule(coupleId, fromRole, message, openOnISO) {
+  const { data, error } = await supabase
+    .from("time_capsules")
+    .insert({ couple_id: coupleId, from_role: fromRole, message, open_on: openOnISO })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function listTimeCapsules(coupleId) {
+  const { data, error } = await supabase
+    .from("time_capsules")
+    .select("*")
+    .eq("couple_id", coupleId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+// ---------- desafio do dia ----------
+
+export async function upsertChallengeAnswer(coupleId, dayISO, role, answer) {
+  const { data, error } = await supabase
+    .from("daily_challenge_answers")
+    .upsert(
+      { couple_id: coupleId, day: dayISO, role, answer },
+      { onConflict: "couple_id,day,role" }
+    )
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function getChallengeAnswersForDay(coupleId, dayISO) {
+  const { data, error } = await supabase
+    .from("daily_challenge_answers")
+    .select("*")
+    .eq("couple_id", coupleId)
+    .eq("day", dayISO);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function listChallengeAnswersHistory(coupleId, sinceISO) {
+  const { data, error } = await supabase
+    .from("daily_challenge_answers")
+    .select("*")
+    .eq("couple_id", coupleId)
+    .gte("day", sinceISO)
+    .order("day", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+// ---------- desejos secretos ----------
+
+export async function getWishesForRole(coupleId, role) {
+  const { data, error } = await supabase
+    .from("secret_wishes")
+    .select("*")
+    .eq("couple_id", coupleId)
+    .eq("role", role)
+    .order("slot", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function upsertWish(coupleId, role, slot, text) {
+  const { data, error } = await supabase
+    .from("secret_wishes")
+    .upsert(
+      { couple_id: coupleId, role, slot, text, updated_at: new Date().toISOString() },
+      { onConflict: "couple_id,role,slot" }
+    )
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function createWishRedemption(coupleId, redeemedBy, wishOwner, wishText, revealOnISO) {
+  const { data, error } = await supabase
+    .from("wish_redemptions")
+    .insert({ couple_id: coupleId, redeemed_by: redeemedBy, wish_owner: wishOwner, wish_text: wishText, reveal_on: revealOnISO })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function listWishRedemptions(coupleId) {
+  const { data, error } = await supabase
+    .from("wish_redemptions")
+    .select("*")
+    .eq("couple_id", coupleId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function markWishFulfilled(id) {
+  const { error } = await supabase.from("wish_redemptions").update({ fulfilled: true }).eq("id", id);
+  if (error) throw error;
+}
+
 // ---------- sequência de uso do app ----------
 
 export async function recordAppOpen(coupleId, role, dayISO) {
@@ -463,6 +572,11 @@ export function subscribeCoupleChanges(coupleId, onChange) {
     .on("postgres_changes", { event: "*", schema: "public", table: "weekly_answers", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "shop_redemptions", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "couple_stats", filter: `couple_id=eq.${coupleId}` }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "sweet_notes", filter: `couple_id=eq.${coupleId}` }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "time_capsules", filter: `couple_id=eq.${coupleId}` }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "daily_challenge_answers", filter: `couple_id=eq.${coupleId}` }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "secret_wishes", filter: `couple_id=eq.${coupleId}` }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "wish_redemptions", filter: `couple_id=eq.${coupleId}` }, onChange)
     .subscribe();
   return () => supabase.removeChannel(channel);
 }
