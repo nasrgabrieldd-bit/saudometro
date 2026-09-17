@@ -94,8 +94,14 @@ function setActiveTab(tab) {
   renderActiveTab();
 }
 
+let kissTimerInterval = null;
+function clearKissTimer() {
+  if (kissTimerInterval) { clearInterval(kissTimerInterval); kissTimerInterval = null; }
+}
+
 function renderActiveTab() {
   if (!State.coupleId) return;
+  clearKissTimer();
   const map = { home: renderHome, calendar: renderCalendar, mood: renderMood, invites: renderInvites, shop: renderShop, profile: renderProfile };
   (map[State.activeTab] || renderHome)();
 }
@@ -259,10 +265,11 @@ function setBusy(sel, busy) {
 async function renderHome() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const mk = monthKey(new Date());
-  const [plan, encounters, coins] = await Promise.all([
+  const [plan, encounters, coins, stats] = await Promise.all([
     db.ensureMonthPlan(State.coupleId, mk),
     db.listEncountersForMonth(State.coupleId, mk),
     db.getCoinBalances(State.coupleId),
+    db.getCoupleStats(State.coupleId),
   ]);
 
   const target = plan.base_target + plan.carry_in;
@@ -294,6 +301,14 @@ async function renderHome() {
         </div>
       </div>
     ` : ""}
+
+    <div class="card" id="kiss-card" style="cursor:pointer; text-align:center;">
+      <div class="card-title" style="font-size:15px;">⏱️ Sem se beijar</div>
+      <div id="kiss-counter" style="font-family:'Baloo 2'; font-weight:700; font-size:26px; color:var(--accent-strong); margin:8px 0; letter-spacing:0.02em;">
+        ${stats?.last_kiss_at ? "calculando..." : "—"}
+      </div>
+      <p class="hint-text">Toca aqui pra ${stats?.last_kiss_at ? "atualizar" : "registrar"} a hora do último beijo</p>
+    </div>
 
     <div class="card">
       <div class="card-title">${monthLabel(mk)}</div>
@@ -343,6 +358,53 @@ async function renderHome() {
   $("#btn-goto-define")?.addEventListener("click", () => setActiveTab("calendar"));
   $("#weekend-card")?.addEventListener("click", () => openWeekendModal(nextWeekendFriday));
   $("#btn-saudade")?.addEventListener("click", openSaudadeModal);
+  $("#kiss-card")?.addEventListener("click", () => openKissModal(stats?.last_kiss_at));
+
+  clearKissTimer();
+  if (stats?.last_kiss_at) {
+    const target = new Date(stats.last_kiss_at).getTime();
+    const counterEl = $("#kiss-counter");
+    const tick = () => {
+      const diff = Math.max(0, Date.now() - target);
+      const totalSec = Math.floor(diff / 1000);
+      const days = Math.floor(totalSec / 86400);
+      const hours = Math.floor((totalSec % 86400) / 3600);
+      const mins = Math.floor((totalSec % 3600) / 60);
+      const secs = totalSec % 60;
+      counterEl.textContent = `${days}d ${String(hours).padStart(2, "0")}h ${String(mins).padStart(2, "0")}m ${String(secs).padStart(2, "0")}s`;
+    };
+    tick();
+    kissTimerInterval = setInterval(tick, 1000);
+  }
+}
+
+function toLocalDatetimeInputValue(d) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function openKissModal(currentISO) {
+  const defaultLocal = toLocalDatetimeInputValue(currentISO ? new Date(currentISO) : new Date());
+  openModal(`
+    <h3 class="modal-title">⏱️ Último beijo</h3>
+    <p class="card-sub">Registra quando foi, e o cronômetro conta a partir daí pros dois.</p>
+    <label class="field-label">Data e hora</label>
+    <input type="datetime-local" id="kiss-datetime" value="${defaultLocal}" />
+    <button class="btn btn-primary btn-block" style="margin-top:16px;" id="btn-save-kiss">Salvar</button>
+  `);
+  $("#btn-save-kiss").addEventListener("click", async () => {
+    const val = $("#kiss-datetime").value;
+    if (!val) { alert("Escolhe uma data e hora :)"); return; }
+    setBusy("#btn-save-kiss", true);
+    try {
+      await db.setLastKiss(State.coupleId, new Date(val).toISOString());
+      closeModal();
+      await renderHome();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#btn-save-kiss", false);
+    }
+  });
 }
 
 function openWeekendModal(defaultDate) {

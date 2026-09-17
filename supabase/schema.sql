@@ -225,11 +225,26 @@ create policy "shop_redemptions: couple access" on shop_redemptions
   for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
 
 -- ------------------------------------------------------------
+-- MARCOS DO CASAL (cronômetro do último beijo, etc.)
+-- ------------------------------------------------------------
+create table if not exists couple_stats (
+  couple_id uuid primary key references couples(id) on delete cascade,
+  last_kiss_at timestamptz,
+  updated_at timestamptz not null default now()
+);
+
+alter table couple_stats enable row level security;
+
+create policy "couple_stats: couple access" on couple_stats
+  for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
+
+-- ------------------------------------------------------------
 -- Habilitar Realtime nas tabelas que o app escuta ao vivo
 -- ------------------------------------------------------------
 alter publication supabase_realtime add table encounters;
 alter publication supabase_realtime add table moods;
 alter publication supabase_realtime add table weekend_recharge;
+alter publication supabase_realtime add table couple_stats;
 alter publication supabase_realtime add table coin_ledger;
 alter publication supabase_realtime add table profiles;
 alter publication supabase_realtime add table weekly_answers;

@@ -161,6 +161,24 @@ export async function listEncountersForMonth(coupleId, mk) {
   return data || [];
 }
 
+// ---------- cronômetro do último beijo ----------
+
+export async function getCoupleStats(coupleId) {
+  const { data, error } = await supabase.from("couple_stats").select("*").eq("couple_id", coupleId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function setLastKiss(coupleId, isoDateTime) {
+  const { data, error } = await supabase
+    .from("couple_stats")
+    .upsert({ couple_id: coupleId, last_kiss_at: isoDateTime, updated_at: new Date().toISOString() }, { onConflict: "couple_id" })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 export async function createEncounter({ coupleId, startDate, endDate, title, kind, createdBy, status }) {
   const mk = monthKey(startDate);
   const { data, error } = await supabase
@@ -383,6 +401,9 @@ export function subscribeCoupleChanges(coupleId, onChange) {
     .on("postgres_changes", { event: "*", schema: "public", table: "weekend_recharge", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "coin_ledger", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "profiles", filter: `couple_id=eq.${coupleId}` }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "weekly_answers", filter: `couple_id=eq.${coupleId}` }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "shop_redemptions", filter: `couple_id=eq.${coupleId}` }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "couple_stats", filter: `couple_id=eq.${coupleId}` }, onChange)
     .subscribe();
   return () => supabase.removeChannel(channel);
 }
