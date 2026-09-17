@@ -241,11 +241,11 @@ export async function listAllInvites(coupleId) {
 
 // ---------- humor ----------
 
-export async function upsertMood(coupleId, dayISO, role, mood, wantsToTalk, note) {
+export async function upsertMood(coupleId, dayISO, role, mood, moodPartner, wantsToTalk, note) {
   const { data, error } = await supabase
     .from("moods")
     .upsert(
-      { couple_id: coupleId, day: dayISO, role, mood, wants_to_talk: wantsToTalk, note: note || "", updated_at: new Date().toISOString() },
+      { couple_id: coupleId, day: dayISO, role, mood, mood_partner: moodPartner, wants_to_talk: wantsToTalk, note: note || "", updated_at: new Date().toISOString() },
       { onConflict: "couple_id,day,role" }
     )
     .select()

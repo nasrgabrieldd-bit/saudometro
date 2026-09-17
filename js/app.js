@@ -14,7 +14,7 @@ import {
 
 const ROLE_LABEL = { gabriel: "Gabriel", tata: "Tata" };
 const ROLE_EMOJI = { gabriel: "🦁", tata: "🦋" };
-const NEEDS_CARE_MOODS = new Set(["saudade", "cansada", "estressada", "mal"]);
+const NEEDS_CARE_MOODS = new Set(["saudade", "cansada", "estressada", "mal", "triste", "ansiosa", "brava", "assustada", "ciumenta"]);
 
 const State = {
   userId: null,
@@ -398,7 +398,7 @@ async function renderHome() {
   const partnerWeekendOn = weekendRows.some((r) => r.week_start === toISODate(nextWeekendFriday) && r.role !== State.role && r.active);
 
   const partnerRecentMood = recentMoods.filter((m) => m.role !== State.role).sort((a, b) => a.day < b.day ? 1 : -1)[0];
-  const partnerNeedsCare = NEEDS_CARE_MOODS.has(partnerRecentMood?.mood);
+  const partnerNeedsCare = NEEDS_CARE_MOODS.has(partnerRecentMood?.mood) || NEEDS_CARE_MOODS.has(partnerRecentMood?.mood_partner);
   const daysSinceKiss = stats?.last_kiss_at ? Math.floor((Date.now() - new Date(stats.last_kiss_at).getTime()) / 86400000) : null;
   const nudgeText = pickSaudadeNudge({
     role: State.role,
@@ -1079,11 +1079,20 @@ async function renderMood() {
 
   view.innerHTML = `
     <div class="card">
-      <div class="card-title">Como você tá hoje?</div>
+      <div class="card-title">Como você está?</div>
       ${myMoodStreak > 1 ? `<p class="hint-text" style="margin:2px 0 12px;">🔥 ${myMoodStreak} dias seguidos registrando seu humor</p>` : ""}
       <div class="mood-grid" id="mood-grid">
         ${MOODS.map((m) => `
           <button class="mood-btn ${mine?.mood === m.id ? "selected" : ""}" data-mood="${m.id}">
+            <span class="emoji">${m.emoji}</span><span class="label">${m.label}</span>
+          </button>
+        `).join("")}
+      </div>
+
+      <div class="section-title">Como você está com ${ROLE_LABEL[otherRole()]} hoje?</div>
+      <div class="mood-grid" id="mood-grid-partner">
+        ${MOODS.map((m) => `
+          <button class="mood-btn ${mine?.mood_partner === m.id ? "selected" : ""}" data-mood="${m.id}">
             <span class="emoji">${m.emoji}</span><span class="label">${m.label}</span>
           </button>
         `).join("")}
@@ -1115,6 +1124,14 @@ async function renderMood() {
             ${theirs.note ? `<div class="entry-meta" style="margin-top:6px;">"${escapeHTML(theirs.note)}"</div>` : ""}
           </div>
         </div>
+        ${theirs.mood_partner ? `
+          <div class="partner-mood-card" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+            <span class="emoji-big">${MOOD_BY_ID[theirs.mood_partner]?.emoji || "❔"}</span>
+            <div>
+              <div class="card-title" style="font-size:15px;">Com você: ${MOOD_BY_ID[theirs.mood_partner]?.label || theirs.mood_partner}</div>
+            </div>
+          </div>
+        ` : ""}
       ` : `<div class="empty-state"><span class="emoji">🤔</span>${ROLE_LABEL[otherRole()]} ainda não registrou o humor de hoje.</div>`}
     </div>
 
@@ -1142,12 +1159,20 @@ async function renderMood() {
   `;
 
   let selectedMood = mine?.mood || null;
+  let selectedMoodPartner = mine?.mood_partner || null;
   let selectedTalk = mine?.wants_to_talk || "talvez";
 
   $("#mood-grid").querySelectorAll(".mood-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       selectedMood = btn.dataset.mood;
       $("#mood-grid").querySelectorAll(".mood-btn").forEach((b) => b.classList.remove("selected"));
+      btn.classList.add("selected");
+    });
+  });
+  $("#mood-grid-partner").querySelectorAll(".mood-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      selectedMoodPartner = btn.dataset.mood;
+      $("#mood-grid-partner").querySelectorAll(".mood-btn").forEach((b) => b.classList.remove("selected"));
       btn.classList.add("selected");
     });
   });
@@ -1159,11 +1184,12 @@ async function renderMood() {
     });
   });
   $("#save-mood").addEventListener("click", async () => {
-    if (!selectedMood) { alert("Escolhe um humor primeiro :)"); return; }
+    if (!selectedMood) { alert("Escolhe como você está primeiro :)"); return; }
+    if (!selectedMoodPartner) { alert(`Escolhe também como você está com ${ROLE_LABEL[otherRole()]} :)`); return; }
     setBusy("#save-mood", true);
     try {
       const isFirstToday = !mine;
-      await db.upsertMood(State.coupleId, today, State.role, selectedMood, selectedTalk, $("#mood-note").value.trim());
+      await db.upsertMood(State.coupleId, today, State.role, selectedMood, selectedMoodPartner, selectedTalk, $("#mood-note").value.trim());
       if (isFirstToday) await earnCoins(State.role, 1, "registrou o humor do dia");
       const streak = await maybeAwardMoodStreak();
       if (streak) alert(`🎉 ${streak} dias seguidos registrando o humor! +5 moedas de bônus.`);

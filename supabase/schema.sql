@@ -115,7 +115,8 @@ create table if not exists moods (
   couple_id uuid not null references couples(id) on delete cascade,
   day date not null,
   role text not null check (role in ('gabriel', 'tata')),
-  mood text not null,
+  mood text not null, -- "como você está" (humor geral)
+  mood_partner text, -- "como você está com seu parceiro" hoje
   wants_to_talk text not null default 'talvez' check (wants_to_talk in ('sim', 'nao', 'talvez')),
   note text not null default '',
   updated_at timestamptz not null default now(),

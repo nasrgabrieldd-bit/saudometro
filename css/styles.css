@@ -454,23 +454,31 @@ button, input, textarea, select {
 /* ---------- mood grid ---------- */
 
 .mood-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  display: flex;
   gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 2px 8px;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 .mood-btn {
   background: var(--surface-alt);
   border: 2px solid transparent;
   border-radius: var(--radius-sm);
-  padding: 12px 4px;
+  padding: 12px 6px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
   cursor: pointer;
+  flex: 0 0 80px;
+  width: 80px;
+  scroll-snap-align: start;
 }
 .mood-btn .emoji { font-size: 26px; }
-.mood-btn .label { font-size: 10.5px; font-weight: 700; text-align: center; color: var(--text-muted); line-height: 1.2; }
+.mood-btn .label { font-size: 10.5px; font-weight: 700; text-align: center; color: var(--text-muted); line-height: 1.2; overflow-wrap: break-word; max-width: 100%; }
 .mood-btn.selected { border-color: var(--accent); background: var(--accent-soft); }
 
 .talk-options { display: flex; flex-direction: column; gap: 8px; }
