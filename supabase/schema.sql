@@ -168,6 +168,25 @@ create or replace view coin_balances as
   group by couple_id, role;
 
 -- ------------------------------------------------------------
+-- PERGUNTA DA SEMANA (uma por semana, sorteada da lista fixa do app)
+-- ------------------------------------------------------------
+create table if not exists weekly_answers (
+  id uuid primary key default gen_random_uuid(),
+  couple_id uuid not null references couples(id) on delete cascade,
+  week_index int not null, -- semanas desde a criação do casal
+  role text not null check (role in ('gabriel', 'tata')),
+  answer text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (couple_id, week_index, role)
+);
+
+alter table weekly_answers enable row level security;
+
+create policy "weekly_answers: couple access" on weekly_answers
+  for all using (couple_id = my_couple_id()) with check (couple_id = my_couple_id());
+
+-- ------------------------------------------------------------
 -- Habilitar Realtime nas tabelas que o app escuta ao vivo
 -- ------------------------------------------------------------
 alter publication supabase_realtime add table encounters;
@@ -175,3 +194,4 @@ alter publication supabase_realtime add table moods;
 alter publication supabase_realtime add table weekend_recharge;
 alter publication supabase_realtime add table coin_ledger;
 alter publication supabase_realtime add table profiles;
+alter publication supabase_realtime add table weekly_answers;

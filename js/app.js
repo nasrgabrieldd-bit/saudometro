@@ -2,6 +2,7 @@ import { initTheme } from "./theme.js";
 import { supabase, isConfigured } from "./supabaseClient.js";
 import * as db from "./db.js";
 import { MOODS, MOOD_BY_ID, TALK_OPTIONS, TALK_BY_ID } from "./moods.js";
+import { weekIndexSince, questionForWeek } from "./questions.js";
 import {
   toISODate, monthKey, parseISODate, addDays, addMonths, startOfMonth,
   daysInMonth, mondayIndex, mondayOfWeek, fridayOfWeekend, fridayOfWeekContaining, humanDateLong,
@@ -22,6 +23,7 @@ const State = {
   calendarEncounters: [],
   calendarPlan: null,
   calendarWeekend: [],
+  coupleCreatedAt: null,
   unsubscribe: null,
 };
 
@@ -63,6 +65,8 @@ async function enterApp(profile) {
   State.coupleId = profile.couple_id;
   State.role = profile.role;
   State.partner = await db.getPartnerProfile(State.coupleId, State.role);
+  const coupleMeta = await db.getCoupleMeta(State.coupleId);
+  State.coupleCreatedAt = coupleMeta.created_at;
 
   $("#screen-onboarding").style.display = "none";
   $("#screen-app").style.display = "flex";
@@ -778,6 +782,12 @@ async function renderMood() {
   const since = toISODate(addDays(new Date(), -6));
   const history = await db.getMoodHistory(State.coupleId, since);
 
+  const weekIndex = weekIndexSince(State.coupleCreatedAt);
+  const question = questionForWeek(weekIndex);
+  const weeklyAnswers = await db.getWeeklyAnswers(State.coupleId, weekIndex);
+  const myAnswer = weeklyAnswers.find((a) => a.role === State.role);
+  const theirAnswer = weeklyAnswers.find((a) => a.role !== State.role);
+
   view.innerHTML = `
     <div class="card">
       <div class="card-title">Como você tá hoje?</div>
@@ -822,6 +832,22 @@ async function renderMood() {
     <div class="card">
       ${historyStripHTML(history)}
     </div>
+
+    <div class="section-title">💭 Pergunta da semana</div>
+    <div class="card">
+      <div class="card-sub" style="font-size:15px; color:var(--text); font-weight:700;">${question}</div>
+      <textarea id="weekly-answer" rows="3" style="margin-top:10px;" placeholder="escreve sua resposta...">${myAnswer?.answer || ""}</textarea>
+      <button class="btn btn-primary btn-block" style="margin-top:12px;" id="save-weekly">${myAnswer ? "Atualizar resposta" : "Responder (🪙+1)"}</button>
+      ${theirAnswer ? `
+        <div class="entry-item" style="margin-top:14px;">
+          <div class="entry-icon">💬</div>
+          <div class="entry-body">
+            <div class="entry-title">Resposta de ${ROLE_LABEL[otherRole()]}</div>
+            <div class="entry-meta" style="margin-top:4px;">"${escapeHTML(theirAnswer.answer)}"</div>
+          </div>
+        </div>
+      ` : `<p class="hint-text" style="margin-top:12px;">${ROLE_LABEL[otherRole()]} ainda não respondeu essa semana.</p>`}
+    </div>
   `;
 
   let selectedMood = mine?.mood || null;
@@ -852,6 +878,23 @@ async function renderMood() {
     } catch (e) {
       alert("Não deu: " + (e.message || e));
       setBusy("#save-mood", false);
+    }
+  });
+
+  $("#save-weekly").addEventListener("click", async () => {
+    const answer = $("#weekly-answer").value.trim();
+    if (!answer) { alert("Escreve uma resposta primeiro :)"); return; }
+    setBusy("#save-weekly", true);
+    try {
+      const saved = await db.saveWeeklyAnswer(State.coupleId, weekIndex, State.role, answer);
+      if (saved.isNew) {
+        await db.addCoinTransaction(State.coupleId, State.role, 1, "respondeu a pergunta da semana");
+        alert("💭 Resposta salva! +1 moeda pra você.");
+      }
+      await renderMood();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#save-weekly", false);
     }
   });
 }
@@ -986,7 +1029,7 @@ async function renderProfile() {
         <span class="pill pill-coin">🦋 Tata: ${coins.tata || 0}</span>
       </div>
       <div class="stack" style="margin-top:12px; font-size:13px; color:var(--text-muted);">
-        <div>🟢 <strong style="color:var(--text);">Ganha:</strong> encontro combinado do mês acontece (+1 pra cada um) · sequência de 7 dias registrando humor (+1) · aceitar um convite (+1) · convite que você mandou foi recusado, a moeda volta (+1)</div>
+        <div>🟢 <strong style="color:var(--text);">Ganha:</strong> encontro combinado do mês acontece (+1 pra cada um) · sequência de 7 dias registrando humor (+1) · responder a pergunta da semana (+1) · aceitar um convite (+1) · convite que você mandou foi recusado, a moeda volta (+1)</div>
         <div>🔴 <strong style="color:var(--text);">Gasta:</strong> mandar qualquer convite, de saudade ou combinado na hora (-1) · recusar um convite de alguém (-1, de graça se for na sua semana de recarregar)</div>
         <div>Todo mundo começa com 10 moedas. Recusar nunca fica bloqueado por falta de moeda. É só um joguinho por cima, ninguém é obrigado a nada.</div>
       </div>

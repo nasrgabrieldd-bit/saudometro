@@ -32,6 +32,16 @@ export async function findCoupleByCode(code) {
   return data;
 }
 
+export async function getCoupleMeta(coupleId) {
+  const { data, error } = await supabase
+    .from("couples")
+    .select("code, created_at")
+    .eq("id", coupleId)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 export async function createCouple(code) {
   const { data, error } = await supabase
     .from("couples")
@@ -241,6 +251,42 @@ export async function getMoodHistory(coupleId, sinceISO) {
     .order("day", { ascending: true });
   if (error) throw error;
   return data || [];
+}
+
+// ---------- pergunta da semana ----------
+
+export async function getWeeklyAnswers(coupleId, weekIndex) {
+  const { data, error } = await supabase
+    .from("weekly_answers")
+    .select("*")
+    .eq("couple_id", coupleId)
+    .eq("week_index", weekIndex);
+  if (error) throw error;
+  return data || [];
+}
+
+// retorna isNew=true só na primeira vez que essa pessoa responde essa semana (pra decidir a moeda)
+export async function saveWeeklyAnswer(coupleId, weekIndex, role, answer) {
+  const existing = await supabase
+    .from("weekly_answers")
+    .select("id")
+    .eq("couple_id", coupleId)
+    .eq("week_index", weekIndex)
+    .eq("role", role)
+    .maybeSingle();
+  if (existing.error) throw existing.error;
+  const isNew = !existing.data;
+
+  const { data, error } = await supabase
+    .from("weekly_answers")
+    .upsert(
+      { couple_id: coupleId, week_index: weekIndex, role, answer, updated_at: new Date().toISOString() },
+      { onConflict: "couple_id,week_index,role" }
+    )
+    .select()
+    .single();
+  if (error) throw error;
+  return { ...data, isNew };
 }
 
 // ---------- fim de semana de recarregar ----------
