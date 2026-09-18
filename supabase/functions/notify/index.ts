@@ -110,6 +110,15 @@ function messageFor(table: string, type: string, record: any, oldRecord: any): M
         path: "?tab=shop",
       };
     }
+    // desfeito por engano — avisa quem tem que cumprir que ainda falta fazer
+    if (type === "UPDATE" && oldRecord?.status === "cumprido" && record.status === "pendente") {
+      return {
+        targetRole: otherRole(record.role),
+        title: "Ainda falta cumprir ↩️",
+        body: `Foi desfeito: "${record.title}" ainda não foi cumprido de verdade.`,
+        path: "?tab=shop",
+      };
+    }
     return null;
   }
 

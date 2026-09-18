@@ -547,10 +547,18 @@ export async function redeemPerk(coupleId, role, perk) {
   return data;
 }
 
-export async function markRedemptionFulfilled(id) {
+export async function markRedemptionFulfilled(id, rewardPaid) {
   const { error } = await supabase
     .from("shop_redemptions")
-    .update({ status: "cumprido", fulfilled_at: new Date().toISOString() })
+    .update({ status: "cumprido", fulfilled_at: new Date().toISOString(), reward_paid: rewardPaid })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function undoRedemptionFulfilled(id) {
+  const { error } = await supabase
+    .from("shop_redemptions")
+    .update({ status: "pendente", fulfilled_at: null, reward_paid: null })
     .eq("id", id);
   if (error) throw error;
 }

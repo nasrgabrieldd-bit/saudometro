@@ -237,7 +237,8 @@ create table if not exists shop_redemptions (
   cost int not null,
   status text not null default 'pendente' check (status in ('pendente', 'cumprido')),
   created_at timestamptz not null default now(),
-  fulfilled_at timestamptz
+  fulfilled_at timestamptz,
+  reward_paid int -- quanto foi pago de recompensa a quem cumpriu (guarda o valor exato, incluindo dia da sorte, pra dar pra desfazer certinho)
 );
 
 alter table shop_redemptions enable row level security;

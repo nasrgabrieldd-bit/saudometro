@@ -1772,7 +1772,10 @@ async function renderShop() {
           <div class="entry-meta">resgatado por ${ROLE_LABEL[r.role]} · ${r.cost}💰</div>
           ${r.status === "pendente"
             ? `<div class="entry-actions"><button class="btn btn-success btn-sm" data-act="fulfill" data-id="${r.id}">Marcar como cumprido${reward ? ` (💰+${reward} pra quem fez)` : ""} ✅</button></div>`
-            : `<div class="entry-meta">cumprido ✅</div>`}
+            : `
+              <div class="entry-meta">cumprido ✅</div>
+              <div class="entry-actions"><button class="btn btn-ghost btn-sm" data-act="undo-fulfill" data-id="${r.id}">↩️ Desfazer</button></div>
+            `}
         </div>
       </div>
     `;
@@ -1833,11 +1836,29 @@ async function renderShop() {
       btn.disabled = true;
       try {
         const redemption = redemptions.find((r) => r.id === btn.dataset.id);
-        await db.markRedemptionFulfilled(btn.dataset.id);
         const perk = PERK_BY_ID[redemption?.perk_id];
+        let paid = 0;
         if (perk?.fulfillReward) {
-          await earnCoins(flipRole(redemption.role), perk.fulfillReward, `cumpriu: ${redemption.title}`);
+          paid = await earnCoins(flipRole(redemption.role), perk.fulfillReward, `cumpriu: ${redemption.title}`);
         }
+        await db.markRedemptionFulfilled(btn.dataset.id, paid);
+        await renderShop();
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        btn.disabled = false;
+      }
+    });
+  });
+  view.querySelectorAll("[data-act='undo-fulfill']").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const redemption = redemptions.find((r) => r.id === btn.dataset.id);
+      if (!confirm(`Desfazer "${redemption?.title}"? Ela volta pra pendente${redemption?.reward_paid ? ` e a moeda de recompensa (${redemption.reward_paid}) é devolvida` : ""}.`)) return;
+      btn.disabled = true;
+      try {
+        if (redemption?.reward_paid) {
+          await db.addCoinTransaction(State.coupleId, flipRole(redemption.role), -redemption.reward_paid, `desfez: cumpriu ${redemption.title}`);
+        }
+        await db.undoRedemptionFulfilled(btn.dataset.id);
         await renderShop();
       } catch (e) {
         alert("Não deu: " + (e.message || e));
