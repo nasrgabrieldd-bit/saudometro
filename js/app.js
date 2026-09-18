@@ -6,6 +6,7 @@ import { weekIndexSince, questionForWeek } from "./questions.js";
 import { dayIndexSince, challengeForDay } from "./challenges.js";
 import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush, needsHomeScreenFirst } from "./push.js";
 import { PERKS, PERK_BY_ID, customToPerk, suggestedReward } from "./perks.js";
+import { holidaysForYear, holidayOn } from "./holidays.js";
 import { pickSaudadeNudge } from "./nudges.js";
 import {
   toISODate, monthKey, parseISODate, addDays, addMonths, startOfMonth,
@@ -933,19 +934,50 @@ async function renderCalendar() {
       <div class="weekday-row"><span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span></div>
       <div class="day-grid" id="day-grid"></div>
       <div class="legend">
-        <span>💗 combinado</span><span>✅ aconteceu</span><span>📅 aceito</span><span>🫂 saudade</span><span>✉️ convite</span><span>🔋 recarregando</span><span>💞 evento casal</span><span>💼 trabalho</span><span>📌 outro</span>
+        <span>💗 combinado</span><span>✅ aconteceu</span><span>📅 aceito</span><span>🫂 saudade</span><span>✉️ convite</span><span>🔋 recarregando</span><span>🎉 datas comemorativas</span><span>💞 evento casal</span><span>💼 trabalho</span><span>📌 outro</span>
       </div>
     </div>
+
+    ${monthHolidaysHTML(State.calendarMonth)}
 
     <div id="day-detail"></div>
   `;
 
   buildDayGrid();
+  view.querySelectorAll("[data-holiday-date]").forEach((el) => {
+    el.addEventListener("click", () => {
+      showDayDetail(el.dataset.holidayDate);
+      $("#day-detail").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
 
   $("#prev-month").addEventListener("click", () => { State.calendarMonth = addMonths(State.calendarMonth, -1); renderCalendar(); });
   $("#next-month").addEventListener("click", () => { State.calendarMonth = addMonths(State.calendarMonth, 1); renderCalendar(); });
   $("#btn-add-planejado").addEventListener("click", () => openAddEncounterModal("planejado"));
   $("#btn-add-evento").addEventListener("click", () => openAddEventModal());
+}
+
+function monthHolidaysHTML(month) {
+  const prefix = monthKey(month);
+  const list = Object.entries(holidaysForYear(month.getFullYear()))
+    .filter(([iso]) => iso.startsWith(prefix))
+    .sort(([a], [b]) => a.localeCompare(b));
+  if (!list.length) return "";
+  return `
+    <div class="card">
+      <div class="card-title" style="font-size:15px;">🎉 Datas do mês</div>
+      <div class="stack" style="margin-top:8px;">
+        ${list.map(([iso, h]) => `
+          <div class="entry-item" style="cursor:pointer;" data-holiday-date="${iso}">
+            <div class="entry-icon">${h.emoji}</div>
+            <div class="entry-body">
+              <div class="entry-title">${h.label}</div>
+              <div class="entry-meta">${humanDateShort(parseISODate(iso))}</div>
+            </div>
+          </div>`).join("")}
+      </div>
+    </div>
+  `;
 }
 
 function buildDayGrid() {
@@ -963,9 +995,10 @@ function buildDayGrid() {
     const isToday = isSameDate(date, new Date());
     const friday = fridayOfWeekend(date);
     const weekendActive = friday && State.calendarWeekend.some((w) => w.week_start === toISODate(friday) && w.active);
-    const dots = entries.slice(0, 3).map(iconFor).join("");
+    const holiday = holidayOn(date);
+    const dots = (holiday ? holiday.emoji : "") + entries.slice(0, holiday ? 2 : 3).map(iconFor).join("");
     html += `
-      <button class="day-cell ${isToday ? "today" : ""}" data-date="${iso}">
+      <button class="day-cell ${isToday ? "today" : ""}" data-date="${iso}" ${holiday ? `title="${holiday.label}"` : ""}>
         <span class="num">${day}</span>
         <span class="dots">${dots}${weekendActive ? "🔋" : ""}</span>
       </button>
@@ -997,9 +1030,11 @@ function showDayDetail(iso) {
     <div class="empty-state"><span class="emoji">🗓️</span>Nada marcado nesse dia ainda.</div>
   `;
 
+  const holiday = holidayOn(date);
   $("#day-detail").innerHTML = `
     <div class="card">
       <div class="card-title">${humanDateLong(date)}</div>
+      ${holiday ? `<div class="pill" style="margin:6px 0 10px;">${holiday.emoji} ${holiday.label}</div>` : ""}
       <div class="stack" id="entries-list">${entriesHTML}</div>
       <div class="row" style="margin-top:14px;">
         <button class="btn btn-secondary" id="btn-add-saudade-day">🫂 Encontro de saudade</button>
