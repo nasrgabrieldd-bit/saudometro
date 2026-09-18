@@ -195,7 +195,7 @@ async function updateNotesNavBadge() {
 const coinsOn = () => feat("shop");
 const cn = (text) => (coinsOn() ? text : "");
 async function addCoins(role, delta, reason) {
-  if (coinsOn()) await addCoins(role, delta, reason);
+  if (coinsOn()) await db.addCoinTransaction(State.coupleId, role, delta, reason);
 }
 
 async function earnCoins(role, amount, reason) {
