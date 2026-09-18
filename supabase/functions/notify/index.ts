@@ -162,6 +162,15 @@ Deno.serve(async (req) => {
     const oldRecord = payload.old_record;
     if (!record) return new Response("no record", { status: 200 });
 
+    // nomes de cada casal (casal sem configuração continua com Gabriel/Tata)
+    ROLE_LABEL.gabriel = "Gabriel";
+    ROLE_LABEL.tata = "Tata";
+    const { data: cs } = await supabase.from("couple_settings").select("names").eq("couple_id", record.couple_id).maybeSingle();
+    for (const k of ["gabriel", "tata"]) {
+      const n = cs?.names?.[k];
+      if (typeof n === "string" && n.trim()) ROLE_LABEL[k] = n.replace(/[<>&"'`\\]/g, "").trim().slice(0, 24);
+    }
+
     const msg = messageFor(table, type, record, oldRecord);
     if (!msg) return new Response("nothing to notify", { status: 200 });
 

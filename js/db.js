@@ -38,11 +38,34 @@ export async function getCoupleMeta(coupleId) {
   return data;
 }
 
-export async function createCouple(code) {
+export async function createCouple(code, names = {}, genders = {}, emojis = {}) {
   // via função no servidor: quem está criando ainda não é membro, então não consegue ler a linha de volta
-  const { data, error } = await supabase.rpc("create_couple", { p_code: code });
+  const { data, error } = await supabase.rpc("create_couple", { p_code: code, p_names: names, p_genders: genders, p_emojis: emojis });
   if (error) throw error;
   return { id: data, code };
+}
+
+// nomes/gênero já salvos de um casal, pra quem vai entrar pelo código (busca exata, nunca lista)
+export async function findCouplePreview(code) {
+  const { data, error } = await supabase.rpc("find_couple_preview", { p_code: code.trim().toUpperCase() });
+  if (error) throw error;
+  return data?.[0] || null;
+}
+
+export async function getCoupleSettings(coupleId) {
+  const { data, error } = await supabase.from("couple_settings").select("*").eq("couple_id", coupleId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function saveCoupleSettings(coupleId, fields) {
+  const { data, error } = await supabase
+    .from("couple_settings")
+    .upsert({ couple_id: coupleId, ...fields, updated_at: new Date().toISOString() }, { onConflict: "couple_id" })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 export async function getRolesTaken(coupleId) {

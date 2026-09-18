@@ -8,14 +8,16 @@ import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscr
 import { PERKS, PERK_BY_ID, customToPerk, suggestedReward } from "./perks.js";
 import { cycleInfo, cycleRingSVG, cycleLegendHTML, cycleTilesHTML, cycleHelpHTML, cyclePhaseName, cycleTip, cyclePhaseOnDate, averageCycleLength, CYCLE_COLORS, CYCLE_DISCLAIMER } from "./cycle.js";
 import { pickSaudadeNudge } from "./nudges.js";
+import { nameOf, genderOf, emojiOf, gen, genMixed, cleanName, setPeopleSettings, defaultEmojis, legacyPeople } from "./people.js";
 import {
   toISODate, monthKey, parseISODate, addDays, addMonths, startOfMonth,
   daysInMonth, mondayIndex, mondayOfWeek, fridayOfWeekend, fridayOfWeekContaining, humanDateLong,
   humanDateShort, weekdayAbbrev, monthLabel, isSameDate, todayISO, genCoupleCode,
 } from "./util.js";
 
-const ROLE_LABEL = { gabriel: "Gabriel", tata: "Tata" };
-const ROLE_EMOJI = { gabriel: "🦁", tata: "🦋" };
+// nomes e emojis vêm da configuração de cada casal (casal sem configuração = Gabriel/Tata como sempre)
+const ROLE_LABEL = new Proxy({}, { get: (_, role) => nameOf(role) });
+const ROLE_EMOJI = new Proxy({}, { get: (_, role) => emojiOf(role) });
 const NEEDS_CARE_MOODS = new Set(["saudade", "cansada", "estressada", "mal", "triste", "ansiosa", "brava", "assustada", "ciumenta"]);
 const WISH_COST = 3;
 
@@ -32,6 +34,7 @@ const State = {
   calendarPlan: null,
   calendarWeekend: [],
   coupleCreatedAt: null,
+  settings: null,
   unsubscribe: null,
 };
 
@@ -80,10 +83,20 @@ async function boot() {
   }
 }
 
+// casal com configuração usa o nome dela; casal antigo continua com o nome do perfil, como sempre foi
+function myDisplayName() {
+  return State.settings ? nameOf(State.role) : State.profile?.display_name || ROLE_LABEL[State.role];
+}
+function partnerDisplayName() {
+  return State.settings ? nameOf(otherRole()) : State.partner?.display_name || ROLE_LABEL[otherRole()];
+}
+
 async function enterApp(profile) {
   State.profile = profile;
   State.coupleId = profile.couple_id;
   State.role = profile.role;
+  State.settings = await db.getCoupleSettings(State.coupleId).catch(() => null);
+  setPeopleSettings(State.settings);
   State.partner = await db.getPartnerProfile(State.coupleId, State.role);
   const coupleMeta = await db.getCoupleMeta(State.coupleId);
   State.coupleCreatedAt = coupleMeta.created_at;
@@ -91,10 +104,10 @@ async function enterApp(profile) {
   $("#screen-onboarding").style.display = "none";
   $("#screen-app").style.display = "flex";
 
-  $("#avatar-badge").textContent = (profile.display_name || "?").trim()[0]?.toUpperCase() || "?";
+  $("#avatar-badge").textContent = (myDisplayName() || "?").trim()[0]?.toUpperCase() || "?";
   const hour = new Date().getHours();
   $("#greeting-eyebrow").textContent = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
-  $("#greeting-name").textContent = profile.display_name || ROLE_LABEL[profile.role];
+  $("#greeting-name").textContent = myDisplayName();
 
   document.querySelectorAll(".nav-btn").forEach((btn) => {
     btn.addEventListener("click", () => setActiveTab(btn.dataset.tab));
@@ -124,7 +137,7 @@ async function checkPendingDebts() {
           return `
             <div class="entry-item">
               <div class="entry-icon">${perk?.emoji || "🎁"}</div>
-              <div class="entry-body"><div class="entry-title">${escapeHTML(r.title)}</div></div>
+              <div class="entry-body"><div class="entry-title">${escapeHTML(gen(r.title, genderOf(r.role)))}</div></div>
             </div>
           `;
         }).join("")}
@@ -290,7 +303,7 @@ function renderActiveTab() {
 function renderOnboarding() {
   $("#screen-onboarding").style.display = "flex";
   $("#screen-onboarding").innerHTML = `
-    <div class="logo">💗</div>
+    <div class="logo" id="logo-egg" style="cursor:default;">💗</div>
     <h1>Saudômetro</h1>
     <p class="tagline">o encontrômetro do casal. Combinem os encontros do mês, guardem o humor do dia e mandem sinais de saudade um pro outro.</p>
     <div class="stack" id="onboarding-choices">
@@ -298,41 +311,125 @@ function renderOnboarding() {
       <button class="btn btn-secondary btn-block" id="btn-join">Já tenho um código</button>
     </div>
     <div id="onboarding-flow"></div>
+    <p class="hint-text" id="egg-text" style="text-align:center; font-size:11.5px; font-style:italic; margin:14px 8px 0; display:none;">Um app feito com amor: o Gabriel quis entender melhor a Tata, e criou um jeito de matar a saudade e falar de sentimentos. Que ele ajude você e quem você ama também.</p>
   `;
   $("#btn-create").addEventListener("click", startCreateFlow);
   $("#btn-join").addEventListener("click", startJoinFlow);
+  // easter egg: tocar no coração mostra a frase de como o app nasceu
+  $("#logo-egg").addEventListener("click", () => {
+    const t = $("#egg-text");
+    t.style.display = t.style.display === "none" ? "block" : "none";
+  });
+}
+
+function genderPickHTML(key, val) {
+  return `<div class="row" style="gap:8px; margin-top:8px;" data-gp="${key}">
+    ${[["mulher", "Mulher"], ["homem", "Homem"]].map(([v, l]) => `<button type="button" class="btn ${val === v ? "btn-primary" : "btn-secondary"} btn-sm" style="flex:1;" data-g="${v}">${l}</button>`).join("")}
+  </div>`;
+}
+
+function wireGenderPick(root, onPick) {
+  root.querySelectorAll("[data-gp]").forEach((row) => {
+    row.querySelectorAll("[data-g]").forEach((b) => b.addEventListener("click", () => {
+      onPick(row.dataset.gp, b.dataset.g);
+      row.querySelectorAll("[data-g]").forEach((x) => { x.className = `btn ${x.dataset.g === b.dataset.g ? "btn-primary" : "btn-secondary"} btn-sm`; });
+    }));
+  });
 }
 
 function startCreateFlow() {
   $("#onboarding-choices").style.display = "none";
-  const suggestion = genCoupleCode();
+  createNamesStep({ p: [{ n: "", g: "" }, { n: "", g: "" }], me: null, code: genCoupleCode() });
+}
+
+function createNamesStep(st) {
   $("#onboarding-flow").innerHTML = `
     <div class="stack">
-      <label class="field-label">Código do casal (pode trocar por uma palavra ou frase de vocês dois)</label>
-      <input type="text" id="couple-code" value="${suggestion}" maxlength="40" style="text-align:center; font-family:'Baloo 2'; font-size:20px; letter-spacing:0.04em;" />
-      <p class="hint-text">Guarde ou manda pra ela(e), vai precisar dele pra entrar no app pelo outro celular.</p>
-      <p class="field-label">Quem é você?</p>
-      <p class="hint-text" style="margin:-4px 0 10px;">🎁 O Gabriel foi o romântico que criou esse aplicativo pra Tata.</p>
-      <div class="role-pick" id="role-pick">
-        ${roleButtonsHTML(new Set())}
-      </div>
-      <label class="field-label">Seu nome (como quer aparecer)</label>
-      <input type="text" id="display-name" placeholder="ex: Gabriel" />
-      <button class="btn btn-primary btn-block" id="confirm-create" disabled>Criar e entrar</button>
+      <p class="field-label">Como vocês se chamam?</p>
+      <p class="hint-text" style="margin:-4px 0 6px;">O app usa o nome e o gênero pra escrever os textos do jeito certo pra cada um.</p>
+      ${[0, 1].map((i) => `
+        <div class="card" style="padding:12px;">
+          <label class="field-label">Pessoa ${i + 1}</label>
+          <input type="text" data-pn="${i}" maxlength="24" value="${escapeHTML(st.p[i].n)}" placeholder="nome" />
+          ${genderPickHTML(i, st.p[i].g)}
+        </div>`).join("")}
+      <button class="btn btn-primary btn-block" id="names-next">Continuar</button>
       <p class="error-text" id="onboarding-error"></p>
     </div>
   `;
-  wireRolePick();
+  const flow = $("#onboarding-flow");
+  wireGenderPick(flow, (k, v) => { st.p[+k].g = v; });
+  flow.querySelectorAll("[data-pn]").forEach((i) => i.addEventListener("input", () => { st.p[+i.dataset.pn].n = i.value; }));
+  $("#names-next").addEventListener("click", () => {
+    const err = (m) => { $("#onboarding-error").textContent = m; };
+    const names = st.p.map((x) => cleanName(x.n));
+    for (let i = 0; i < 2; i++) {
+      if (!names[i]) return err(`Escreva o nome da pessoa ${i + 1}.`);
+      if (!st.p[i].g) return err(`Escolha o gênero de ${names[i]}.`);
+    }
+    if (names[0].toLowerCase() === names[1].toLowerCase()) return err("Os dois nomes precisam ser diferentes.");
+    st.p.forEach((x, i) => { x.n = names[i]; });
+    createWhoStep(st);
+  });
+}
+
+function createWhoStep(st) {
+  const emo = defaultEmojis(st.p[0].g, st.p[1].g);
+  $("#onboarding-flow").innerHTML = `
+    <div class="stack">
+      <p class="field-label">Quem é você?</p>
+      <div class="role-pick" id="role-pick">
+        ${[0, 1].map((i) => `
+          <button class="role-btn ${st.me === i ? "selected" : ""}" data-idx="${i}">
+            <span class="role-emoji">${emo[i]}</span>
+            <span>${escapeHTML(st.p[i].n)}</span>
+          </button>`).join("")}
+      </div>
+      <button class="btn btn-primary btn-block" id="who-next">Continuar</button>
+      <button class="btn btn-ghost btn-block" id="who-back">Voltar</button>
+      <p class="error-text" id="onboarding-error"></p>
+    </div>
+  `;
+  const wrap = $("#role-pick");
+  wrap.querySelectorAll(".role-btn").forEach((btn) => btn.addEventListener("click", () => {
+    st.me = +btn.dataset.idx;
+    wrap.querySelectorAll(".role-btn").forEach((b) => b.classList.toggle("selected", b === btn));
+  }));
+  $("#who-back").addEventListener("click", () => createNamesStep(st));
+  $("#who-next").addEventListener("click", () => {
+    if (st.me === null) { $("#onboarding-error").textContent = "Toque no seu nome."; return; }
+    createCodeStep(st);
+  });
+}
+
+function createCodeStep(st) {
+  const partner = st.p[1 - st.me].n;
+  $("#onboarding-flow").innerHTML = `
+    <div class="stack">
+      <label class="field-label">Código do casal (pode trocar por uma palavra ou frase de vocês dois)</label>
+      <input type="text" id="couple-code" value="${escapeHTML(st.code)}" maxlength="40" style="text-align:center; font-family:'Baloo 2'; font-size:20px; letter-spacing:0.04em;" />
+      <p class="hint-text">Guarde ou mande pra ${escapeHTML(partner)}, vai precisar dele pra entrar no app pelo outro celular.</p>
+      <button class="btn btn-primary btn-block" id="confirm-create">Criar e entrar</button>
+      <button class="btn btn-ghost btn-block" id="code-back">Voltar</button>
+      <p class="error-text" id="onboarding-error"></p>
+    </div>
+  `;
+  $("#code-back").addEventListener("click", () => createWhoStep(st));
   $("#confirm-create").addEventListener("click", async () => {
-    const role = $("#role-pick").dataset.selected;
-    const name = $("#display-name").value.trim() || ROLE_LABEL[role];
     const code = $("#couple-code").value.trim().toUpperCase();
+    st.code = code;
     $("#onboarding-error").textContent = "";
     if (code.length < 3) { $("#onboarding-error").textContent = "O código precisa ter pelo menos 3 letras."; return; }
+    const slots = ["gabriel", "tata"];
+    const emo = defaultEmojis(st.p[0].g, st.p[1].g);
+    const names = { gabriel: st.p[0].n, tata: st.p[1].n };
+    const genders = { gabriel: st.p[0].g, tata: st.p[1].g };
+    const emojis = { gabriel: emo[0], tata: emo[1] };
+    const role = slots[st.me];
     setBusy("#confirm-create", true);
     try {
-      const couple = await db.createCouple(code);
-      const profile = await db.createProfile({ id: State.userId, coupleId: couple.id, role, displayName: name });
+      const couple = await db.createCouple(code, names, genders, emojis);
+      const profile = await db.createProfile({ id: State.userId, coupleId: couple.id, role, displayName: names[role] });
       await db.addCoinTransaction(couple.id, role, 25, "saldo inicial");
       await enterApp(profile);
     } catch (e) {
@@ -342,7 +439,6 @@ function startCreateFlow() {
       setBusy("#confirm-create", false);
     }
   });
-  syncCreateButtonState();
 }
 
 function startJoinFlow() {
@@ -362,7 +458,7 @@ function startJoinFlow() {
     if (code.length < 3) { $("#onboarding-error").textContent = "Digite o código completo."; return; }
     setBusy("#btn-check-code", true);
     try {
-      const couple = await db.findCoupleByCode(code);
+      const couple = await db.findCouplePreview(code);
       if (!couple) {
         $("#onboarding-error").textContent = "Não achei esse código. Confere com quem te mandou :)";
         setBusy("#btn-check-code", false);
@@ -378,62 +474,60 @@ function startJoinFlow() {
 }
 
 function renderJoinStep2(couple, taken) {
+  const base = legacyPeople();
+  const hasSettings = !!(couple.names && Object.keys(couple.names).length);
+  const eff = {};
+  for (const k of ["names", "genders", "emojis"]) eff[k] = { ...base[k], ...(couple[k] || {}) };
+  eff.names = { gabriel: cleanName(eff.names.gabriel) || base.names.gabriel, tata: cleanName(eff.names.tata) || base.names.tata };
+  let role = null, gender = null;
+
   $("#join-step2").innerHTML = `
     <p class="field-label">Quem é você?</p>
-    <p class="hint-text" style="margin:-4px 0 10px;">🎁 O Gabriel foi o romântico que criou esse aplicativo pra Tata.</p>
-    <div class="role-pick" id="role-pick">${roleButtonsHTML(taken)}</div>
-    <label class="field-label">Seu nome (como quer aparecer)</label>
-    <input type="text" id="display-name" placeholder="ex: Tata" />
+    <div class="role-pick" id="role-pick">
+      ${["gabriel", "tata"].map((r) => `
+        <button class="role-btn" data-role="${r}">
+          <span class="role-emoji">${escapeHTML(eff.emojis[r])}</span>
+          <span>${escapeHTML(eff.names[r])}${taken.has(r) ? " (já em uso)" : ""}</span>
+        </button>`).join("")}
+    </div>
+    <div id="join-me" style="display:none;">
+      <label class="field-label">Seu nome (pode corrigir)</label>
+      <input type="text" id="display-name" maxlength="24" />
+      <div id="join-gender"></div>
+    </div>
     <button class="btn btn-primary btn-block" id="confirm-join" disabled style="margin-top:14px;">Entrar</button>
   `;
-  wireRolePick();
+  const wrap = $("#role-pick");
+  wrap.querySelectorAll(".role-btn").forEach((btn) => btn.addEventListener("click", () => {
+    role = btn.dataset.role;
+    gender = eff.genders[role];
+    wrap.querySelectorAll(".role-btn").forEach((b) => b.classList.toggle("selected", b === btn));
+    $("#join-me").style.display = "block";
+    $("#display-name").value = eff.names[role];
+    $("#join-gender").innerHTML = genderPickHTML("me", gender);
+    wireGenderPick($("#join-gender"), (_, v) => { gender = v; });
+    $("#confirm-join").disabled = false;
+  }));
   $("#confirm-join").addEventListener("click", async () => {
-    const role = $("#role-pick").dataset.selected;
-    const name = $("#display-name").value.trim() || ROLE_LABEL[role];
+    const name = cleanName($("#display-name").value) || eff.names[role];
     setBusy("#confirm-join", true);
     try {
       const profile = await db.createProfile({ id: State.userId, coupleId: couple.id, role, displayName: name });
       if (profile.isNew) await db.addCoinTransaction(couple.id, role, 25, "saldo inicial");
+      // só grava a configuração se a pessoa corrigiu algo (casal antigo continua sem configuração)
+      if (name !== eff.names[role] || gender !== eff.genders[role]) {
+        await db.saveCoupleSettings(couple.id, {
+          names: { ...eff.names, [role]: name },
+          genders: { ...eff.genders, [role]: gender },
+          emojis: eff.emojis,
+        });
+      }
       await enterApp(profile);
     } catch (e) {
       $("#onboarding-error").textContent = "Não deu pra entrar: " + (e.message || e);
       setBusy("#confirm-join", false);
     }
   });
-  syncCreateButtonState();
-}
-
-function roleButtonsHTML(takenSet) {
-  return ["gabriel", "tata"].map((r) => `
-    <button class="role-btn" data-role="${r}">
-      <span class="role-emoji">${ROLE_EMOJI[r]}</span>
-      <span>${ROLE_LABEL[r]}${takenSet.has(r) ? " (já em uso)" : ""}</span>
-    </button>
-  `).join("");
-}
-
-function wireRolePick() {
-  const wrap = $("#role-pick");
-  wrap.querySelectorAll(".role-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      wrap.querySelectorAll(".role-btn").forEach((b) => b.classList.remove("selected"));
-      btn.classList.add("selected");
-      wrap.dataset.selected = btn.dataset.role;
-      syncCreateButtonState();
-    });
-  });
-}
-
-function syncCreateButtonState() {
-  const wrap = $("#role-pick");
-  const confirmBtn = $("#confirm-create") || $("#confirm-join");
-  if (!wrap || !confirmBtn) return;
-  const check = () => { confirmBtn.disabled = !wrap.dataset.selected; };
-  check();
-  const nameInput = $("#display-name");
-  if (nameInput) nameInput.addEventListener("input", check);
-  const observer = new MutationObserver(check);
-  observer.observe(wrap, { attributes: true, attributeFilter: ["data-selected"] });
 }
 
 function setBusy(sel, busy) {
@@ -481,6 +575,7 @@ async function renderHome() {
     role: State.role,
     todayISO: todayStr,
     partnerName: ROLE_LABEL[otherRole()],
+    partnerGender: genderOf(otherRole()),
     partnerNeedsCare,
     daysSinceKiss,
     weekHasSomething,
@@ -545,7 +640,7 @@ async function renderHome() {
       <div class="switch-row">
         <div>
           <div class="card-title" style="font-size:15px;">🔋 Fim de semana de recarregar</div>
-          <div class="card-sub" style="margin-bottom:0;">${humanDateShort(nextWeekendFriday)} a ${humanDateShort(addDays(nextWeekendFriday, 2))}. ${myWeekendOn ? "Você está reclusa(o) recarregando" : "Tudo normal pra você"}${partnerWeekendOn ? `. ${ROLE_LABEL[State.partner?.role]} também recarregando` : ""}.</div>
+          <div class="card-sub" style="margin-bottom:0;">${humanDateShort(nextWeekendFriday)} a ${humanDateShort(addDays(nextWeekendFriday, 2))}. ${myWeekendOn ? gen("Você está reclusa(o) recarregando", genderOf(State.role)) : "Tudo normal pra você"}${partnerWeekendOn ? `. ${ROLE_LABEL[State.partner?.role]} também recarregando` : ""}.</div>
         </div>
         <span class="switch ${myWeekendOn ? "on" : ""}" style="pointer-events:none;"></span>
       </div>
@@ -886,7 +981,7 @@ async function renderCalendar() {
     db.ensureMonthPlan(State.coupleId, mk),
     db.listEncountersForMonth(State.coupleId, mk),
     db.getWeekendRecharge(State.coupleId, mk),
-    State.role === "tata" ? db.getCycle(State.coupleId, State.role).catch(() => null) : null,
+    genderOf(State.role) === "mulher" ? db.getCycle(State.coupleId, State.role).catch(() => null) : null,
     State.partner ? db.getCycle(State.coupleId, State.partner.role).catch(() => null) : null,
   ]);
   State.calendarCycle = myCycle ? { s: myCycle, full: true } : partnerCycle ? { s: partnerCycle, full: partnerCycle.visibility === "full" } : null;
@@ -1278,7 +1373,7 @@ async function renderMood() {
   const myMoodStreak = countMoodStreakFromHistory(history, State.role);
 
   const weekIndex = weekIndexSince(State.coupleCreatedAt);
-  const question = questionForWeek(weekIndex);
+  const question = gen(questionForWeek(weekIndex), genderOf(State.role));
   const weeklyAnswers = await db.getWeeklyAnswers(State.coupleId, weekIndex);
   const myAnswer = weeklyAnswers.find((a) => a.role === State.role);
   const theirAnswer = weeklyAnswers.find((a) => a.role !== State.role);
@@ -1304,7 +1399,7 @@ async function renderMood() {
       <div class="mood-grid" id="mood-grid">
         ${MOODS.map((m) => `
           <button class="mood-btn ${mine?.mood === m.id ? "selected" : ""}" data-mood="${m.id}">
-            <span class="emoji">${m.emoji}</span><span class="label">${m.label}</span>
+            <span class="emoji">${m.emoji}</span><span class="label">${gen(m.label, genderOf(State.role))}</span>
           </button>
         `).join("")}
       </div>
@@ -1313,7 +1408,7 @@ async function renderMood() {
       <div class="mood-grid" id="mood-grid-partner">
         ${MOODS.map((m) => `
           <button class="mood-btn ${mine?.mood_partner === m.id ? "selected" : ""}" data-mood="${m.id}">
-            <span class="emoji">${m.emoji}</span><span class="label">${m.label}</span>
+            <span class="emoji">${m.emoji}</span><span class="label">${gen(m.label, genderOf(State.role))}</span>
           </button>
         `).join("")}
       </div>
@@ -1339,7 +1434,7 @@ async function renderMood() {
         <div class="partner-mood-card">
           <span class="emoji-big">${MOOD_BY_ID[theirs.mood]?.emoji || "❔"}</span>
           <div>
-            <div class="card-title" style="font-size:15px;">${MOOD_BY_ID[theirs.mood]?.label || theirs.mood}</div>
+            <div class="card-title" style="font-size:15px;">${gen(MOOD_BY_ID[theirs.mood]?.label || theirs.mood, genderOf(otherRole()))}</div>
             <div class="card-sub" style="margin-bottom:0;">${TALK_BY_ID[theirs.wants_to_talk]?.emoji || ""} ${TALK_BY_ID[theirs.wants_to_talk]?.label || ""}</div>
             ${theirs.note ? `<div class="entry-meta" style="margin-top:6px;">"${escapeHTML(theirs.note)}"</div>` : ""}
           </div>
@@ -1348,7 +1443,7 @@ async function renderMood() {
           <div class="partner-mood-card" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
             <span class="emoji-big">${MOOD_BY_ID[theirs.mood_partner]?.emoji || "❔"}</span>
             <div>
-              <div class="card-title" style="font-size:15px;">Com você: ${MOOD_BY_ID[theirs.mood_partner]?.label || theirs.mood_partner}</div>
+              <div class="card-title" style="font-size:15px;">Com você: ${gen(MOOD_BY_ID[theirs.mood_partner]?.label || theirs.mood_partner, genderOf(otherRole()))}</div>
             </div>
           </div>
         ` : ""}
@@ -1377,7 +1472,7 @@ async function renderMood() {
         </div>
       ` : `<p class="hint-text" style="margin-top:12px;">${ROLE_LABEL[otherRole()]} ainda não respondeu essa semana.</p>`}
     </div>
-    <p class="hint-text" style="text-align:center; margin-top:-8px;">🔮 Semana que vem: "${questionForWeek(weekIndex + 1)}"</p>
+    <p class="hint-text" style="text-align:center; margin-top:-8px;">🔮 Semana que vem: "${gen(questionForWeek(weekIndex + 1), genderOf(State.role))}"</p>
   `;
 
   $("#partner-mood-tap").addEventListener("click", () => openMoodHistoryModal(history, otherRole()));
@@ -1466,8 +1561,8 @@ function openMoodHistoryModal(history, role) {
           <div class="entry-icon">${mood?.emoji || "❔"}</div>
           <div class="entry-body">
             <div class="entry-title">${label}</div>
-            <div class="entry-meta" style="margin-top:2px;">Geral: <strong style="color:var(--text);">${mood?.label || escapeHTML(m.mood)}</strong></div>
-            ${withMood ? `<div class="entry-meta">Com ${withWhom}: ${withMood.emoji} <strong style="color:var(--text);">${withMood.label}</strong></div>` : ""}
+            <div class="entry-meta" style="margin-top:2px;">Geral: <strong style="color:var(--text);">${gen(mood?.label || escapeHTML(m.mood), genderOf(role))}</strong></div>
+            ${withMood ? `<div class="entry-meta">Com ${withWhom}: ${withMood.emoji} <strong style="color:var(--text);">${gen(withMood.label, genderOf(role))}</strong></div>` : ""}
             ${talk ? `<div class="entry-meta">${talk.emoji} ${talk.label}</div>` : ""}
             ${m.note ? `<div class="entry-meta" style="margin-top:4px;">"${escapeHTML(m.note)}"</div>` : ""}
           </div>
@@ -1719,7 +1814,7 @@ async function renderChallengeView() {
   ]);
 
   const todayIdx = dayIndexSince(State.coupleCreatedAt);
-  const todayChallenge = challengeForDay(todayIdx);
+  const todayChallenge = genMixed(challengeForDay(todayIdx), genderOf(State.role), genderOf(otherRole()));
   const myAnswerToday = todayAnswers.find((a) => a.role === State.role);
   const theirAnswerToday = todayAnswers.find((a) => a.role !== State.role);
 
@@ -1747,7 +1842,7 @@ async function renderChallengeView() {
         <div class="card-title" style="font-size:14px;">Desafios anteriores</div>
         <div class="stack">${historyDays.map((day) => {
           const dayAnswers = challengeHistory.filter((r) => r.day === day);
-          const prompt = challengeForDay(dayIndexSince(State.coupleCreatedAt, parseISODate(day)));
+          const prompt = genMixed(challengeForDay(dayIndexSince(State.coupleCreatedAt, parseISODate(day))), genderOf(State.role), genderOf(otherRole()));
           return `
             <div class="entry-item">
               <div class="entry-icon">🎯</div>
@@ -1969,7 +2064,7 @@ async function renderShop() {
         <div class="row" style="align-items:flex-start;">
           <div style="flex:0 0 auto; font-size:30px;">${escapeHTML(p.emoji)}</div>
           <div style="flex:1; min-width:0;">
-            <div class="card-title" style="font-size:15px;">${escapeHTML(p.title)}</div>
+            <div class="card-title" style="font-size:15px;">${escapeHTML(gen(p.title, genderOf(State.role)))}</div>
             ${p.desc ? `<div class="card-sub">${escapeHTML(p.desc)}</div>` : ""}
           </div>
           ${p.custom ? `<button class="btn btn-ghost btn-sm" style="flex:none;" data-act="edit-perk" data-id="${p.rowId}">✏️ Editar</button>` : ""}
@@ -1986,7 +2081,7 @@ async function renderShop() {
       <div class="entry-item">
         <div class="entry-icon">${escapeHTML(perk?.emoji || "🎁")}</div>
         <div class="entry-body">
-          <div class="entry-title">${escapeHTML(r.title)}</div>
+          <div class="entry-title">${escapeHTML(gen(r.title, genderOf(r.role)))}</div>
           <div class="entry-meta">resgatado por ${ROLE_LABEL[r.role]} · ${r.cost}💰</div>
           ${r.status === "pendente"
             ? `<div class="entry-actions"><button class="btn btn-success btn-sm" data-act="fulfill" data-id="${r.id}">Marcar como cumprido${reward ? ` (💰+${reward} pra quem fez)` : ""} ✅</button></div>`
@@ -2033,10 +2128,11 @@ async function renderShop() {
   view.querySelectorAll("[data-act='redeem']").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const perk = perkById[btn.dataset.perk];
-      if (!confirm(`Resgatar "${perk.title}" por ${perk.cost} moedas?`)) return;
+      const perkTitle = gen(perk.title, genderOf(State.role));
+      if (!confirm(`Resgatar "${perkTitle}" por ${perk.cost} moedas?`)) return;
       btn.disabled = true;
       try {
-        await db.redeemPerk(State.coupleId, State.role, perk);
+        await db.redeemPerk(State.coupleId, State.role, { ...perk, title: perkTitle });
         await renderShop();
       } catch (e) {
         alert("Não deu: " + (e.message || e));
@@ -2165,8 +2261,9 @@ async function renderProfile() {
       <div class="row" style="align-items:center;">
         <div class="avatar" style="width:56px;height:56px;font-size:22px;">${ROLE_EMOJI[State.role]}</div>
         <div>
-          <div class="card-title">${escapeHTML(State.profile.display_name)}</div>
-          <div class="card-sub" style="margin-bottom:0;">você é ${ROLE_LABEL[State.role]} · par de ${State.partner ? escapeHTML(State.partner.display_name) : "..."}</div>
+          <div class="card-title">${escapeHTML(myDisplayName())}</div>
+          <div class="card-sub" style="margin-bottom:0;">você é ${ROLE_LABEL[State.role]} · par de ${State.partner ? escapeHTML(partnerDisplayName()) : "..."}</div>
+          <button class="btn btn-ghost btn-sm" id="btn-edit-names" style="margin-top:6px; padding:6px 10px;">✏️ Editar nomes</button>
         </div>
       </div>
     </div>
@@ -2244,6 +2341,8 @@ async function renderProfile() {
     if (avatarTaps >= 5) { avatarTaps = 0; openAdminGate(); }
   });
 
+  $("#btn-edit-names")?.addEventListener("click", openNamesEditor);
+
   $("#btn-enable-push")?.addEventListener("click", () => {
     openModal(`
       <h3 class="modal-title">🔔 Ativar notificações</h3>
@@ -2276,7 +2375,7 @@ async function renderProfile() {
 
 // ================= CICLO MENSTRUAL (opcional, aba Calendário) =================
 
-const partnerName = () => escapeHTML(State.partner?.display_name || ROLE_LABEL[otherRole()]);
+const partnerName = () => escapeHTML(partnerDisplayName());
 
 function visibilityLabel(v) {
   return { me: "Só você vê", basic: `${partnerName()} vê o básico`, full: `${partnerName()} vê tudo` }[v];
@@ -2284,8 +2383,8 @@ function visibilityLabel(v) {
 
 function cycleCalendarSectionHTML(mine, theirs) {
   let h = "";
-  // o recurso é só da Tata; o Gabriel só vê o card dela se ela compartilhar
-  if (!mine && State.role === "tata") {
+  // o recurso é só de quem é mulher; o parceiro só vê o card se ela compartilhar
+  if (!mine && genderOf(State.role) === "mulher") {
     h += `
       <div class="card">
         <div class="card-title" style="font-size:15px;">🌸 Meu ciclo <span class="pill pill-muted" style="margin-left:6px;">opcional</span></div>
@@ -2417,6 +2516,58 @@ function openCycleEditor(existing) {
     } catch (e) {
       alert("Não deu: " + (e.message || e));
       setBusy("#cy-save", false);
+    }
+  });
+}
+
+// ================= NOMES DO CASAL =================
+
+// qualquer um dos dois pode editar os nomes e o gênero de ambos
+function openNamesEditor() {
+  const base = legacyPeople();
+  const cur = {
+    names: { ...base.names, ...(State.settings?.names || {}) },
+    genders: { ...base.genders, ...(State.settings?.genders || {}) },
+    emojis: { ...base.emojis, ...(State.settings?.emojis || {}) },
+  };
+  const roles = [State.role, otherRole()];
+  const genders = { ...cur.genders };
+  openModal(`
+    <h3 class="modal-title">✏️ Nomes do casal</h3>
+    <p class="card-sub">Os dois podem editar. O app usa o nome e o gênero pra escrever os textos do jeito certo.</p>
+    ${roles.map((r) => `
+      <div class="card" style="padding:12px; margin-bottom:10px;">
+        <label class="field-label">${r === State.role ? "Você" : "Seu par"}</label>
+        <input type="text" data-nm="${r}" maxlength="24" value="${escapeHTML(nameOf(r))}" />
+        <div class="row" style="gap:8px; margin-top:8px;" data-gr="${r}">
+          ${[["mulher", "Mulher"], ["homem", "Homem"]].map(([v, l]) => `<button type="button" class="btn ${genders[r] === v ? "btn-primary" : "btn-secondary"} btn-sm" style="flex:1;" data-g="${v}">${l}</button>`).join("")}
+        </div>
+      </div>`).join("")}
+    <p class="error-text" id="names-err"></p>
+    <button class="btn btn-primary btn-block" id="names-save">Salvar</button>
+  `);
+  $("#modal-sheet").querySelectorAll("[data-gr]").forEach((row) => {
+    row.querySelectorAll("[data-g]").forEach((b) => b.addEventListener("click", () => {
+      genders[row.dataset.gr] = b.dataset.g;
+      row.querySelectorAll("[data-g]").forEach((x) => { x.className = `btn ${x.dataset.g === b.dataset.g ? "btn-primary" : "btn-secondary"} btn-sm`; });
+    }));
+  });
+  $("#names-save").addEventListener("click", async () => {
+    const names = { ...cur.names };
+    $("#modal-sheet").querySelectorAll("[data-nm]").forEach((i) => { names[i.dataset.nm] = cleanName(i.value); });
+    if (!names.gabriel || !names.tata) { $("#names-err").textContent = "Os dois nomes precisam estar preenchidos."; return; }
+    if (names.gabriel.toLowerCase() === names.tata.toLowerCase()) { $("#names-err").textContent = "Os dois nomes precisam ser diferentes."; return; }
+    setBusy("#names-save", true);
+    try {
+      State.settings = await db.saveCoupleSettings(State.coupleId, { names, genders, emojis: cur.emojis, features: State.settings?.features || {} });
+      setPeopleSettings(State.settings);
+      $("#greeting-name").textContent = myDisplayName();
+      $("#avatar-badge").textContent = (myDisplayName() || "?").trim()[0]?.toUpperCase() || "?";
+      closeModal();
+      renderActiveTab();
+    } catch (e) {
+      $("#names-err").textContent = "Não deu: " + (e.message || e);
+      setBusy("#names-save", false);
     }
   });
 }

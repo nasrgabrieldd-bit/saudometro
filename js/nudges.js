@@ -1,3 +1,5 @@
+import { gen } from "./people.js";
+
 // banco de mensagens fofas pra lembrar cada um de cuidar do outro à distância.
 // escolhidas por contexto (humor recente, dias sem beijo, semana sem encontro) e sorteadas
 // de forma estável pelo dia, pra não ficar mudando toda hora que a home recarrega.
@@ -40,7 +42,12 @@ function stableIndex(seed, length) {
 
 // escolhe UMA mensagem de carinho pro dia, priorizando o sinal mais relevante:
 // humor recente do parceiro > dias sem beijo > semana sem encontro marcado.
-export function pickSaudadeNudge({ role, todayISO, partnerName, partnerNeedsCare, daysSinceKiss, weekHasSomething }) {
+export function pickSaudadeNudge({ partnerGender, ...rest }) {
+  const text = pickRawNudge(rest);
+  return text ? gen(text, partnerGender) : null;
+}
+
+function pickRawNudge({ role, todayISO, partnerName, partnerNeedsCare, daysSinceKiss, weekHasSomething }) {
   const seedBase = `${todayISO}:${role}`;
   if (partnerNeedsCare) {
     const i = stableIndex(seedBase + ":mood", MOOD_NUDGES.length);
