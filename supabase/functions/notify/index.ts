@@ -46,6 +46,15 @@ function messageFor(table: string, type: string, record: any, oldRecord: any): M
         path: "?tab=calendar",
       };
     }
+    if (type === "INSERT" && record.kind === "evento") {
+      const cat = ({ casal: "de casal", trabalho: "de trabalho", outro: "" } as Record<string, string>)[record.category] ?? "";
+      return {
+        targetRole: otherRole(record.created_by),
+        title: "Novo evento no calendário 📌",
+        body: `${ROLE_LABEL[record.created_by]} adicionou um evento ${cat ? cat + " " : ""}: ${record.title || "sem título"}`.replace(" :", ":"),
+        path: "?tab=calendar",
+      };
+    }
     if (type === "INSERT" && record.kind === "saudade") {
       return {
         targetRole: otherRole(record.created_by),

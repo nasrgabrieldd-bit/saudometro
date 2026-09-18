@@ -5,7 +5,7 @@ import { MOODS, MOOD_BY_ID, TALK_OPTIONS, TALK_BY_ID } from "./moods.js";
 import { weekIndexSince, questionForWeek } from "./questions.js";
 import { dayIndexSince, challengeForDay } from "./challenges.js";
 import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush, needsHomeScreenFirst } from "./push.js";
-import { PERKS, PERK_BY_ID } from "./perks.js";
+import { PERKS, PERK_BY_ID, customToPerk, suggestedReward } from "./perks.js";
 import { pickSaudadeNudge } from "./nudges.js";
 import {
   toISODate, monthKey, parseISODate, addDays, addMonths, startOfMonth,
@@ -727,19 +727,27 @@ async function findNextUpcoming(today) {
   const end = addDays(start, 60);
   const all = await encountersInRange(start, end);
   const candidates = all
-    .filter((e) => e.status !== "recusado" && e.status !== "nao_aconteceu")
+    .filter((e) => e.kind !== "evento" && e.status !== "recusado" && e.status !== "nao_aconteceu")
     .filter((e) => { const en = e.end_date ? parseISODate(e.end_date) : parseISODate(e.start_date); return en >= start; })
     .sort((a, b) => parseISODate(a.start_date) - parseISODate(b.start_date));
   return candidates[0] || null;
 }
 
+const EVENT_CATEGORIES = {
+  casal: { emoji: "💞", label: "Casal" },
+  trabalho: { emoji: "💼", label: "Trabalho" },
+  outro: { emoji: "📌", label: "Outro" },
+};
+
 function defaultTitle(e) {
   if (e.kind === "planejado") return "Encontro combinado";
   if (e.kind === "saudade") return "Encontro de saudade";
+  if (e.kind === "evento") return "Evento";
   return "Convite";
 }
 
 function iconFor(e) {
+  if (e.kind === "evento") return (EVENT_CATEGORIES[e.category] || EVENT_CATEGORIES.outro).emoji;
   // "aconteceu de verdade" tem prioridade sobre qualquer outro estado, de qualquer tipo
   if (e.status === "aconteceu") return "✅";
   if (e.status === "nao_aconteceu") return "⚪";
@@ -918,13 +926,14 @@ async function renderCalendar() {
         </div>
         <button class="btn btn-primary btn-sm" id="btn-add-planejado">+ Encontro</button>
       </div>
+      <button class="btn btn-secondary btn-block" style="margin-top:10px;" id="btn-add-evento">📌 Adicionar evento</button>
     </div>
 
     <div class="card">
       <div class="weekday-row"><span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span></div>
       <div class="day-grid" id="day-grid"></div>
       <div class="legend">
-        <span>💗 combinado</span><span>✅ aconteceu</span><span>📅 aceito</span><span>🫂 saudade</span><span>✉️ convite</span><span>🔋 recarregando</span>
+        <span>💗 combinado</span><span>✅ aconteceu</span><span>📅 aceito</span><span>🫂 saudade</span><span>✉️ convite</span><span>🔋 recarregando</span><span>💞 evento casal</span><span>💼 trabalho</span><span>📌 outro</span>
       </div>
     </div>
 
@@ -936,6 +945,7 @@ async function renderCalendar() {
   $("#prev-month").addEventListener("click", () => { State.calendarMonth = addMonths(State.calendarMonth, -1); renderCalendar(); });
   $("#next-month").addEventListener("click", () => { State.calendarMonth = addMonths(State.calendarMonth, 1); renderCalendar(); });
   $("#btn-add-planejado").addEventListener("click", () => openAddEncounterModal("planejado"));
+  $("#btn-add-evento").addEventListener("click", () => openAddEventModal());
 }
 
 function buildDayGrid() {
@@ -993,12 +1003,14 @@ function showDayDetail(iso) {
       <div class="stack" id="entries-list">${entriesHTML}</div>
       <div class="row" style="margin-top:14px;">
         <button class="btn btn-secondary" id="btn-add-saudade-day">🫂 Encontro de saudade</button>
+        <button class="btn btn-secondary" id="btn-add-evento-day">📌 Evento</button>
         ${friday ? `<button class="btn ${myWeekendOn ? "btn-danger" : "btn-secondary"}" id="btn-toggle-weekend-day">${myWeekendOn ? "🔋 Cancelar recarga" : "🔋 Recarregar esse fds"}</button>` : ""}
       </div>
     </div>
   `;
 
   $("#btn-add-saudade-day").addEventListener("click", () => openAddEncounterModal("saudade", date));
+  $("#btn-add-evento-day").addEventListener("click", () => openAddEventModal(date));
   $("#btn-toggle-weekend-day")?.addEventListener("click", async () => {
     await db.setWeekendRecharge(State.coupleId, toISODate(friday), State.role, !myWeekendOn);
     await renderCalendar();
@@ -1012,7 +1024,9 @@ function entryItemHTML(e) {
   const mine = e.created_by === State.role;
   const isTerminal = e.status === "aconteceu" || e.status === "nao_aconteceu";
   let actions = "";
-  if (e.kind === "planejado" && !isTerminal) {
+  if (e.kind === "evento") {
+    actions = "";
+  } else if (e.kind === "planejado" && !isTerminal) {
     actions = `
       <button class="btn btn-success btn-sm" data-act="happened" data-id="${e.id}">Aconteceu ✅</button>
       <button class="btn btn-ghost btn-sm" data-act="missed" data-id="${e.id}">Não rolou</button>
@@ -1049,6 +1063,7 @@ function entryItemHTML(e) {
 }
 
 function statusLabel(e) {
+  if (e.kind === "evento") return `evento de ${(EVENT_CATEGORIES[e.category] || EVENT_CATEGORIES.outro).label.toLowerCase()}`;
   const map = {
     agendado: "combinado", confirmado: "confirmado", aconteceu: "aconteceu",
     nao_aconteceu: "não aconteceu", pendente: "pendente", recusado: "recusado",
@@ -1146,6 +1161,58 @@ function openAddEncounterModal(kind, presetDate) {
   });
 }
 
+function openAddEventModal(presetDate) {
+  const dateVal = presetDate ? toISODate(presetDate) : toISODate(new Date());
+  let category = "casal";
+  openModal(`
+    <h3 class="modal-title">📌 Novo evento no calendário</h3>
+    <label class="field-label">Tipo</label>
+    <div class="row" id="event-cats" style="gap:8px;">
+      ${Object.entries(EVENT_CATEGORIES).map(([id, c]) => `
+        <button type="button" class="btn ${id === category ? "btn-primary" : "btn-secondary"} btn-sm" data-cat="${id}" style="flex:1;">${c.emoji} ${c.label}</button>
+      `).join("")}
+    </div>
+    <label class="field-label">Título</label>
+    <input type="text" id="new-title" maxlength="80" placeholder="ex: reunião importante, aniversário da vó" />
+    <label class="field-label">Data de início</label>
+    <input type="date" id="new-start" value="${dateVal}" />
+    <label class="field-label">Data final (se durar mais de um dia)</label>
+    <input type="date" id="new-end" value="" />
+    <p class="hint-text" style="margin-top:8px;">O evento aparece no calendário dos dois e não conta como encontro nem mexe nas moedas.</p>
+    <button class="btn btn-primary btn-block" style="margin-top:16px;" id="save-encounter">Salvar</button>
+  `);
+  $("#event-cats").querySelectorAll("[data-cat]").forEach((b) => {
+    b.addEventListener("click", () => {
+      category = b.dataset.cat;
+      $("#event-cats").querySelectorAll("[data-cat]").forEach((x) => {
+        x.className = `btn ${x.dataset.cat === category ? "btn-primary" : "btn-secondary"} btn-sm`;
+      });
+    });
+  });
+  $("#save-encounter").addEventListener("click", async () => {
+    const title = $("#new-title").value.trim();
+    if (!title) { alert("Dá um título pro evento :)"); return; }
+    if (!$("#new-start").value) { alert("Escolhe a data de início."); return; }
+    const start = parseISODate($("#new-start").value);
+    const endVal = $("#new-end").value;
+    if (endVal && parseISODate(endVal) < start) { alert("A data final não pode ser antes da inicial."); return; }
+    setBusy("#save-encounter", true);
+    try {
+      await db.createEncounter({
+        coupleId: State.coupleId, startDate: start, endDate: endVal ? parseISODate(endVal) : null,
+        title, kind: "evento", category, createdBy: State.role, status: "agendado",
+      });
+      closeModal();
+      State.calendarMonth = startOfMonth(start);
+      await renderCalendar();
+      showDayDetail(toISODate(start));
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#save-encounter", false);
+    }
+  });
+}
+
 // ================= HUMOR =================
 
 async function renderMood() {
@@ -1202,7 +1269,7 @@ async function renderMood() {
     </div>
 
     <div class="section-title">Humor de ${ROLE_LABEL[otherRole()]} hoje</div>
-    <div class="card">
+    <div class="card" id="partner-mood-tap" role="button" tabindex="0" style="cursor:pointer;">
       ${theirs ? `
         <div class="partner-mood-card">
           <span class="emoji-big">${MOOD_BY_ID[theirs.mood]?.emoji || "❔"}</span>
@@ -1221,11 +1288,13 @@ async function renderMood() {
           </div>
         ` : ""}
       ` : `<div class="empty-state"><span class="emoji">🤔</span>${ROLE_LABEL[otherRole()]} ainda não registrou o humor de hoje.</div>`}
+      <p class="hint-text" style="margin:12px 0 0; text-align:center; font-weight:800; color:var(--accent-strong);">Toque pra ver os últimos 7 dias 📅 ›</p>
     </div>
 
     <div class="section-title">Últimos 7 dias</div>
     <div class="card">
       ${historyStripHTML(history)}
+      <button class="btn btn-secondary btn-block" style="margin-top:14px;" id="btn-mood-history">📅 Ver detalhes de ${ROLE_LABEL[otherRole()]} (com você, conversa, recadinhos)</button>
     </div>
 
     <div class="section-title">💭 Pergunta da semana</div>
@@ -1245,6 +1314,9 @@ async function renderMood() {
     </div>
     <p class="hint-text" style="text-align:center; margin-top:-8px;">🔮 Semana que vem: "${questionForWeek(weekIndex + 1)}"</p>
   `;
+
+  $("#partner-mood-tap").addEventListener("click", () => openMoodHistoryModal(history, otherRole()));
+  $("#btn-mood-history").addEventListener("click", () => openMoodHistoryModal(history, otherRole()));
 
   let selectedMood = mine?.mood || null;
   let selectedMoodPartner = mine?.mood_partner || null;
@@ -1304,6 +1376,54 @@ async function renderMood() {
       setBusy("#save-weekly", false);
     }
   });
+}
+
+// detalhe dos últimos 7 dias de uma pessoa: humor geral + como está "com o par" + vontade de conversar + recado
+function openMoodHistoryModal(history, role) {
+  const days = [];
+  for (let i = 0; i < 7; i++) days.push(addDays(new Date(), -i));
+  const render = () => {
+    const isMe = role === State.role;
+    const withWhom = isMe ? ROLE_LABEL[otherRole()] : "você";
+    const rows = days.map((d) => {
+      const iso = toISODate(d);
+      const m = history.find((h) => h.day === iso && h.role === role);
+      const label = `${iso === todayISO() ? "Hoje" : weekdayAbbrev(d)} · ${humanDateShort(d)}`;
+      if (!m) {
+        return `<div class="entry-item"><div class="entry-icon">·</div><div class="entry-body">
+          <div class="entry-title">${label}</div><div class="entry-meta">sem registro nesse dia</div></div></div>`;
+      }
+      const mood = MOOD_BY_ID[m.mood];
+      const withMood = m.mood_partner ? MOOD_BY_ID[m.mood_partner] : null;
+      const talk = TALK_BY_ID[m.wants_to_talk];
+      return `
+        <div class="entry-item">
+          <div class="entry-icon">${mood?.emoji || "❔"}</div>
+          <div class="entry-body">
+            <div class="entry-title">${label}</div>
+            <div class="entry-meta" style="margin-top:2px;">Geral: <strong style="color:var(--text);">${mood?.label || escapeHTML(m.mood)}</strong></div>
+            ${withMood ? `<div class="entry-meta">Com ${withWhom}: ${withMood.emoji} <strong style="color:var(--text);">${withMood.label}</strong></div>` : ""}
+            ${talk ? `<div class="entry-meta">${talk.emoji} ${talk.label}</div>` : ""}
+            ${m.note ? `<div class="entry-meta" style="margin-top:4px;">"${escapeHTML(m.note)}"</div>` : ""}
+          </div>
+        </div>`;
+    }).join("");
+    $("#modal-sheet").querySelector("#mood-hist-body").innerHTML = `<div class="stack">${rows}</div>`;
+    $("#modal-sheet").querySelectorAll("[data-hist-role]").forEach((b) => {
+      b.className = `btn ${b.dataset.histRole === role ? "btn-primary" : "btn-secondary"} btn-sm`;
+    });
+  };
+  openModal(`
+    <h3 class="modal-title">📅 Últimos 7 dias</h3>
+    <div class="row" style="gap:8px; margin-bottom:12px;">
+      ${[otherRole(), State.role].map((r) => `<button type="button" class="btn btn-secondary btn-sm" style="flex:1;" data-hist-role="${r}">${ROLE_EMOJI[r]} ${r === State.role ? "Você" : ROLE_LABEL[r]}</button>`).join("")}
+    </div>
+    <div id="mood-hist-body"></div>
+  `);
+  $("#modal-sheet").querySelectorAll("[data-hist-role]").forEach((b) => {
+    b.addEventListener("click", () => { role = b.dataset.histRole; render(); });
+  });
+  render();
 }
 
 function historyStripHTML(history) {
@@ -1765,22 +1885,43 @@ function formatNoteTimestamp(iso) {
 
 async function renderShop() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
-  const [coins, redemptions] = await Promise.all([
+  const [coins, redemptions, customRows] = await Promise.all([
     db.getCoinBalances(State.coupleId),
     db.listShopRedemptions(State.coupleId),
+    db.listCustomPerks(State.coupleId).catch(() => []),
   ]);
   const myCoins = coins[State.role] || 0;
   const pending = redemptions.filter((r) => r.status === "pendente");
   const fulfilled = redemptions.filter((r) => r.status === "cumprido");
+  const customPerks = customRows.map(customToPerk);
+  const perkById = { ...PERK_BY_ID, ...Object.fromEntries(customPerks.map((p) => [p.id, p])) };
+  // item apagado depois de resgatado: usa a recompensa sugerida pelo custo que ficou registrado
+  const rewardFor = (r) => perkById[r.perk_id]?.fulfillReward ?? suggestedReward(r.cost);
+
+  function perkCardHTML(p) {
+    return `
+      <div class="card">
+        <div class="row" style="align-items:flex-start;">
+          <div style="flex:0 0 auto; font-size:30px;">${escapeHTML(p.emoji)}</div>
+          <div style="flex:1; min-width:0;">
+            <div class="card-title" style="font-size:15px;">${escapeHTML(p.title)}</div>
+            ${p.desc ? `<div class="card-sub">${escapeHTML(p.desc)}</div>` : ""}
+          </div>
+          ${p.custom ? `<button class="btn btn-ghost btn-sm" style="flex:none;" data-act="edit-perk" data-id="${p.rowId}">✏️ Editar</button>` : ""}
+        </div>
+        <button class="btn ${myCoins >= p.cost ? "btn-warm" : "btn-secondary"} btn-block" data-act="redeem" data-perk="${p.id}" ${myCoins < p.cost ? "disabled" : ""}>Resgatar (💰 ${p.cost})</button>
+      </div>
+    `;
+  }
 
   function redemptionItemHTML(r) {
-    const perk = PERK_BY_ID[r.perk_id];
-    const reward = perk?.fulfillReward || 0;
+    const perk = perkById[r.perk_id];
+    const reward = rewardFor(r);
     return `
       <div class="entry-item">
-        <div class="entry-icon">${perk?.emoji || "🎁"}</div>
+        <div class="entry-icon">${escapeHTML(perk?.emoji || "🎁")}</div>
         <div class="entry-body">
-          <div class="entry-title">${r.title}</div>
+          <div class="entry-title">${escapeHTML(r.title)}</div>
           <div class="entry-meta">resgatado por ${ROLE_LABEL[r.role]} · ${r.cost}💰</div>
           ${r.status === "pendente"
             ? `<div class="entry-actions"><button class="btn btn-success btn-sm" data-act="fulfill" data-id="${r.id}">Marcar como cumprido${reward ? ` (💰+${reward} pra quem fez)` : ""} ✅</button></div>`
@@ -1804,18 +1945,13 @@ async function renderShop() {
 
     <div class="section-title">Trocar moedas por</div>
     <div class="stack">
-      ${PERKS.map((p) => `
-        <div class="card">
-          <div class="row" style="align-items:flex-start;">
-            <div style="flex:0 0 auto; font-size:30px;">${p.emoji}</div>
-            <div style="flex:1;">
-              <div class="card-title" style="font-size:15px;">${p.title}</div>
-              <div class="card-sub">${p.desc}</div>
-            </div>
-          </div>
-          <button class="btn ${myCoins >= p.cost ? "btn-warm" : "btn-secondary"} btn-block" data-act="redeem" data-perk="${p.id}" ${myCoins < p.cost ? "disabled" : ""}>Resgatar (💰 ${p.cost})</button>
-        </div>
-      `).join("")}
+      ${PERKS.map(perkCardHTML).join("")}
+    </div>
+
+    <div class="section-title">Criados por vocês 💡</div>
+    <div class="stack">
+      ${customPerks.map(perkCardHTML).join("")}
+      <button class="btn btn-secondary btn-block" id="btn-new-perk">➕ Criar um item da lojinha</button>
     </div>
 
     ${pending.length ? `
@@ -1831,7 +1967,7 @@ async function renderShop() {
 
   view.querySelectorAll("[data-act='redeem']").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      const perk = PERK_BY_ID[btn.dataset.perk];
+      const perk = perkById[btn.dataset.perk];
       if (!confirm(`Resgatar "${perk.title}" por ${perk.cost} moedas?`)) return;
       btn.disabled = true;
       try {
@@ -1848,10 +1984,10 @@ async function renderShop() {
       btn.disabled = true;
       try {
         const redemption = redemptions.find((r) => r.id === btn.dataset.id);
-        const perk = PERK_BY_ID[redemption?.perk_id];
+        const reward = rewardFor(redemption);
         let paid = 0;
-        if (perk?.fulfillReward) {
-          paid = await earnCoins(flipRole(redemption.role), perk.fulfillReward, `cumpriu: ${redemption.title}`);
+        if (reward) {
+          paid = await earnCoins(flipRole(redemption.role), reward, `cumpriu: ${redemption.title}`);
         }
         await db.markRedemptionFulfilled(btn.dataset.id, paid);
         await renderShop();
@@ -1860,6 +1996,10 @@ async function renderShop() {
         btn.disabled = false;
       }
     });
+  });
+  $("#btn-new-perk").addEventListener("click", () => openPerkModal(null));
+  view.querySelectorAll("[data-act='edit-perk']").forEach((btn) => {
+    btn.addEventListener("click", () => openPerkModal(customRows.find((r) => r.id === btn.dataset.id)));
   });
   view.querySelectorAll("[data-act='undo-fulfill']").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -1877,6 +2017,64 @@ async function renderShop() {
         btn.disabled = false;
       }
     });
+  });
+}
+
+function openPerkModal(existing) {
+  const cost0 = existing?.cost ?? 10;
+  openModal(`
+    <h3 class="modal-title">${existing ? "✏️ Editar item" : "💡 Novo item da lojinha"}</h3>
+    <div class="row" style="gap:10px;">
+      <div style="flex:0 0 72px;">
+        <label class="field-label">Emoji</label>
+        <input type="text" id="perk-emoji" maxlength="4" value="${escapeHTML(existing?.emoji || "🎁")}" style="text-align:center; font-size:22px;" />
+      </div>
+      <div style="flex:1; min-width:0;">
+        <label class="field-label">Nome</label>
+        <input type="text" id="perk-title" maxlength="60" value="${escapeHTML(existing?.title || "")}" placeholder="ex: massagem nos pés" />
+      </div>
+    </div>
+    <label class="field-label">Descrição (opcional)</label>
+    <textarea id="perk-desc" rows="2" maxlength="200" placeholder="o que o outro se compromete a fazer">${escapeHTML(existing?.description || "")}</textarea>
+    <label class="field-label">Custo em moedas</label>
+    <input type="number" id="perk-cost" min="1" max="200" value="${cost0}" />
+    <p class="hint-text" id="perk-reward-hint" style="margin-top:6px;"></p>
+    <button class="btn btn-primary btn-block" style="margin-top:16px;" id="save-perk">Salvar</button>
+    ${existing ? `<button class="btn btn-danger btn-block" style="margin-top:8px;" id="delete-perk">🗑️ Apagar item</button>` : ""}
+  `);
+  const reward = () => suggestedReward(Math.min(200, Math.max(1, parseInt($("#perk-cost").value, 10) || 1)));
+  const updateHint = () => { $("#perk-reward-hint").textContent = `Quem cumprir o resgate ganha 💰+${reward()} (25% do custo).`; };
+  updateHint();
+  $("#perk-cost").addEventListener("input", updateHint);
+
+  $("#save-perk").addEventListener("click", async () => {
+    const title = $("#perk-title").value.trim();
+    const cost = parseInt($("#perk-cost").value, 10);
+    if (!title) { alert("Dá um nome pro item :)"); return; }
+    if (!cost || cost < 1 || cost > 200) { alert("O custo tem que ser entre 1 e 200 moedas."); return; }
+    setBusy("#save-perk", true);
+    try {
+      await db.saveCustomPerk({
+        id: existing?.id, coupleId: State.coupleId, createdBy: State.role,
+        emoji: $("#perk-emoji").value.trim() || "🎁", title,
+        description: $("#perk-desc").value.trim(), cost, fulfillReward: suggestedReward(cost),
+      });
+      closeModal();
+      await renderShop();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#save-perk", false);
+    }
+  });
+  $("#delete-perk")?.addEventListener("click", async () => {
+    if (!confirm(`Apagar "${existing.title}" da lojinha? Resgates já feitos continuam valendo.`)) return;
+    try {
+      await db.deleteCustomPerk(existing.id);
+      closeModal();
+      await renderShop();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+    }
   });
 }
 
@@ -1970,6 +2168,15 @@ async function renderProfile() {
     </div>
   `;
 
+  // 5 toques rápidos no avatar abrem o modo dono (senha validada no servidor)
+  let avatarTaps = 0, avatarTimer = null;
+  view.querySelector(".avatar")?.addEventListener("click", () => {
+    avatarTaps++;
+    clearTimeout(avatarTimer);
+    avatarTimer = setTimeout(() => { avatarTaps = 0; }, 1500);
+    if (avatarTaps >= 5) { avatarTaps = 0; openAdminGate(); }
+  });
+
   $("#btn-enable-push")?.addEventListener("click", () => {
     openModal(`
       <h3 class="modal-title">🔔 Ativar notificações</h3>
@@ -1998,6 +2205,73 @@ async function renderProfile() {
       setBusy("#btn-disable-push", false);
     }
   });
+}
+
+// ================= MODO DONO =================
+
+function openAdminGate() {
+  let saved = "";
+  try { saved = sessionStorage.getItem("adminKey") || ""; } catch (e) { /* sem storage */ }
+  if (saved) { showAdminStats(saved); return; }
+  openModal(`
+    <h3 class="modal-title">🔐 Modo dono</h3>
+    <p class="card-sub">Área só pra quem administra o app.</p>
+    <input type="password" id="admin-key" autocomplete="off" placeholder="senha" />
+    <p class="error-text" id="admin-err" style="margin-top:8px;" hidden></p>
+    <button class="btn btn-primary btn-block" style="margin-top:14px;" id="admin-go">Entrar</button>
+  `);
+  $("#admin-go").addEventListener("click", () => showAdminStats($("#admin-key").value));
+  $("#admin-key").addEventListener("keydown", (ev) => { if (ev.key === "Enter") showAdminStats($("#admin-key").value); });
+}
+
+async function showAdminStats(key) {
+  if (!key) return;
+  const busyBtn = $("#admin-go");
+  if (busyBtn) setBusy("#admin-go", true);
+  try {
+    const s = await db.adminStats(key);
+    try { sessionStorage.setItem("adminKey", key); } catch (e) { /* sem storage */ }
+    const fmt = (iso) => (iso ? humanDateShort(parseISODate(String(iso).slice(0, 10))) : "—");
+    const stat = (n, label) => `<div class="card" style="text-align:center; margin:0;"><div style="font-family:'Baloo 2',sans-serif; font-size:28px; font-weight:800; color:var(--accent-strong);">${n}</div><div class="hint-text" style="margin:0;">${label}</div></div>`;
+    openModal(`
+      <h3 class="modal-title">🔐 Modo dono</h3>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        ${stat(s.couples, "casais")}
+        ${stat(s.users, "usuários")}
+        ${stat(s.couples_complete, "casais completos (2 pessoas)")}
+        ${stat(s.new_7d, "casais novos (7 dias)")}
+        ${stat(s.active_today, "casais ativos hoje")}
+        ${stat(s.active_7d, "casais ativos (7 dias)")}
+      </div>
+      <div class="section-title">Casais (mais novos primeiro)</div>
+      <div class="stack" style="max-height:40vh; overflow-y:auto;">
+        ${s.list.length ? s.list.map((c, i) => `
+          <div class="entry-item">
+            <div class="entry-icon">💑</div>
+            <div class="entry-body">
+              <div class="entry-title">Casal ${s.couples - i}</div>
+              <div class="entry-meta">criado em ${fmt(c.created_at)} · ${c.members}/2 pessoas · último uso: ${fmt(c.last_open)}</div>
+            </div>
+          </div>`).join("") : `<div class="empty-state">Nenhum casal ainda.</div>`}
+      </div>
+      <p class="hint-text" style="margin-top:12px;">Só números e datas — nenhum código de casal ou conteúdo privado aparece aqui.</p>
+      <button class="btn btn-ghost btn-block" style="margin-top:10px;" id="admin-logout">Sair do modo dono</button>
+    `);
+    $("#admin-logout").addEventListener("click", () => {
+      try { sessionStorage.removeItem("adminKey"); } catch (e) { /* sem storage */ }
+      closeModal();
+    });
+  } catch (e) {
+    try { sessionStorage.removeItem("adminKey"); } catch (e2) { /* sem storage */ }
+    const denied = String(e.message || e).includes("acesso negado");
+    if ($("#admin-err")) {
+      $("#admin-err").hidden = false;
+      $("#admin-err").textContent = denied ? "Senha incorreta." : "Modo dono ainda não configurado no banco.";
+      setBusy("#admin-go", false);
+    } else {
+      openAdminGate();
+    }
+  }
 }
 
 // ---------------- start ----------------

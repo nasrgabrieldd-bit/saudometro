@@ -175,7 +175,7 @@ export async function setLastKiss(coupleId, isoDateTime) {
   return data;
 }
 
-export async function createEncounter({ coupleId, startDate, endDate, title, kind, createdBy, status }) {
+export async function createEncounter({ coupleId, startDate, endDate, title, kind, createdBy, status, category }) {
   const mk = monthKey(startDate);
   const { data, error } = await supabase
     .from("encounters")
@@ -188,6 +188,7 @@ export async function createEncounter({ coupleId, startDate, endDate, title, kin
       kind,
       status: status || (kind === "convite" ? "pendente" : "agendado"),
       counts_as_point: kind === "planejado",
+      ...(kind === "evento" ? { category: category || "outro" } : {}),
       created_by: createdBy,
     })
     .select()
@@ -583,4 +584,39 @@ export function subscribeCoupleChanges(coupleId, onChange) {
     .on("postgres_changes", { event: "*", schema: "public", table: "wish_redemptions", filter: `couple_id=eq.${coupleId}` }, onChange)
     .subscribe();
   return () => supabase.removeChannel(channel);
+}
+
+// ---------- itens da lojinha criados pelo casal ----------
+
+export async function listCustomPerks(coupleId) {
+  const { data, error } = await supabase
+    .from("custom_perks")
+    .select("*")
+    .eq("couple_id", coupleId)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function saveCustomPerk({ id, coupleId, emoji, title, description, cost, fulfillReward, createdBy }) {
+  const fields = { emoji, title, description, cost, fulfill_reward: fulfillReward };
+  const q = id
+    ? supabase.from("custom_perks").update(fields).eq("id", id)
+    : supabase.from("custom_perks").insert({ ...fields, couple_id: coupleId, created_by: createdBy });
+  const { data, error } = await q.select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteCustomPerk(id) {
+  const { error } = await supabase.from("custom_perks").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// ---------- modo dono ----------
+
+export async function adminStats(key) {
+  const { data, error } = await supabase.rpc("admin_stats", { p_key: key });
+  if (error) throw error;
+  return data;
 }

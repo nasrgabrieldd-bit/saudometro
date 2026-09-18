@@ -58,3 +58,21 @@ export const PERKS = [
 ];
 
 export const PERK_BY_ID = Object.fromEntries(PERKS.map((p) => [p.id, p]));
+
+// recompensa sugerida pra quem cumpre um item criado pelo casal: ~25% do custo, no mínimo 1
+export function suggestedReward(cost) {
+  return Math.max(1, Math.round(cost * 0.25));
+}
+
+export function customToPerk(row) {
+  return {
+    id: `custom:${row.id}`,
+    rowId: row.id,
+    custom: true,
+    emoji: row.emoji || "🎁",
+    title: row.title,
+    desc: row.description || "",
+    cost: row.cost,
+    fulfillReward: row.fulfill_reward,
+  };
+}
