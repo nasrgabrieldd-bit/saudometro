@@ -35,7 +35,7 @@ export function permissionState() {
 
 export async function registerServiceWorker() {
   if (!pushSupported()) return null;
-  return navigator.serviceWorker.register("sw.js");
+  return navigator.serviceWorker.register("sw.js", { updateViaCache: "none" });
 }
 
 export async function isSubscribed() {

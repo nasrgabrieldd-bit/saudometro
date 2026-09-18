@@ -1,5 +1,40 @@
+// bump isso a cada deploy relevante: força limpar cache velho do celular
+const CACHE_VERSION = "v2";
+const CACHE_NAME = `saudometro-${CACHE_VERSION}`;
+
 self.addEventListener("install", () => self.skipWaiting());
-self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)));
+      await self.clients.claim();
+    })()
+  );
+});
+
+// network-first: sempre tenta buscar a versão mais nova do app antes de usar cache
+// (sem isso, o navegador do celular guardava index.html/app.js em cache e só
+// atualizava reinstalando o app)
+self.addEventListener("fetch", (event) => {
+  const req = event.request;
+  if (req.method !== "GET" || new URL(req.url).origin !== self.location.origin) return;
+
+  event.respondWith(
+    (async () => {
+      try {
+        const fresh = await fetch(req, { cache: "no-store" });
+        const cache = await caches.open(CACHE_NAME);
+        cache.put(req, fresh.clone());
+        return fresh;
+      } catch (e) {
+        const cached = await caches.match(req);
+        if (cached) return cached;
+        throw e;
+      }
+    })()
+  );
+});
 
 self.addEventListener("push", (event) => {
   let data = {};

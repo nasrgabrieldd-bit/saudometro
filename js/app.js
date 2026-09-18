@@ -52,7 +52,19 @@ function closeModal() {
 
 // ---------------- boot ----------------
 
+function watchForAppUpdates() {
+  if (!("serviceWorker" in navigator)) return;
+  navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).catch(() => {});
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (reloaded) return;
+    reloaded = true;
+    window.location.reload();
+  });
+}
+
 async function boot() {
+  watchForAppUpdates();
   if (!isConfigured) {
     $("#screen-setup").style.display = "flex";
     return;
