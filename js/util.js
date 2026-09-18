@@ -105,7 +105,9 @@ export function nextMonthKey(mk) {
 
 export function genCoupleCode() {
   const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // sem letras/números confusos
+  const bytes = new Uint32Array(10);
+  crypto.getRandomValues(bytes); // aleatório de verdade (Math.random é previsível)
   let code = "";
-  for (let i = 0; i < 6; i++) code += alphabet[Math.floor(Math.random() * alphabet.length)];
+  for (let i = 0; i < 10; i++) code += alphabet[bytes[i] % alphabet.length];
   return code;
 }

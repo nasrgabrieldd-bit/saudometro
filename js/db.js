@@ -72,6 +72,8 @@ export async function saveCoupleSettings(coupleId, fields) {
 export async function joinCouple({ code, role, displayName }) {
   const { data, error } = await supabase.rpc("join_couple", { p_code: code.trim().toUpperCase(), p_role: role, p_name: displayName });
   if (error) throw error;
+  // o servidor devolve o erro de código como resposta (e não como exceção) pra poder contar a tentativa
+  if (data?.error) throw new Error(data.error === "codigo_invalido" ? "código inválido" : data.error);
   return data;
 }
 

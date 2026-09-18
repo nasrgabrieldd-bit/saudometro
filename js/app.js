@@ -436,9 +436,9 @@ function createCodeStep(st) {
   const partner = st.p[1 - st.me].n;
   $("#onboarding-flow").innerHTML = `
     <div class="stack">
-      <label class="field-label">Código do casal (pode trocar por uma palavra ou frase de vocês dois)</label>
+      <label class="field-label">Código do casal (pode trocar por uma frase de vocês dois, com pelo menos 8 caracteres)</label>
       <input type="text" id="couple-code" value="${escapeHTML(st.code)}" maxlength="40" style="text-align:center; font-family:'Baloo 2'; font-size:20px; letter-spacing:0.04em;" />
-      <p class="hint-text">Guarde ou mande pra ${escapeHTML(partner)}, vai precisar dele pra entrar no app pelo outro celular.</p>
+      <p class="hint-text">Guarde ou mande pra ${escapeHTML(partner)}, vai precisar dele pra entrar no app pelo outro celular. Ele é a chave do casal: quanto mais difícil de adivinhar, mais protegido. Evite palavras simples como o nome de vocês.</p>
       <button class="btn btn-primary btn-block" id="confirm-create">Criar e entrar</button>
       <button class="btn btn-ghost btn-block" id="code-back">Voltar</button>
       <p class="error-text" id="onboarding-error"></p>
@@ -449,7 +449,7 @@ function createCodeStep(st) {
     const code = $("#couple-code").value.trim().toUpperCase();
     st.code = code;
     $("#onboarding-error").textContent = "";
-    if (code.length < 3) { $("#onboarding-error").textContent = "O código precisa ter pelo menos 3 letras."; return; }
+    if (code.replace(/s/g, "").length < 8) { $("#onboarding-error").textContent = "O código precisa ter pelo menos 8 caracteres."; return; }
     const slots = ["gabriel", "tata"];
     const emo = defaultEmojis(st.p[0].g, st.p[1].g);
     const names = { gabriel: st.p[0].n, tata: st.p[1].n };
@@ -465,6 +465,8 @@ function createCodeStep(st) {
     } catch (e) {
       $("#onboarding-error").textContent = e.code === "23505"
         ? "Esse código já existe, tenta outro."
+        : String(e.message || "").includes("curto")
+        ? "O código precisa ter pelo menos 8 caracteres."
         : "Não deu pra criar agora: " + (e.message || e);
       setBusy("#confirm-create", false);
     }
