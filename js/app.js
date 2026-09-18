@@ -6,6 +6,7 @@ import { weekIndexSince, questionForWeek } from "./questions.js";
 import { dayIndexSince, challengeForDay } from "./challenges.js";
 import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush, needsHomeScreenFirst } from "./push.js";
 import { PERKS, PERK_BY_ID, customToPerk, suggestedReward } from "./perks.js";
+import { cycleInfo, cycleRingSVG, cycleLegendHTML, cycleTilesHTML, cycleHelpHTML, cyclePhaseName, cycleTip, cyclePhaseOnDate, averageCycleLength, CYCLE_COLORS, CYCLE_DISCLAIMER } from "./cycle.js";
 import { pickSaudadeNudge } from "./nudges.js";
 import {
   toISODate, monthKey, parseISODate, addDays, addMonths, startOfMonth,
@@ -881,11 +882,14 @@ function openSaudadeModal() {
 async function renderCalendar() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const mk = monthKey(State.calendarMonth);
-  const [plan, encounters, weekend] = await Promise.all([
+  const [plan, encounters, weekend, myCycle, partnerCycle] = await Promise.all([
     db.ensureMonthPlan(State.coupleId, mk),
     db.listEncountersForMonth(State.coupleId, mk),
     db.getWeekendRecharge(State.coupleId, mk),
+    db.getCycle(State.coupleId, State.role).catch(() => null),
+    State.partner ? db.getCycle(State.coupleId, State.partner.role).catch(() => null) : null,
   ]);
+  State.calendarCycle = myCycle ? { s: myCycle, full: true } : partnerCycle ? { s: partnerCycle, full: partnerCycle.visibility === "full" } : null;
   const yearlyDates = await db.listYearlyDates(State.coupleId).catch(() => []);
   const [viewYear, viewMonth] = mk.split("-").map(Number);
   encounters.forEach((e) => { if (e.yearly) e.origYear = parseISODate(e.start_date).getFullYear(); });
@@ -935,9 +939,12 @@ async function renderCalendar() {
     ${specialDatesCardHTML()}
 
     <div id="day-detail"></div>
+
+    <div id="cycle-section">${cycleCalendarSectionHTML(myCycle, partnerCycle)}</div>
   `;
 
   buildDayGrid();
+  wireCycleSection(myCycle, partnerCycle);
   view.querySelectorAll("[data-special-date]").forEach((el) => {
     el.addEventListener("click", () => {
       showDayDetail(el.dataset.specialDate);
@@ -994,7 +1001,9 @@ function buildDayGrid() {
     const isToday = isSameDate(date, new Date());
     const friday = fridayOfWeekend(date);
     const weekendActive = friday && State.calendarWeekend.some((w) => w.week_start === toISODate(friday) && w.active);
-    const dots = entries.slice(0, 3).map(iconFor).join("");
+    const cyKey = State.calendarCycle ? cyclePhaseOnDate(State.calendarCycle.s, date, State.calendarCycle.full) : null;
+    const cyDot = cyKey ? `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${CYCLE_COLORS[cyKey]};"></span>` : "";
+    const dots = cyDot + entries.slice(0, cyKey ? 2 : 3).map(iconFor).join("");
     html += `
       <button class="day-cell ${isToday ? "today" : ""}" data-date="${iso}">
         <span class="num">${day}</span>
@@ -1028,9 +1037,12 @@ function showDayDetail(iso) {
     <div class="empty-state"><span class="emoji">🗓️</span>Nada marcado nesse dia ainda.</div>
   `;
 
+  const cyKeyDay = State.calendarCycle ? cyclePhaseOnDate(State.calendarCycle.s, date, State.calendarCycle.full) : null;
+  const cyNames = { mens: "Menstruação", tpm: "TPM", ovul: "Ovulação", fert: "Período fértil (estimativa)" };
   $("#day-detail").innerHTML = `
     <div class="card">
       <div class="card-title">${humanDateLong(date)}</div>
+      ${cyKeyDay ? `<div class="pill pill-muted" style="margin:6px 0 10px;"><span style="width:9px;height:9px;border-radius:50%;background:${CYCLE_COLORS[cyKeyDay]};display:inline-block;"></span>${cyNames[cyKeyDay]}</div>` : ""}
       <div class="stack" id="entries-list">${entriesHTML}</div>
       <div class="row" style="margin-top:14px;">
         <button class="btn btn-secondary" id="btn-add-saudade-day">🫂 Encontro de saudade</button>
@@ -2258,6 +2270,152 @@ async function renderProfile() {
     } catch (e) {
       alert("Não deu: " + (e.message || e));
       setBusy("#btn-disable-push", false);
+    }
+  });
+}
+
+// ================= CICLO MENSTRUAL (opcional, aba Calendário) =================
+
+const partnerName = () => escapeHTML(State.partner?.display_name || ROLE_LABEL[otherRole()]);
+
+function visibilityLabel(v) {
+  return { me: "Só você vê", basic: `${partnerName()} vê o básico`, full: `${partnerName()} vê tudo` }[v];
+}
+
+function cycleCalendarSectionHTML(mine, theirs) {
+  let h = "";
+  if (!mine) {
+    h += `
+      <div class="card">
+        <div class="card-title" style="font-size:15px;">🌸 Meu ciclo <span class="pill pill-muted" style="margin-left:6px;">opcional</span></div>
+        <p class="card-sub">Acompanhe seu ciclo aqui e decida se ${partnerName()} vê alguma coisa. Enquanto estiver desligado, nada é guardado e ninguém vê nada.</p>
+        <button class="btn btn-secondary btn-block" id="cycle-enable">Ativar meu ciclo</button>
+      </div>`;
+  } else {
+    const c = cycleInfo(mine);
+    h += `
+      <div class="card">
+        <div class="row" style="align-items:center; margin-bottom:6px;">
+          <div class="card-title" style="font-size:15px; flex:1;">🌸 Meu ciclo</div>
+          <span class="pill pill-muted">${mine.visibility === "me" ? "🔒 " : "👁️ "}${visibilityLabel(mine.visibility)}</span>
+        </div>
+        ${cycleRingSVG(c, true)}
+        ${cycleLegendHTML(true)}
+        <div style="text-align:center; margin-top:14px;"><button class="btn btn-primary btn-sm" id="cycle-edit" style="background:#E8508F;">Editar período</button></div>
+        ${cycleTilesHTML(c, true)}
+        <p class="hint-text" style="margin:12px 0 0;">${CYCLE_DISCLAIMER}</p>
+        <button class="btn btn-ghost btn-block" style="margin-top:10px;" id="cycle-disable">Desativar e apagar meus dados do ciclo</button>
+      </div>`;
+  }
+  if (theirs) {
+    const full = theirs.visibility === "full";
+    const c = cycleInfo(theirs);
+    h += `
+      <div class="card" style="position:relative;">
+        <button class="btn btn-ghost btn-sm" id="cycle-help-btn" aria-label="Entender cada fase do ciclo" style="position:absolute; top:10px; right:10px; width:30px; height:30px; padding:0; border-radius:50%; font-weight:800;">?</button>
+        <div class="card-title" style="font-size:15px; padding-right:38px; margin-bottom:6px;">🌸 Ciclo de ${partnerName()}</div>
+        <span class="pill pill-muted" style="margin-bottom:8px;">💗 Compartilhou com você</span>
+        ${cycleRingSVG(c, full, `${partnerName()} está`)}
+        ${cycleLegendHTML(full)}
+        <p class="card-sub" style="text-align:center; margin:12px 0 0;">${cycleTip(c)}</p>
+        ${cycleTilesHTML(c, full)}
+        <p class="hint-text" style="margin:12px 0 0;">${CYCLE_DISCLAIMER}</p>
+      </div>`;
+  }
+  return h;
+}
+
+function wireCycleSection(mine, theirs) {
+  $("#cycle-enable")?.addEventListener("click", () => openCycleEditor(null));
+  $("#cycle-edit")?.addEventListener("click", () => openCycleEditor(mine));
+  $("#cycle-disable")?.addEventListener("click", async () => {
+    if (!confirm("Desativar o ciclo e apagar tudo que foi registrado? Isso não dá pra desfazer.")) return;
+    try {
+      await db.deleteCycle(State.coupleId, State.role);
+      await renderCalendar();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+    }
+  });
+  $("#cycle-help-btn")?.addEventListener("click", () => {
+    openModal(`
+      <h3 class="modal-title">💡 Entendendo cada fase</h3>
+      ${cycleHelpHTML(cycleInfo(theirs), theirs.visibility === "full")}
+    `);
+  });
+}
+
+function openCycleEditor(existing) {
+  const today = todayISO();
+  let start = existing?.last_period_start || today;
+  let L = existing?.cycle_length || 28, P = existing?.period_length || 5;
+  let vis = existing?.visibility || "me";
+  let lengthTouched = false;
+  const visOptions = [["me", "🔒 Só eu vejo"], ["basic", `👁️ ${partnerName()}: só o básico`], ["full", `👁️ ${partnerName()}: tudo`]];
+
+  openModal(`
+    <h3 class="modal-title">🌸 ${existing ? "Editar meu ciclo" : "Ativar meu ciclo"}</h3>
+    <label class="field-label">Quando começou sua última menstruação?</label>
+    <div class="row" style="gap:8px;">
+      <button type="button" class="btn btn-secondary btn-sm" style="flex:1;" data-q="0">Começou hoje</button>
+      <button type="button" class="btn btn-secondary btn-sm" style="flex:1;" data-q="1">Foi ontem</button>
+    </div>
+    <label class="field-label">Ou escolha outra data</label>
+    <input type="date" id="cy-date" value="${start}" max="${today}" />
+    <div class="row" style="align-items:center; margin-top:14px;"><span style="flex:1;">Duração do ciclo</span>
+      <button type="button" class="btn btn-secondary btn-sm" data-step="L" data-d="-1" style="flex:none; width:38px;">−</button>
+      <strong id="cy-L" style="min-width:64px; text-align:center;"></strong>
+      <button type="button" class="btn btn-secondary btn-sm" data-step="L" data-d="1" style="flex:none; width:38px;">+</button></div>
+    <div class="row" style="align-items:center; margin-top:8px;"><span style="flex:1;">Dias de menstruação</span>
+      <button type="button" class="btn btn-secondary btn-sm" data-step="P" data-d="-1" style="flex:none; width:38px;">−</button>
+      <strong id="cy-P" style="min-width:64px; text-align:center;"></strong>
+      <button type="button" class="btn btn-secondary btn-sm" data-step="P" data-d="1" style="flex:none; width:38px;">+</button></div>
+    <p class="hint-text" style="margin-top:8px;">Não sabe a duração? Deixe 28 e 5. Depois de alguns ciclos registrados, o app ajusta pela sua média.</p>
+    <label class="field-label">Quem pode ver</label>
+    <div class="stack" id="cy-vis" style="gap:6px;">
+      ${visOptions.map(([id, l]) => `<button type="button" class="btn btn-block ${vis === id ? "btn-primary" : "btn-secondary"}" data-vis="${id}">${l}</button>`).join("")}
+    </div>
+    <p class="hint-text" style="margin-top:8px;">"Só o básico" mostra menstruação e TPM. "Tudo" inclui ovulação e período fértil. Quando compartilhado, um botão "?" explica cada fase pra quem vê.</p>
+    <button class="btn btn-primary btn-block" style="margin-top:16px;" id="cy-save">Salvar</button>
+  `);
+  const paint = () => { $("#cy-L").textContent = `${L} dias`; $("#cy-P").textContent = `${P} dias`; };
+  paint();
+  $("#modal-sheet").querySelectorAll("[data-q]").forEach((b) => b.addEventListener("click", () => {
+    start = toISODate(addDays(new Date(), -parseInt(b.dataset.q, 10)));
+    $("#cy-date").value = start;
+  }));
+  $("#cy-date").addEventListener("change", (e) => { if (e.target.value) start = e.target.value; });
+  $("#modal-sheet").querySelectorAll("[data-step]").forEach((b) => b.addEventListener("click", () => {
+    const d = parseInt(b.dataset.d, 10);
+    if (b.dataset.step === "L") { L = Math.min(40, Math.max(21, L + d)); lengthTouched = true; }
+    else P = Math.min(10, Math.max(2, P + d));
+    paint();
+  }));
+  $("#cy-vis").querySelectorAll("[data-vis]").forEach((b) => b.addEventListener("click", () => {
+    vis = b.dataset.vis;
+    $("#cy-vis").querySelectorAll("[data-vis]").forEach((x) => { x.className = `btn btn-block ${x.dataset.vis === vis ? "btn-primary" : "btn-secondary"}`; });
+  }));
+  $("#cy-save").addEventListener("click", async () => {
+    if (!start || start > today) { alert("Escolhe uma data que já passou (ou hoje)."); return; }
+    setBusy("#cy-save", true);
+    try {
+      const starts = new Set(existing?.period_starts || []);
+      // mudar a data por poucos dias é correção, não ciclo novo
+      if (existing && Math.abs((parseISODate(start) - parseISODate(existing.last_period_start)) / 86400000) <= 10) {
+        starts.delete(existing.last_period_start);
+      }
+      starts.add(start);
+      const list = [...starts].sort().slice(-8);
+      let len = L;
+      if (!lengthTouched) { const avg = averageCycleLength(list); if (avg) len = avg; }
+      await db.saveCycle(State.coupleId, State.role, {
+        visibility: vis, last_period_start: list[list.length - 1], cycle_length: len, period_length: P, period_starts: list,
+      });
+      closeModal();
+      await renderCalendar();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#cy-save", false);
     }
   });
 }

@@ -632,3 +632,34 @@ export async function adminStats(key) {
   if (error) throw error;
   return data;
 }
+
+// ---------- ciclo menstrual (opcional; o banco só entrega ao parceiro se ela compartilhar) ----------
+
+export async function getCycle(coupleId, role) {
+  const { data, error } = await supabase
+    .from("cycle_settings")
+    .select("*")
+    .eq("couple_id", coupleId)
+    .eq("role", role)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function saveCycle(coupleId, role, fields) {
+  const { data, error } = await supabase
+    .from("cycle_settings")
+    .upsert(
+      { couple_id: coupleId, role, ...fields, updated_at: new Date().toISOString() },
+      { onConflict: "couple_id,role" }
+    )
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteCycle(coupleId, role) {
+  const { error } = await supabase.from("cycle_settings").delete().eq("couple_id", coupleId).eq("role", role);
+  if (error) throw error;
+}
