@@ -459,7 +459,7 @@ function createCodeStep(st) {
     setBusy("#confirm-create", true);
     try {
       const couple = await db.createCouple(code, names, genders, emojis);
-      const profile = await db.createProfile({ id: State.userId, coupleId: couple.id, role, displayName: names[role] });
+      const profile = await db.joinCouple({ code, role, displayName: names[role] });
       await db.addCoinTransaction(couple.id, role, 25, "saldo inicial");
       await enterApp(profile);
     } catch (e) {
@@ -494,8 +494,8 @@ function startJoinFlow() {
         setBusy("#btn-check-code", false);
         return;
       }
-      const profs = await db.getRoleProfiles(couple.id);
-      renderJoinStep2(couple, new Set(profs.map((p) => p.role)), Object.fromEntries(profs.map((p) => [p.role, p.display_name])));
+      const roster = couple.roster || {};
+      renderJoinStep2(couple, new Set(Object.keys(roster)), roster);
     } catch (e) {
       $("#onboarding-error").textContent = "Deu ruim: " + (e.message || e);
       setBusy("#btn-check-code", false);
@@ -551,7 +551,7 @@ function renderJoinStep2(couple, taken, displayNames = {}) {
     if (!gender) return err("Escolha se você é mulher ou homem.");
     setBusy("#confirm-join", true);
     try {
-      const profile = await db.createProfile({ id: State.userId, coupleId: couple.id, role, displayName: name });
+      const profile = await db.joinCouple({ code: couple.code, role, displayName: name });
       if (profile.isNew) await db.addCoinTransaction(couple.id, role, 25, "saldo inicial");
       // só grava a configuração se a pessoa corrigiu algo (casal antigo continua sem configuração)
       if (name !== eff.names[role] || gender !== eff.genders[role]) {

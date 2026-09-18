@@ -68,40 +68,11 @@ export async function saveCoupleSettings(coupleId, fields) {
   return data;
 }
 
-// quem já entrou no casal e com que nome (perfis são de leitura aberta)
-export async function getRoleProfiles(coupleId) {
-  const { data, error } = await supabase.from("profiles").select("role, display_name").eq("couple_id", coupleId);
+// entrar (ou reentrar) num casal: a função no servidor confere o código e cria ou retoma o perfil
+export async function joinCouple({ code, role, displayName }) {
+  const { data, error } = await supabase.rpc("join_couple", { p_code: code.trim().toUpperCase(), p_role: role, p_name: displayName });
   if (error) throw error;
-  return data || [];
-}
-
-export async function getRolesTaken(coupleId) {
-  const { data, error } = await supabase.from("profiles").select("role").eq("couple_id", coupleId);
-  if (error) throw error;
-  return new Set((data || []).map((r) => r.role));
-}
-
-// cria o perfil, ou "retoma" ele se esse papel do casal já existia (ex: dado local apagado
-// ao remover/readicionar o app na tela inicial) — evita o erro de papel duplicado.
-export async function createProfile({ id, coupleId, role, displayName }) {
-  const inserted = await supabase
-    .from("profiles")
-    .insert({ id, couple_id: coupleId, role, display_name: displayName })
-    .select()
-    .single();
-  if (!inserted.error) return { ...inserted.data, isNew: true };
-  if (inserted.error.code !== "23505") throw inserted.error;
-
-  // já existe alguém com esse papel nesse casal — assume esse papel pra essa identidade nova
-  const updated = await supabase
-    .from("profiles")
-    .update({ id, display_name: displayName })
-    .eq("couple_id", coupleId)
-    .eq("role", role)
-    .select()
-    .single();
-  if (updated.error) throw updated.error;
-  return { ...updated.data, isNew: false };
+  return data;
 }
 
 export async function getMyProfile(userId) {
