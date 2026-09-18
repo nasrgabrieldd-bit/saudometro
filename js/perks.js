@@ -1,5 +1,12 @@
 export const PERKS = [
   {
+    id: "boa_noite_fofo",
+    emoji: "🌙",
+    title: "Boa noite, fofo(a)",
+    desc: "Resgata isso e seu par te manda uma mensagem de boa noite bem fofa hoje.",
+    cost: 5,
+  },
+  {
     id: "cafe_na_cama",
     emoji: "🍳",
     title: "Café da manhã na cama",

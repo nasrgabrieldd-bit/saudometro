@@ -433,7 +433,17 @@ async function renderHome() {
     weekHasSomething,
   });
 
+  // depois das 20h, se ainda não registrou o humor de hoje, lembra antes que o dia acabe
+  const iLoggedMoodToday = recentMoods.some((m) => m.role === State.role && m.day === todayStr);
+  const showMoodReminder = new Date().getHours() >= 20 && !iLoggedMoodToday;
+
   view.innerHTML = `
+    ${showMoodReminder ? `
+      <div class="banner banner-warm" id="mood-reminder-banner" style="cursor:pointer;">
+        <div class="banner-icon">🌙</div>
+        <div class="banner-text"><strong>O dia tá quase acabando!</strong>Você ainda não registrou seu humor de hoje. Não esquece 💗</div>
+      </div>
+    ` : ""}
     ${nudgeText ? `
       <div class="banner banner-warm">
         <div class="banner-icon">🥹</div>
@@ -501,6 +511,7 @@ async function renderHome() {
 
   $("#btn-goto-define")?.addEventListener("click", () => setActiveTab("calendar"));
   $("#weekend-card")?.addEventListener("click", () => openWeekendModal(nextWeekendFriday));
+  $("#mood-reminder-banner")?.addEventListener("click", () => setActiveTab("mood"));
   $("#btn-saudade")?.addEventListener("click", openSaudadeModal);
   $("#kiss-card")?.addEventListener("click", () => openKissModal(stats?.last_kiss_at));
 
