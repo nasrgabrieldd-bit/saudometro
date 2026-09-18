@@ -886,7 +886,7 @@ async function renderCalendar() {
     db.ensureMonthPlan(State.coupleId, mk),
     db.listEncountersForMonth(State.coupleId, mk),
     db.getWeekendRecharge(State.coupleId, mk),
-    db.getCycle(State.coupleId, State.role).catch(() => null),
+    State.role === "tata" ? db.getCycle(State.coupleId, State.role).catch(() => null) : null,
     State.partner ? db.getCycle(State.coupleId, State.partner.role).catch(() => null) : null,
   ]);
   State.calendarCycle = myCycle ? { s: myCycle, full: true } : partnerCycle ? { s: partnerCycle, full: partnerCycle.visibility === "full" } : null;
@@ -2284,14 +2284,15 @@ function visibilityLabel(v) {
 
 function cycleCalendarSectionHTML(mine, theirs) {
   let h = "";
-  if (!mine) {
+  // o recurso é só da Tata; o Gabriel só vê o card dela se ela compartilhar
+  if (!mine && State.role === "tata") {
     h += `
       <div class="card">
         <div class="card-title" style="font-size:15px;">🌸 Meu ciclo <span class="pill pill-muted" style="margin-left:6px;">opcional</span></div>
         <p class="card-sub">Acompanhe seu ciclo aqui e decida se ${partnerName()} vê alguma coisa. Enquanto estiver desligado, nada é guardado e ninguém vê nada.</p>
         <button class="btn btn-secondary btn-block" id="cycle-enable">Ativar meu ciclo</button>
       </div>`;
-  } else {
+  } else if (mine) {
     const c = cycleInfo(mine);
     h += `
       <div class="card">

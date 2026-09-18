@@ -13,7 +13,7 @@ $$;
 
 create table if not exists cycle_settings (
   couple_id uuid not null references couples(id) on delete cascade,
-  role text not null check (role in ('gabriel', 'tata')),
+  role text not null check (role = 'tata'), -- recurso só da Tata
   visibility text not null default 'me' check (visibility in ('me', 'basic', 'full')),
   last_period_start date not null,
   cycle_length int not null default 28 check (cycle_length between 21 and 40),
@@ -43,3 +43,7 @@ create policy "cycle_settings: update own" on cycle_settings
 drop policy if exists "cycle_settings: delete own" on cycle_settings;
 create policy "cycle_settings: delete own" on cycle_settings
   for delete using (couple_id = my_couple_id() and role = my_role());
+
+-- garante que so a Tata tenha dados de ciclo (idempotente)
+alter table cycle_settings drop constraint if exists cycle_settings_role_check;
+alter table cycle_settings add constraint cycle_settings_role_check check (role = 'tata');
