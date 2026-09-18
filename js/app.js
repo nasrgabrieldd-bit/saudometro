@@ -93,6 +93,33 @@ async function enterApp(profile) {
   applyInitialRoute();
   updateStreakBadge();
   updateNotesNavBadge();
+  checkPendingDebts();
+}
+
+// avisa assim que abre o app se o par te resgatou algo na lojinha que você ainda não cumpriu
+async function checkPendingDebts() {
+  try {
+    const redemptions = await db.listShopRedemptions(State.coupleId, 30);
+    const owedByMe = redemptions.filter((r) => r.status === "pendente" && r.role !== State.role);
+    if (!owedByMe.length) return;
+    openModal(`
+      <h3 class="modal-title">🎁 Você está devendo!</h3>
+      <p class="card-sub">${ROLE_LABEL[otherRole()]} está esperando você cumprir:</p>
+      <div class="stack">
+        ${owedByMe.map((r) => {
+          const perk = PERK_BY_ID[r.perk_id];
+          return `
+            <div class="entry-item">
+              <div class="entry-icon">${perk?.emoji || "🎁"}</div>
+              <div class="entry-body"><div class="entry-title">${escapeHTML(r.title)}</div></div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+      <button class="btn btn-primary btn-block" style="margin-top:16px;" id="btn-goto-shop-debt">Ver na lojinha</button>
+    `);
+    $("#btn-goto-shop-debt")?.addEventListener("click", () => { closeModal(); setActiveTab("shop"); });
+  } catch (e) { /* aviso é só um bônus, falha calada */ }
 }
 
 // abre direto na aba/tela certa quando o app é aberto por um link de notificação
@@ -654,6 +681,7 @@ function progressDots(happened, target) {
 }
 
 function otherRole() { return State.role === "gabriel" ? "tata" : "gabriel"; }
+function flipRole(role) { return role === "gabriel" ? "tata" : "gabriel"; }
 
 function daysUntilLabel(date) {
   const d = Math.round((startOfDay(date) - startOfDay(new Date())) / 86400000);
@@ -1735,13 +1763,16 @@ async function renderShop() {
 
   function redemptionItemHTML(r) {
     const perk = PERK_BY_ID[r.perk_id];
+    const reward = perk?.fulfillReward || 0;
     return `
       <div class="entry-item">
         <div class="entry-icon">${perk?.emoji || "🎁"}</div>
         <div class="entry-body">
           <div class="entry-title">${r.title}</div>
           <div class="entry-meta">resgatado por ${ROLE_LABEL[r.role]} · ${r.cost}💰</div>
-          ${r.status === "pendente" ? `<div class="entry-actions"><button class="btn btn-success btn-sm" data-act="fulfill" data-id="${r.id}">Marcar como cumprido ✅</button></div>` : `<div class="entry-meta">cumprido ✅</div>`}
+          ${r.status === "pendente"
+            ? `<div class="entry-actions"><button class="btn btn-success btn-sm" data-act="fulfill" data-id="${r.id}">Marcar como cumprido${reward ? ` (💰+${reward} pra quem fez)` : ""} ✅</button></div>`
+            : `<div class="entry-meta">cumprido ✅</div>`}
         </div>
       </div>
     `;
@@ -1801,7 +1832,12 @@ async function renderShop() {
     btn.addEventListener("click", async () => {
       btn.disabled = true;
       try {
+        const redemption = redemptions.find((r) => r.id === btn.dataset.id);
         await db.markRedemptionFulfilled(btn.dataset.id);
+        const perk = PERK_BY_ID[redemption?.perk_id];
+        if (perk?.fulfillReward) {
+          await earnCoins(flipRole(redemption.role), perk.fulfillReward, `cumpriu: ${redemption.title}`);
+        }
         await renderShop();
       } catch (e) {
         alert("Não deu: " + (e.message || e));
@@ -1878,8 +1914,9 @@ async function renderProfile() {
         <span class="pill pill-coin">🦋 Tata: ${coins.tata || 0}</span>
       </div>
       <div class="stack" style="margin-top:12px; font-size:13px; color:var(--text-muted);">
-        <div>🟢 <strong style="color:var(--text);">Ganha:</strong> encontro combinado do mês acontece (+1 pra cada um) · registrar o humor do dia (+1, uma vez por dia) · sequência de 7 dias de humor (+5 de bônus) · mandar uma mensagem fofa (+1, uma vez por dia) · responder a pergunta da semana (+1) · responder o desafio do dia (+1, uma vez por dia) · aceitar um convite (+1) · 15 dias seguidos usando o app (+10, uma vez) · 30 dias seguidos (+25, uma vez) · convite que você mandou foi recusado, a moeda volta (+1)</div>
+        <div>🟢 <strong style="color:var(--text);">Ganha:</strong> encontro combinado do mês acontece (+1 pra cada um) · registrar o humor do dia (+1, uma vez por dia) · sequência de 7 dias de humor (+5 de bônus) · mandar uma mensagem fofa (+1, uma vez por dia) · responder a pergunta da semana (+1) · responder o desafio do dia (+1, uma vez por dia) · aceitar um convite (+1) · 15 dias seguidos usando o app (+10, uma vez) · 30 dias seguidos (+25, uma vez) · convite que você mandou foi recusado, a moeda volta (+1) · cumprir um resgate da lojinha que o outro pediu (varia por item, veja a Lojinha)</div>
         <div>🔴 <strong style="color:var(--text);">Gasta:</strong> mandar qualquer convite, de saudade ou combinado na hora (-1) · recusar um convite de alguém (-1, de graça se for na sua semana de recarregar) · usar o freeze pra proteger a sequência de dias (-1) · resgatar um desejo secreto às cegas (-${WISH_COST})</div>
+        <div>🎁 Todo resgate na lojinha fica <strong style="color:var(--text);">pendente</strong> até alguém marcar como cumprido — só aí quem cumpriu ganha a moeda de recompensa. Se o outro te resgatou algo, um aviso aparece quando você abrir o app.</div>
         <div>🕰️ A cápsula do tempo é de graça — não gasta nem dá moeda, é só pra guardar um recado pro futuro.</div>
         <div>🍀 De vez em quando (1 em cada 10), uma recompensa vem em dobro — é o "dia da sorte".</div>
         <div>Todo mundo começa com 25 moedas. Recusar nunca fica bloqueado por falta de moeda. É só um joguinho por cima, ninguém é obrigado a nada.</div>

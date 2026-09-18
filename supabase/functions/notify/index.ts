@@ -92,13 +92,25 @@ function messageFor(table: string, type: string, record: any, oldRecord: any): M
     };
   }
 
-  if (table === "shop_redemptions" && type === "INSERT") {
-    return {
-      targetRole: otherRole(record.role),
-      title: "Resgate na lojinha 🎁",
-      body: `${ROLE_LABEL[record.role]} resgatou "${record.title}"! Já sabe o que fazer 😉`,
-      path: "?tab=shop",
-    };
+  if (table === "shop_redemptions") {
+    if (type === "INSERT") {
+      return {
+        targetRole: otherRole(record.role),
+        title: "Resgate na lojinha 🎁",
+        body: `${ROLE_LABEL[record.role]} resgatou "${record.title}"! Já sabe o que fazer 😉`,
+        path: "?tab=shop",
+      };
+    }
+    // marcado como cumprido — avisa quem resgatou (pediu), não quem cumpriu
+    if (type === "UPDATE" && oldRecord?.status === "pendente" && record.status === "cumprido") {
+      return {
+        targetRole: record.role,
+        title: "Resgate cumprido ✅",
+        body: `${ROLE_LABEL[otherRole(record.role)]} confirmou: "${record.title}" foi cumprido!`,
+        path: "?tab=shop",
+      };
+    }
+    return null;
   }
 
   // resgate de desejo secreto: avisa o DONO do desejo, sem contar qual foi (é às cegas)

@@ -5,6 +5,7 @@ export const PERKS = [
     title: "Boa noite, fofo(a)",
     desc: "Resgata isso e seu par te manda uma mensagem de boa noite bem fofa hoje.",
     cost: 5,
+    fulfillReward: 2,
   },
   {
     id: "cafe_na_cama",
@@ -12,6 +13,7 @@ export const PERKS = [
     title: "Café da manhã na cama",
     desc: "O outro prepara um café da manhã especial pra você, sem pedir duas vezes.",
     cost: 18,
+    fulfillReward: 5,
   },
   {
     id: "tarefa_livre",
@@ -19,6 +21,7 @@ export const PERKS = [
     title: "Livre de uma tarefa chata",
     desc: "Escolhe uma tarefa de casa que você odeia — o outro assume ela por um dia.",
     cost: 20,
+    fulfillReward: 5,
   },
   {
     id: "surpresa",
@@ -26,6 +29,7 @@ export const PERKS = [
     title: "Direito a uma surpresa",
     desc: "Ela te deve uma surpresa — ela escolhe o que, você só resgata o direito de receber.",
     cost: 25,
+    fulfillReward: 6,
   },
   {
     id: "fala_sincera",
@@ -33,6 +37,7 @@ export const PERKS = [
     title: "Falar sem filtro",
     desc: "Você pode falar algo que não gostou, e ela promete ouvir sem drama.",
     cost: 20,
+    fulfillReward: 5,
   },
   {
     id: "passeio_surpresa",
@@ -40,6 +45,7 @@ export const PERKS = [
     title: "Passeio surpresa que você planeja",
     desc: "O contrário do de cima: aqui você prepara um passeio surpresa e o outro só aparece.",
     cost: 35,
+    fulfillReward: 8,
   },
   {
     id: "sem_recusa",
@@ -47,6 +53,7 @@ export const PERKS = [
     title: "Encontro sem recusa",
     desc: "O próximo convite que você mandar, ela não pode recusar.",
     cost: 40,
+    fulfillReward: 10,
   },
 ];
 
