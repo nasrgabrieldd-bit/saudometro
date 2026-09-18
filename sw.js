@@ -20,9 +20,15 @@ self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const url = event.notification.data?.url || "./";
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (list) => {
       for (const client of list) {
-        if (client.url.includes(self.registration.scope) && "focus" in client) return client.focus();
+        if (client.url.includes(self.registration.scope)) {
+          // já tá aberto: navega pra tela certa em vez de só trazer pra frente
+          if ("navigate" in client) {
+            try { await client.navigate(url); } catch (e) { /* alguns navegadores recusam, segue pro focus */ }
+          }
+          if ("focus" in client) return client.focus();
+        }
       }
       return self.clients.openWindow(url);
     })

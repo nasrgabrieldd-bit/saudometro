@@ -17,7 +17,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 const ROLE_LABEL: Record<string, string> = { gabriel: "Gabriel", tata: "Tata" };
 const otherRole = (role: string) => (role === "gabriel" ? "tata" : "gabriel");
 
-type Msg = { targetRole: string; title: string; body: string } | null;
+type Msg = { targetRole: string; title: string; body: string; path: string } | null;
 
 function messageFor(table: string, type: string, record: any, oldRecord: any): Msg {
   if (table === "moods" && type === "INSERT") {
@@ -25,6 +25,7 @@ function messageFor(table: string, type: string, record: any, oldRecord: any): M
       targetRole: otherRole(record.role),
       title: "Humor atualizado 💗",
       body: `${ROLE_LABEL[record.role] || record.role} registrou o humor de hoje.`,
+      path: "?tab=mood",
     };
   }
 
@@ -34,6 +35,7 @@ function messageFor(table: string, type: string, record: any, oldRecord: any): M
         targetRole: otherRole(record.created_by),
         title: "Novo convite 💌",
         body: `${ROLE_LABEL[record.created_by]} te convidou: ${record.title || "um encontro"}`,
+        path: "?tab=notes&view=invites",
       };
     }
     if (type === "INSERT" && record.kind === "planejado") {
@@ -41,6 +43,7 @@ function messageFor(table: string, type: string, record: any, oldRecord: any): M
         targetRole: otherRole(record.created_by),
         title: "Calendário atualizado 📅",
         body: `${ROLE_LABEL[record.created_by]} definiu um encontro do mês.`,
+        path: "?tab=calendar",
       };
     }
     if (type === "INSERT" && record.kind === "saudade") {
@@ -48,6 +51,7 @@ function messageFor(table: string, type: string, record: any, oldRecord: any): M
         targetRole: otherRole(record.created_by),
         title: "Calendário atualizado 🫂",
         body: `${ROLE_LABEL[record.created_by]} marcou um encontro de saudade.`,
+        path: "?tab=calendar",
       };
     }
     // convite respondido — avisa quem mandou o convite, não quem respondeu
@@ -56,6 +60,7 @@ function messageFor(table: string, type: string, record: any, oldRecord: any): M
         targetRole: record.created_by,
         title: "Convite aceito 🎉",
         body: `${ROLE_LABEL[otherRole(record.created_by)]} aceitou seu convite: ${record.title || "o encontro"}!`,
+        path: "?tab=notes&view=invites",
       };
     }
     if (type === "UPDATE" && record.kind === "convite" && oldRecord?.status === "pendente" && record.status === "recusado") {
@@ -63,6 +68,7 @@ function messageFor(table: string, type: string, record: any, oldRecord: any): M
         targetRole: record.created_by,
         title: "Convite recusado 😔",
         body: `${ROLE_LABEL[otherRole(record.created_by)]} não pôde topar o convite dessa vez.`,
+        path: "?tab=notes&view=invites",
       };
     }
     return null;
@@ -73,6 +79,7 @@ function messageFor(table: string, type: string, record: any, oldRecord: any): M
       targetRole: otherRole(record.role),
       title: "Pergunta da semana 💭",
       body: `${ROLE_LABEL[record.role]} respondeu a pergunta da semana!`,
+      path: "?tab=mood",
     };
   }
 
@@ -81,6 +88,7 @@ function messageFor(table: string, type: string, record: any, oldRecord: any): M
       targetRole: otherRole(record.role),
       title: "Desafio do dia 🎯",
       body: `${ROLE_LABEL[record.role]} respondeu o desafio de hoje!`,
+      path: "?tab=notes&view=challenge",
     };
   }
 
@@ -89,6 +97,7 @@ function messageFor(table: string, type: string, record: any, oldRecord: any): M
       targetRole: otherRole(record.role),
       title: "Resgate na lojinha 🎁",
       body: `${ROLE_LABEL[record.role]} resgatou "${record.title}"! Já sabe o que fazer 😉`,
+      path: "?tab=shop",
     };
   }
 
@@ -98,6 +107,7 @@ function messageFor(table: string, type: string, record: any, oldRecord: any): M
       targetRole: record.wish_owner,
       title: "Desejo secreto resgatado 🎁",
       body: `${ROLE_LABEL[record.redeemed_by]} resgatou um dos seus desejos secretos às cegas — só revela amanhã!`,
+      path: "?tab=notes&view=wishes",
     };
   }
 
@@ -106,6 +116,7 @@ function messageFor(table: string, type: string, record: any, oldRecord: any): M
       targetRole: otherRole(record.from_role),
       title: "Cápsula do tempo 🕰️",
       body: `${ROLE_LABEL[record.from_role]} selou uma cápsula do tempo pra você! Abre em ${record.open_on}.`,
+      path: "?tab=notes&view=capsule",
     };
   }
 
@@ -136,7 +147,7 @@ Deno.serve(async (req) => {
         webpush
           .sendNotification(
             { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-            JSON.stringify({ title: msg.title, body: msg.body, url: "./" })
+            JSON.stringify({ title: msg.title, body: msg.body, url: `./${msg.path}` })
           )
           .catch(async (err: any) => {
             if (err.statusCode === 404 || err.statusCode === 410) {

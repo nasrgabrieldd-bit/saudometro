@@ -90,9 +90,22 @@ async function enterApp(profile) {
   if (State.unsubscribe) State.unsubscribe();
   State.unsubscribe = db.subscribeCoupleChanges(State.coupleId, () => { renderActiveTab(); updateNotesNavBadge(); });
 
-  setActiveTab("home");
+  applyInitialRoute();
   updateStreakBadge();
   updateNotesNavBadge();
+}
+
+// abre direto na aba/tela certa quando o app é aberto por um link de notificação
+// (ex: "?tab=notes&view=wishes"), e depois limpa a url pra não reaplicar num refresh
+function applyInitialRoute() {
+  const params = new URLSearchParams(window.location.search);
+  const tab = params.get("tab") || "home";
+  const view = params.get("view");
+  State.activeTab = tab;
+  State.notesView = tab === "notes" && view ? view : "hub";
+  document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+  renderActiveTab();
+  if (window.location.search) history.replaceState(null, "", window.location.pathname);
 }
 
 // selo discreto no ícone de Recados quando tem convite esperando resposta
