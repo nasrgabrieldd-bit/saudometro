@@ -2219,6 +2219,8 @@ async function renderProfile() {
         </div>
       `).join("")}</div>` : `<div class="empty-state"><span class="emoji">💰</span>Nada ainda.</div>`}
     </div>
+
+    <p class="hint-text" style="text-align:center; margin:22px 0 4px; font-size:11px; opacity:0.45;">© 2026 Gabriel Nascimento Santos</p>
   `;
 
   // 5 toques rápidos no avatar abrem o modo dono (senha validada no servidor)
