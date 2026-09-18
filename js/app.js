@@ -494,8 +494,8 @@ function startJoinFlow() {
         setBusy("#btn-check-code", false);
         return;
       }
-      const taken = await db.getRolesTaken(couple.id);
-      renderJoinStep2(couple, taken);
+      const profs = await db.getRoleProfiles(couple.id);
+      renderJoinStep2(couple, new Set(profs.map((p) => p.role)), Object.fromEntries(profs.map((p) => [p.role, p.display_name])));
     } catch (e) {
       $("#onboarding-error").textContent = "Deu ruim: " + (e.message || e);
       setBusy("#btn-check-code", false);
@@ -503,12 +503,18 @@ function startJoinFlow() {
   });
 }
 
-function renderJoinStep2(couple, taken) {
+function renderJoinStep2(couple, taken, displayNames = {}) {
   const base = legacyPeople();
-  const hasSettings = !!(couple.names && Object.keys(couple.names).length);
-  const eff = {};
-  for (const k of ["names", "genders", "emojis"]) eff[k] = { ...base[k], ...(couple[k] || {}) };
-  eff.names = { gabriel: cleanName(eff.names.gabriel) || base.names.gabriel, tata: cleanName(eff.names.tata) || base.names.tata };
+  const hasNames = (k) => !!cleanName(couple.names?.[k]);
+  // nome de cada vaga: o salvo no casal; senão o de quem já entrou; vaga livre de casal antigo fica sem nome
+  const nameFor = (k) => cleanName(couple.names?.[k]) || (taken.has(k) ? cleanName(displayNames[k]) || base.names[k] : "");
+  const genderFor = (k) => (couple.genders?.[k] === "mulher" || couple.genders?.[k] === "homem" ? couple.genders[k] : taken.has(k) || hasNames(k) ? base.genders[k] : null);
+  const emojiFor = (k) => couple.emojis?.[k] || base.emojis[k];
+  const eff = {
+    names: { gabriel: nameFor("gabriel"), tata: nameFor("tata") },
+    genders: { gabriel: genderFor("gabriel"), tata: genderFor("tata") },
+    emojis: { gabriel: emojiFor("gabriel"), tata: emojiFor("tata") },
+  };
   let role = null, gender = null;
 
   $("#join-step2").innerHTML = `
@@ -517,12 +523,12 @@ function renderJoinStep2(couple, taken) {
       ${["gabriel", "tata"].map((r) => `
         <button class="role-btn" data-role="${r}">
           <span class="role-emoji">${escapeHTML(eff.emojis[r])}</span>
-          <span>${escapeHTML(eff.names[r])}${taken.has(r) ? " (já em uso)" : ""}</span>
+          <span>${eff.names[r] ? escapeHTML(eff.names[r]) : "Sou eu (vaga livre)"}${taken.has(r) ? " (já em uso)" : ""}</span>
         </button>`).join("")}
     </div>
     <div id="join-me" style="display:none;">
       <label class="field-label">Seu nome (pode corrigir)</label>
-      <input type="text" id="display-name" maxlength="24" />
+      <input type="text" id="display-name" maxlength="24" placeholder="seu nome" />
       <div id="join-gender"></div>
     </div>
     <button class="btn btn-primary btn-block" id="confirm-join" disabled style="margin-top:14px;">Entrar</button>
@@ -540,15 +546,20 @@ function renderJoinStep2(couple, taken) {
   }));
   $("#confirm-join").addEventListener("click", async () => {
     const name = cleanName($("#display-name").value) || eff.names[role];
+    const err = (m) => { $("#onboarding-error").textContent = m; };
+    if (!name) return err("Escreva seu nome.");
+    if (!gender) return err("Escolha se você é mulher ou homem.");
     setBusy("#confirm-join", true);
     try {
       const profile = await db.createProfile({ id: State.userId, coupleId: couple.id, role, displayName: name });
       if (profile.isNew) await db.addCoinTransaction(couple.id, role, 25, "saldo inicial");
       // só grava a configuração se a pessoa corrigiu algo (casal antigo continua sem configuração)
       if (name !== eff.names[role] || gender !== eff.genders[role]) {
+        // só grava o que alguém realmente escolheu: vaga livre fica sem nome (nunca o padrão Gabriel/Tata)
+        const keep = (obj) => Object.fromEntries(Object.entries(obj).filter(([, v]) => v));
         await db.saveCoupleSettings(couple.id, {
-          names: { ...eff.names, [role]: name },
-          genders: { ...eff.genders, [role]: gender },
+          names: keep({ ...eff.names, [role]: name }),
+          genders: keep({ ...eff.genders, [role]: gender }),
           emojis: eff.emojis,
         });
       }

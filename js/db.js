@@ -68,6 +68,13 @@ export async function saveCoupleSettings(coupleId, fields) {
   return data;
 }
 
+// quem já entrou no casal e com que nome (perfis são de leitura aberta)
+export async function getRoleProfiles(coupleId) {
+  const { data, error } = await supabase.from("profiles").select("role, display_name").eq("couple_id", coupleId);
+  if (error) throw error;
+  return data || [];
+}
+
 export async function getRolesTaken(coupleId) {
   const { data, error } = await supabase.from("profiles").select("role").eq("couple_id", coupleId);
   if (error) throw error;

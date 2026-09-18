@@ -18,8 +18,10 @@ export function cleanName(s) {
   return String(s ?? "").replace(/[<>&"'`\\]/g, "").replace(/\s+/g, " ").trim().slice(0, 24);
 }
 
+// casal com nomes salvos nunca cai em "Gabriel"/"Tata": vaga sem nome vira "Seu par"
 export function nameOf(role) {
-  return cleanName(settings?.names?.[role]) || LEGACY.names[role] || String(role);
+  const named = settings?.names && Object.keys(settings.names).length > 0;
+  return cleanName(settings?.names?.[role]) || (named ? "Seu par" : LEGACY.names[role]) || String(role);
 }
 
 export function genderOf(role) {
