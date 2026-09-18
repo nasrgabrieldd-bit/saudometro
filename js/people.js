@@ -97,3 +97,23 @@ export function togetherSince() {
   const v = settings?.features?.together_since;
   return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
 }
+
+// regras de moedas de cada casal (0 = não dá / não cobra). Sem configuração, valem os padrões de sempre.
+export const COIN_DEFAULTS = {
+  mood: 1, note: 1, weekly: 1, daily: 1, meet: 1, accept: 1, moodStreak: 5, login15: 10, login30: 25,
+  invite: 1, miss: 1, decline: 1, freeze: 1, wish: 3,
+};
+
+export function coinRule(key) {
+  const v = settings?.features?.coin_rules?.[key];
+  return Number.isInteger(v) && v >= 0 && v <= 50 ? v : COIN_DEFAULTS[key];
+}
+
+export function luckyOn() {
+  return settings?.features?.coin_rules?.lucky !== false;
+}
+
+export function perkHidden(id) {
+  const off = settings?.features?.perks_off;
+  return Array.isArray(off) && off.includes(id);
+}

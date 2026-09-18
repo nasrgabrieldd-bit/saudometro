@@ -8,7 +8,7 @@ import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscr
 import { PERKS, PERK_BY_ID, customToPerk, suggestedReward } from "./perks.js";
 import { cycleInfo, cycleRingSVG, cycleLegendHTML, cycleTilesHTML, cycleHelpHTML, cyclePhaseName, cycleTip, cyclePhaseOnDate, averageCycleLength, CYCLE_COLORS, CYCLE_DISCLAIMER } from "./cycle.js";
 import { pickSaudadeNudge } from "./nudges.js";
-import { nameOf, genderOf, emojiOf, gen, genMixed, cleanName, setPeopleSettings, defaultEmojis, legacyPeople, feat, goalTarget, HOME_WIDGETS, homeOrder, homeWidgetOn, togetherSince } from "./people.js";
+import { nameOf, genderOf, emojiOf, gen, genMixed, cleanName, setPeopleSettings, defaultEmojis, legacyPeople, feat, goalTarget, HOME_WIDGETS, homeOrder, homeWidgetOn, togetherSince, coinRule, luckyOn, perkHidden, COIN_DEFAULTS } from "./people.js";
 import {
   toISODate, monthKey, parseISODate, addDays, addMonths, startOfMonth,
   daysInMonth, mondayIndex, mondayOfWeek, fridayOfWeekend, fridayOfWeekContaining, humanDateLong,
@@ -19,7 +19,6 @@ import {
 const ROLE_LABEL = new Proxy({}, { get: (_, role) => nameOf(role) });
 const ROLE_EMOJI = new Proxy({}, { get: (_, role) => emojiOf(role) });
 const NEEDS_CARE_MOODS = new Set(["saudade", "cansada", "estressada", "mal", "triste", "ansiosa", "brava", "assustada", "ciumenta"]);
-const WISH_COST = 3;
 
 const State = {
   userId: null,
@@ -193,14 +192,18 @@ async function updateNotesNavBadge() {
 
 // dá moeda com 10% de chance de vir em dobro ("dia da sorte")
 const coinsOn = () => feat("shop");
+const coinWord = (n) => `${n} ${n === 1 ? "moeda" : "moedas"}`;
+const earnTag = (k) => (coinsOn() && coinRule(k) > 0 ? ` (💰+${coinRule(k)})` : "");
+const costTag = (k) => (coinsOn() && coinRule(k) > 0 ? ` (💰 -${coinRule(k)})` : "");
+const partnerThey = () => gen("ela(e)", genderOf(otherRole()));
 const cn = (text) => (coinsOn() ? text : "");
 async function addCoins(role, delta, reason) {
-  if (coinsOn()) await db.addCoinTransaction(State.coupleId, role, delta, reason);
+  if (coinsOn() && delta !== 0) await db.addCoinTransaction(State.coupleId, role, delta, reason);
 }
 
 async function earnCoins(role, amount, reason) {
-  if (!coinsOn()) return 0;
-  const lucky = Math.random() < 0.1;
+  if (!coinsOn() || amount <= 0) return 0;
+  const lucky = luckyOn() && Math.random() < 0.1;
   const finalAmount = lucky ? amount * 2 : amount;
   await addCoins(role, finalAmount, lucky ? `${reason} (🍀 dia da sorte, dobrado!)` : reason);
   if (lucky) alert(`🍀 Dia da sorte! Você ganhou o dobro: +${finalAmount} moedas em vez de +${amount}.`);
@@ -234,6 +237,11 @@ async function computeLoginStreak() {
 async function updateStreakBadge() {
   const todayIso = todayISO();
   await db.recordAppOpen(State.coupleId, State.role, todayIso);
+  if (!feat("streaks")) {
+    const b = document.getElementById("streak-badge");
+    if (b) b.hidden = true;
+    return;
+  }
   const { streak, validDays } = await computeLoginStreak();
 
   const badge = document.getElementById("streak-badge");
@@ -260,9 +268,9 @@ async function maybeAwardLoginMilestone(streak) {
   const recent = await db.listCoinHistory(State.coupleId, 200);
   const already = recent.some((r) => r.role === State.role && r.reason.startsWith(reason));
   if (already) return;
-  const amount = streak === 15 ? 10 : 25;
+  const amount = streak === 15 ? coinRule("login15") : coinRule("login30");
   await earnCoins(State.role, amount, reason);
-  alert(`🔥 ${streak} dias seguidos usando o app!${cn(` +${amount} moedas de bônus.`)}`);
+  alert(`🔥 ${streak} dias seguidos usando o app!${amount > 0 ? cn(` +${amount} moedas de bônus.`) : ""}`);
 }
 
 function offerStreakFreeze(missedDayISO) {
@@ -273,10 +281,10 @@ function offerStreakFreeze(missedDayISO) {
 
   openModal(`
     <h3 class="modal-title">❄️ Quase perdeu a sequência!</h3>
-    <p class="card-sub">Parece que ontem vocês não abriram o app. Quer gastar 1 moeda pra proteger sua sequência de dias?</p>
+    <p class="card-sub">Parece que ontem vocês não abriram o app. Quer gastar ${coinWord(coinRule("freeze"))} pra proteger sua sequência de dias?</p>
     <div class="row" style="margin-top:16px;">
       <button class="btn btn-ghost" id="btn-skip-freeze">Deixa quebrar</button>
-      <button class="btn btn-primary" id="btn-do-freeze">Usar 1 moeda 💰</button>
+      <button class="btn btn-primary" id="btn-do-freeze">Usar ${coinWord(coinRule("freeze"))} 💰</button>
     </div>
   `);
   $("#btn-skip-freeze").addEventListener("click", closeModal);
@@ -284,12 +292,12 @@ function offerStreakFreeze(missedDayISO) {
     setBusy("#btn-do-freeze", true);
     try {
       const balances = await db.getCoinBalances(State.coupleId);
-      if ((balances[State.role] || 0) < 1) {
+      if ((balances[State.role] || 0) < coinRule("freeze")) {
         alert("Você não tem moeda suficiente pra isso ainda.");
         closeModal();
         return;
       }
-      await addCoins(State.role, -1, "usou freeze de sequência");
+      await addCoins(State.role, -coinRule("freeze"), "usou freeze de sequência");
       await db.addStreakFreeze(State.coupleId, State.role, missedDayISO);
       closeModal();
       await updateStreakBadge();
@@ -676,10 +684,10 @@ async function renderHome() {
     </div>` : "";
   html.miss = feat("miss") ? `    <div class="card">
       <div class="card-title" style="font-size:15px;">Mandar sinal de saudade</div>
-      <div class="card-sub">${coinsOn() ? "Gasta 1 moeda 💰 e manda" : "Manda"} um pedido de visita pra ${ROLE_LABEL[otherRole()]} aprovar.</div>
+      <div class="card-sub">${coinsOn() && coinRule("miss") > 0 ? `Gasta ${coinWord(coinRule("miss"))} 💰 e manda` : "Manda"} um pedido de visita pra ${ROLE_LABEL[otherRole()]} aprovar.</div>
       <div class="row" style="align-items:center;">
         ${coinsOn() ? `<span class="pill pill-coin">💰 você tem ${coins[State.role] || 0}</span>` : ""}
-        <button class="btn btn-warm" id="btn-saudade" ${(coinsOn() && (coins[State.role] || 0) < 1) ? "disabled" : ""}>🥺 Mandar sinal</button>
+        <button class="btn btn-warm" id="btn-saudade" ${(coinsOn() && (coins[State.role] || 0) < coinRule("miss")) ? "disabled" : ""}>🥺 Mandar sinal</button>
       </div>
     </div>` : "";
   html.mood = todayMoodCardHTML(recentMoods, todayStr);
@@ -920,7 +928,7 @@ async function isRechargeExemptForDate(dateISO, role) {
 
 // nunca bloqueia a ação por falta de moeda — só cobra quando dá pra cobrar
 async function spendCoinIfAvailable(role, amount, reason) {
-  if (!coinsOn()) return true;
+  if (!coinsOn() || amount <= 0) return true;
   const balances = await db.getCoinBalances(State.coupleId);
   if ((balances[role] || 0) >= amount) {
     await addCoins(role, -amount, reason);
@@ -934,17 +942,17 @@ async function spendCoinIfAvailable(role, amount, reason) {
 async function respondToConvite(entry, decision) {
   if (decision === "accept") {
     await db.updateEncounterStatus(entry.id, "confirmado");
-    await earnCoins(State.role, 1, "aceitou um convite");
+    await earnCoins(State.role, coinRule("accept"), "aceitou um convite");
   } else if (decision === "decline") {
     await db.updateEncounterStatus(entry.id, "recusado");
     // recusar "devolve" a moeda pra quem convidou — quem recusou fica devendo, tenta cobrar dela
-    await addCoins(entry.created_by, 1, "convite recusado: reembolso");
+    await addCoins(entry.created_by, coinRule("invite"), "convite recusado: reembolso");
     const exempt = await isRechargeExemptForDate(entry.start_date, State.role);
-    if (!exempt) await spendCoinIfAvailable(State.role, 1, "recusou um convite");
+    if (!exempt) await spendCoinIfAvailable(State.role, coinRule("decline"), "recusou um convite");
   } else if (decision === "cancel") {
     await db.updateEncounterStatus(entry.id, "recusado");
     // cancelar o próprio convite antes de resposta devolve a moeda de quem mandou
-    await addCoins(State.role, 1, "cancelou o próprio convite: reembolso");
+    await addCoins(State.role, coinRule("invite"), "cancelou o próprio convite: reembolso");
   }
 }
 
@@ -966,14 +974,14 @@ async function maybeAwardMoodStreak() {
   const alreadyAwarded = recent.some((r) => r.role === State.role && r.reason.startsWith(reason) && r.created_at.slice(0, 10) === todayISO());
   if (alreadyAwarded) return 0;
 
-  await earnCoins(State.role, 5, reason);
+  await earnCoins(State.role, coinRule("moodStreak"), reason);
   return streak;
 }
 
 function openSweetNoteModal(alreadyEarnedToday) {
   openModal(`
     <h3 class="modal-title">💌 Recadinho fofo</h3>
-    <p class="card-sub">${!coinsOn() ? "Manda quantos quiser." : alreadyEarnedToday ? "Você já ganhou a moeda de hoje, mas manda quantos quiser." : "O primeiro recadinho do dia já dá 1 moeda pra você."}</p>
+    <p class="card-sub">${!coinsOn() || coinRule("note") === 0 ? "Manda quantos quiser." : alreadyEarnedToday ? "Você já ganhou a moeda de hoje, mas manda quantos quiser." : `O primeiro recadinho do dia já dá ${coinWord(coinRule("note"))} pra você.`}</p>
     <textarea id="sweet-note-text" rows="3" placeholder="tô pensando em você..."></textarea>
     <button class="btn btn-primary btn-block" style="margin-top:16px;" id="btn-send-sweet-note">Mandar</button>
   `);
@@ -983,7 +991,7 @@ function openSweetNoteModal(alreadyEarnedToday) {
     setBusy("#btn-send-sweet-note", true);
     try {
       await db.sendSweetNote(State.coupleId, State.role, message);
-      if (!alreadyEarnedToday) await earnCoins(State.role, 1, "mandou uma mensagem fofa");
+      if (!alreadyEarnedToday) await earnCoins(State.role, coinRule("note"), "mandou uma mensagem fofa");
       closeModal();
       await renderActiveTab();
     } catch (e) {
@@ -997,19 +1005,19 @@ function openSaudadeModal() {
   const minDate = todayISO();
   openModal(`
     <h3 class="modal-title">🥺 Sinal de saudade</h3>
-    <p class="card-sub">Escolhe um dia pra tentar se ver. Isso não mexe na meta do mês, é só um pedido especial pra ${ROLE_LABEL[otherRole()]} aprovar. ${cn(" Se ela recusar, a moeda volta pra você.")}</p>
+    <p class="card-sub">Escolhe um dia pra tentar se ver. Isso não mexe na meta do mês, é só um pedido especial pra ${ROLE_LABEL[otherRole()]} aprovar. ${cn(` Se ${partnerThey()} recusar, a moeda volta pra você.`)}</p>
     <label class="field-label">Que dia?</label>
     <input type="date" id="saudade-date" min="${minDate}" value="${minDate}" />
     <label class="field-label">Mensagem (opcional)</label>
     <textarea id="saudade-msg" rows="2" placeholder="tô com saudade, será que dá pra gente se ver?"></textarea>
-    <button class="btn btn-warm btn-block" style="margin-top:16px;" id="send-saudade">Enviar sinal${cn(" (💰 -1)")}</button>
+    <button class="btn btn-warm btn-block" style="margin-top:16px;" id="send-saudade">Enviar sinal${costTag("miss")}</button>
   `);
   $("#send-saudade").addEventListener("click", async () => {
     setBusy("#send-saudade", true);
     const dateVal = $("#saudade-date").value;
     const msg = $("#saudade-msg").value.trim();
     try {
-      await addCoins(State.role, -1, "sinal de saudade");
+      await addCoins(State.role, -coinRule("miss"), "sinal de saudade");
       await db.createEncounter({
         coupleId: State.coupleId,
         startDate: parseISODate(dateVal),
@@ -1235,9 +1243,9 @@ function entryItemHTML(e) {
     actions = mine
       ? `<span class="pill pill-muted">Esperando resposta de ${ROLE_LABEL[otherRole()]}</span> <button class="btn btn-ghost btn-sm" data-act="cancel" data-id="${e.id}">Cancelar</button>`
       : `
-        <button class="btn btn-success btn-sm" data-act="accept" data-id="${e.id}">Aceitar${cn(" 💰+1")}</button>
+        <button class="btn btn-success btn-sm" data-act="accept" data-id="${e.id}">Aceitar${earnTag("accept")}</button>
         <button class="btn btn-danger btn-sm" data-act="decline" data-id="${e.id}">Recusar</button>
-        ${coinsOn() ? `<div class="hint-text" style="flex-basis:100%; margin-top:4px;">recusar devolve a moeda pra ${ROLE_LABEL[e.created_by]} e custa 1💰 sua${feat("recharge") ? " (de graça se for na sua semana de recarregar)" : ""}</div>` : ""}
+        ${coinsOn() ? `<div class="hint-text" style="flex-basis:100%; margin-top:4px;">recusar devolve a moeda pra ${ROLE_LABEL[e.created_by]} e ${coinRule("decline") > 0 ? `custa ${coinRule("decline")}💰 sua` : "não custa nada pra você"}${feat("recharge") ? " (de graça se for na sua semana de recarregar)" : ""}</div>` : ""}
       `;
   } else if (isTerminal) {
     actions = `<button class="btn btn-ghost btn-sm" data-act="undo" data-id="${e.id}">↩️ Desfazer</button>`;
@@ -1270,8 +1278,8 @@ function statusLabel(e) {
 // marcando/desmarcando de novo pra farmar moeda de graça.
 async function undoEntryStatus(entry) {
   if (entry.status === "aconteceu" && entry.kind === "planejado") {
-    await addCoins("gabriel", -1, "desfez: encontro combinado aconteceu (estorno)");
-    await addCoins("tata", -1, "desfez: encontro combinado aconteceu (estorno)");
+    await addCoins("gabriel", -coinRule("meet"), "desfez: encontro combinado aconteceu (estorno)");
+    await addCoins("tata", -coinRule("meet"), "desfez: encontro combinado aconteceu (estorno)");
   }
   const previousStatus = entry.kind === "convite" ? "confirmado" : "agendado";
   await db.updateEncounterStatus(entry.id, previousStatus);
@@ -1295,8 +1303,8 @@ function wireEntryActions() {
           await db.updateEncounterStatus(id, "aconteceu");
           const entry = State.calendarEncounters.find((e) => e.id === id);
           if (entry?.kind === "planejado") {
-            await earnCoins("gabriel", 1, "encontro combinado aconteceu");
-            await earnCoins("tata", 1, "encontro combinado aconteceu");
+            await earnCoins("gabriel", coinRule("meet"), "encontro combinado aconteceu");
+            await earnCoins("tata", coinRule("meet"), "encontro combinado aconteceu");
           }
         } else if (act === "missed") {
           await db.updateEncounterStatus(id, "nao_aconteceu");
@@ -1516,7 +1524,7 @@ ${feat("weekly") ? `    <div class="section-title">💭 Pergunta da semana</div>
     <div class="card">
       <div class="card-sub" style="font-size:15px; color:var(--text); font-weight:700;">${question}</div>
       <textarea id="weekly-answer" rows="3" style="margin-top:10px;" placeholder="escreve sua resposta...">${escapeHTML(myAnswer?.answer || "")}</textarea>
-      <button class="btn btn-primary btn-block" style="margin-top:12px;" id="save-weekly">${myAnswer ? "Atualizar resposta" : `Responder${cn(" (💰+1)")}`}</button>
+      <button class="btn btn-primary btn-block" style="margin-top:12px;" id="save-weekly">${myAnswer ? "Atualizar resposta" : `Responder${earnTag("weekly")}`}</button>
       ${theirAnswer ? `
         <div class="entry-item" style="margin-top:14px;">
           <div class="entry-icon">💬</div>
@@ -1565,9 +1573,9 @@ ${feat("weekly") ? `    <div class="section-title">💭 Pergunta da semana</div>
     try {
       const isFirstToday = !mine;
       await db.upsertMood(State.coupleId, today, State.role, selectedMood, selectedMoodPartner, selectedTalk, $("#mood-note").value.trim());
-      if (isFirstToday) await earnCoins(State.role, 1, "registrou o humor do dia");
+      if (isFirstToday) await earnCoins(State.role, coinRule("mood"), "registrou o humor do dia");
       const streak = await maybeAwardMoodStreak();
-      if (streak) alert(`🎉 ${streak} dias seguidos registrando o humor!${cn(" +5 moedas de bônus.")}`);
+      if (streak) alert(`🎉 ${streak} dias seguidos registrando o humor!${coinRule("moodStreak") > 0 ? cn(` +${coinRule("moodStreak")} moedas de bônus.`) : ""}`);
       await renderMood();
     } catch (e) {
       alert("Não deu: " + (e.message || e));
@@ -1582,8 +1590,8 @@ ${feat("weekly") ? `    <div class="section-title">💭 Pergunta da semana</div>
     try {
       const saved = await db.saveWeeklyAnswer(State.coupleId, weekIndex, State.role, answer);
       if (saved.isNew) {
-        await earnCoins(State.role, 1, "respondeu a pergunta da semana");
-        alert(`💭 Resposta salva!${cn(" +1 moeda pra você.")}`);
+        await earnCoins(State.role, coinRule("weekly"), "respondeu a pergunta da semana");
+        alert(`💭 Resposta salva!${coinRule("weekly") > 0 ? cn(` +${coinWord(coinRule("weekly"))} pra você.`) : ""}`);
       }
       await renderMood();
     } catch (e) {
@@ -1699,9 +1707,9 @@ async function renderInvites() {
       <input type="date" id="invite-date" value="${todayISO()}" />
       <div class="row" style="align-items:center; margin-top:14px;">
         ${coinsOn() ? `<span class="pill pill-coin">💰 você tem ${myCoins}</span>` : ""}
-        <button class="btn btn-primary" id="send-invite" ${coinsOn() && myCoins < 1 ? "disabled" : ""}>Enviar convite${cn(" (💰 -1)")}</button>
+        <button class="btn btn-primary" id="send-invite" ${coinsOn() && myCoins < coinRule("invite") ? "disabled" : ""}>Enviar convite${costTag("invite")}</button>
       </div>
-      ${coinsOn() ? `<p class="hint-text" style="margin-top:8px;">Se ela recusar, a moeda volta pra você.</p>` : ""}
+      ${coinsOn() ? `<p class="hint-text" style="margin-top:8px;">Se ${partnerThey()} recusar, a moeda volta pra você.</p>` : ""}
     </div>
 
     <div class="section-title">Enviados por você</div>
@@ -1721,7 +1729,7 @@ async function renderInvites() {
     if (!title) { alert("Escreve um título pro convite :)"); return; }
     setBusy("#send-invite", true);
     try {
-      await addCoins(State.role, -1, "enviou um convite");
+      await addCoins(State.role, -coinRule("invite"), "enviou um convite");
       await db.createEncounter({
         coupleId: State.coupleId, startDate: parseISODate($("#invite-date").value),
         title, kind: "convite", createdBy: State.role, status: "pendente",
@@ -1798,7 +1806,7 @@ async function renderNotesHub() {
     <div class="section-title">💌 Recadinho fofo</div>
     <div class="card">
       ${theirNoteToday ? `<div class="entry-meta" style="margin-bottom:10px; color:var(--text);">${ROLE_LABEL[otherRole()]}: "${escapeHTML(theirNoteToday.message)}"</div>` : ""}
-      <div class="card-sub">${!coinsOn() ? (iSentToday ? "Você já mandou um hoje. Pode mandar outro." : "Manda um recadinho fofo pra ele(a).") : iSentToday ? "Você já mandou um hoje. Pode mandar outro, mas a moeda já foi." : "O primeiro recadinho do dia já dá 1 moeda pra você."}</div>
+      <div class="card-sub">${!coinsOn() || coinRule("note") === 0 ? (iSentToday ? "Você já mandou um hoje. Pode mandar outro." : gen("Manda um recadinho fofo pra ele(a).", genderOf(otherRole()))) : iSentToday ? "Você já mandou um hoje. Pode mandar outro, mas a moeda já foi." : `O primeiro recadinho do dia já dá ${coinWord(coinRule("note"))} pra você.`}</div>
       <button class="btn btn-primary btn-block" style="margin-top:12px;" id="btn-send-note">💌 Mandar recadinho</button>
       <button class="btn btn-ghost btn-block" style="margin-top:8px;" id="btn-notes-history">Ver histórico completo →</button>
     </div>
@@ -1886,7 +1894,7 @@ async function renderChallengeView() {
         <div class="entry-meta" style="margin-top:8px; color:var(--text);">Você: "${escapeHTML(myAnswerToday.answer)}"</div>
       ` : `
         <textarea id="challenge-answer" rows="2" placeholder="escreve aqui..." style="margin-top:10px;"></textarea>
-        <button class="btn btn-warm btn-block" style="margin-top:10px;" id="btn-answer-challenge">Responder desafio${cn(" (💰+1)")}</button>
+        <button class="btn btn-warm btn-block" style="margin-top:10px;" id="btn-answer-challenge">Responder desafio${earnTag("daily")}</button>
       `}
       ${theirAnswerToday
         ? `<div class="entry-meta" style="margin-top:8px; color:var(--text);">${ROLE_LABEL[otherRole()]}: "${escapeHTML(theirAnswerToday.answer)}"</div>`
@@ -1920,7 +1928,7 @@ async function renderChallengeView() {
     setBusy("#btn-answer-challenge", true);
     try {
       await db.upsertChallengeAnswer(State.coupleId, todayStr, State.role, answer);
-      await earnCoins(State.role, 1, "respondeu o desafio do dia");
+      await earnCoins(State.role, coinRule("daily"), "respondeu o desafio do dia");
       await renderNotes();
     } catch (e) {
       alert("Não deu: " + (e.message || e));
@@ -1989,7 +1997,7 @@ async function renderWishesView() {
       <div class="card-sub">Sorteia um às cegas — você só descobre qual foi amanhã.</div>
       <div class="row" style="align-items:center;">
         ${coinsOn() ? `<span class="pill pill-coin">💰 você tem ${myCoins}</span>` : ""}
-        <button class="btn btn-plum" id="btn-redeem-wish" ${coinsOn() && myCoins < WISH_COST ? "disabled" : ""}>🎁 Resgatar às cegas${cn(` (💰 -${WISH_COST})`)}</button>
+        <button class="btn btn-plum" id="btn-redeem-wish" ${coinsOn() && myCoins < coinRule("wish") ? "disabled" : ""}>🎁 Resgatar às cegas${costTag("wish")}</button>
       </div>
     </div>
     ${redemptions.length ? `
@@ -2024,7 +2032,7 @@ async function renderWishesView() {
         return;
       }
       const pick = filled[Math.floor(Math.random() * filled.length)];
-      await addCoins(State.role, -WISH_COST, "resgatou um desejo às cegas");
+      await addCoins(State.role, -coinRule("wish"), "resgatou um desejo às cegas");
       const revealOn = toISODate(addDays(new Date(), 1));
       await db.createWishRedemption(State.coupleId, State.role, otherRole(), pick.text, revealOn);
       await renderNotes();
@@ -2160,7 +2168,7 @@ async function renderShop() {
 
     <div class="section-title">Trocar moedas por</div>
     <div class="stack">
-      ${PERKS.map(perkCardHTML).join("")}
+      ${PERKS.filter((x) => !perkHidden(x.id)).map(perkCardHTML).join("")}
     </div>
 
     <div class="section-title">Criados por vocês 💡</div>
@@ -2329,14 +2337,14 @@ async function renderProfile() {
       <button class="btn btn-secondary btn-block" id="btn-personalize">Personalizar</button>
     </div>
 
-    <div class="section-title">Sequências 🔥</div>
+${feat("streaks") ? `    <div class="section-title">Sequências 🔥</div>
     <div class="card">
       <div class="row">
         <span class="pill">🔥 Uso do app: ${loginStreak} dia${loginStreak === 1 ? "" : "s"}</span>
         <span class="pill">🥰 Humor: ${moodStreak} dia${moodStreak === 1 ? "" : "s"}</span>
       </div>
       <p class="hint-text" style="margin-top:10px;">Só passa a contar como sequência a partir de 2 dias seguidos. Abrir o app ou registrar o humor hoje garante o dia de amanhã.</p>
-    </div>
+    </div>` : ""}
 
     <div class="card">
       <div class="card-title" style="font-size:15px;">Código do casal</div>
@@ -2364,15 +2372,14 @@ async function renderProfile() {
 ${coinsOn() ? `    <div class="section-title">Moedas 💰</div>
     <div class="card">
       <div class="row">
-        <span class="pill pill-coin">🦁 Gabriel: ${coins.gabriel || 0}</span>
-        <span class="pill pill-coin">🦋 Tata: ${coins.tata || 0}</span>
+        <span class="pill pill-coin">${ROLE_EMOJI.gabriel} ${ROLE_LABEL.gabriel}: ${coins.gabriel || 0}</span>
+        <span class="pill pill-coin">${ROLE_EMOJI.tata} ${ROLE_LABEL.tata}: ${coins.tata || 0}</span>
       </div>
       <div class="stack" style="margin-top:12px; font-size:13px; color:var(--text-muted);">
-        <div>🟢 <strong style="color:var(--text);">Ganha:</strong> encontro combinado do mês acontece (+1 pra cada um) · registrar o humor do dia (+1, uma vez por dia) · sequência de 7 dias de humor (+5 de bônus) · mandar uma mensagem fofa (+1, uma vez por dia) · responder a pergunta da semana (+1) · responder o desafio do dia (+1, uma vez por dia) · aceitar um convite (+1) · 15 dias seguidos usando o app (+10, uma vez) · 30 dias seguidos (+25, uma vez) · convite que você mandou foi recusado, a moeda volta (+1) · cumprir um resgate da lojinha que o outro pediu (varia por item, veja a Lojinha)</div>
-        <div>🔴 <strong style="color:var(--text);">Gasta:</strong> mandar qualquer convite, de saudade ou combinado na hora (-1) · recusar um convite de alguém (-1, de graça se for na sua semana de recarregar) · usar o freeze pra proteger a sequência de dias (-1) · resgatar um desejo secreto às cegas (-${WISH_COST})</div>
+        ${coinRulesHTML()}
         <div>🎁 Todo resgate na lojinha fica <strong style="color:var(--text);">pendente</strong> até alguém marcar como cumprido — só aí quem cumpriu ganha a moeda de recompensa. Se o outro te resgatou algo, um aviso aparece quando você abrir o app.</div>
         <div>🕰️ A cápsula do tempo é de graça — não gasta nem dá moeda, é só pra guardar um recado pro futuro.</div>
-        <div>🍀 De vez em quando (1 em cada 10), uma recompensa vem em dobro — é o "dia da sorte".</div>
+        ${luckyOn() ? `<div>🍀 De vez em quando (1 em cada 10), uma recompensa vem em dobro — é o "dia da sorte".</div>` : ""}
         <div>Todo mundo começa com 25 moedas. Recusar nunca fica bloqueado por falta de moeda. É só um joguinho por cima, ninguém é obrigado a nada.</div>
       </div>
     </div>
@@ -2602,6 +2609,7 @@ const FEATURE_LIST = [
   { k: "daily", g: "Recados e brincadeiras", t: "Desafio do dia", d: "Uma pergunta por dia, no hub de Recados" },
   { k: "capsule", g: "Recados e brincadeiras", t: "Cápsula do tempo", d: "Mensagem que só abre numa data futura" },
   { k: "wishes", g: "Recados e brincadeiras", t: "Desejos secretos", d: "Desejos que o outro resgata às cegas" },
+  { k: "streaks", g: "Perfil", t: "Sequências de dias", d: "Contagem de dias seguidos no topo e no Perfil, com bônus e proteção" },
   { k: "shop", g: "Lojinha e moedas", t: "Lojinha e moedas", d: "Aba Lojinha, moedas e recompensas. Desligado, tudo é de graça e sem moedas" },
 ];
 
@@ -2713,6 +2721,51 @@ function specialCardHTML(n) {
     </div>`;
 }
 
+// ---- regras de moedas de cada casal ----
+
+const RULE_LIST = [
+  { k: "mood", t: "Registrar o humor do dia", kind: "earn" },
+  { k: "note", t: "Mandar um recadinho fofo (1x por dia)", kind: "earn" },
+  { k: "weekly", t: "Responder a pergunta da semana", kind: "earn" },
+  { k: "daily", t: "Responder o desafio do dia (1x por dia)", kind: "earn" },
+  { k: "meet", t: "Encontro combinado aconteceu (pra cada um)", kind: "earn" },
+  { k: "accept", t: "Aceitar um convite", kind: "earn" },
+  { k: "moodStreak", t: "Bônus de 7 dias seguidos de humor", kind: "earn" },
+  { k: "login15", t: "Bônus de 15 dias seguidos usando o app (1x)", kind: "earn" },
+  { k: "login30", t: "Bônus de 30 dias seguidos usando o app (1x)", kind: "earn", max: 50 },
+  { k: "invite", t: "Mandar um convite", kind: "cost" },
+  { k: "miss", t: "Mandar sinal de saudade", kind: "cost" },
+  { k: "decline", t: "Recusar um convite", kind: "cost" },
+  { k: "freeze", t: "Proteger a sequência de dias", kind: "cost" },
+  { k: "wish", t: "Resgatar um desejo secreto às cegas", kind: "cost" },
+];
+
+// texto do Perfil que explica como ganhar e gastar moedas, com os valores do casal
+function coinRulesHTML() {
+  const r = coinRule;
+  const earn = [], spend = [];
+  if (r("meet") > 0) earn.push(`encontro combinado do mês acontece (+${r("meet")} pra cada um)`);
+  if (r("mood") > 0) earn.push(`registrar o humor do dia (+${r("mood")}, uma vez por dia)`);
+  if (r("moodStreak") > 0) earn.push(`sequência de 7 dias de humor (+${r("moodStreak")} de bônus)`);
+  if (r("note") > 0) earn.push(`mandar uma mensagem fofa (+${r("note")}, uma vez por dia)`);
+  if (feat("weekly") && r("weekly") > 0) earn.push(`responder a pergunta da semana (+${r("weekly")})`);
+  if (feat("daily") && r("daily") > 0) earn.push(`responder o desafio do dia (+${r("daily")}, uma vez por dia)`);
+  if (r("accept") > 0) earn.push(`aceitar um convite (+${r("accept")})`);
+  if (feat("streaks") && r("login15") > 0) earn.push(`15 dias seguidos usando o app (+${r("login15")}, uma vez)`);
+  if (feat("streaks") && r("login30") > 0) earn.push(`30 dias seguidos (+${r("login30")}, uma vez)`);
+  if (r("invite") > 0) earn.push("convite que você mandou foi recusado, a moeda volta");
+  earn.push("cumprir um resgate da lojinha que o outro pediu (varia por item, veja a Lojinha)");
+  if (r("invite") > 0) spend.push(`mandar um convite (-${r("invite")})`);
+  if (feat("miss") && r("miss") > 0) spend.push(`mandar um sinal de saudade (-${r("miss")})`);
+  if (r("decline") > 0) spend.push(`recusar um convite de alguém (-${r("decline")}${feat("recharge") ? ", de graça se for na sua semana de recarregar" : ""})`);
+  if (feat("streaks") && r("freeze") > 0) spend.push(`usar o freeze pra proteger a sequência de dias (-${r("freeze")})`);
+  if (feat("wishes") && r("wish") > 0) spend.push(`resgatar um desejo secreto às cegas (-${r("wish")})`);
+  const strong = (t) => `<strong style="color:var(--text);">${t}</strong>`;
+  return `
+    <div>🟢 ${strong("Ganha:")} ${earn.join(" · ")}</div>
+    <div>🔴 ${strong("Gasta:")} ${spend.join(" · ") || "nada por enquanto"}</div>`;
+}
+
 // ---- tela Personalizar ----
 
 function openPersonalizeModal() {
@@ -2723,6 +2776,10 @@ function openPersonalizeModal() {
   let goal = goalTarget();
   let since = togetherSince() || "";
   const today = todayISO();
+  const rules = {};
+  RULE_LIST.forEach((r) => { rules[r.k] = coinRule(r.k); });
+  let lucky = luckyOn();
+  const perksOff = new Set(State.settings?.features?.perks_off || []);
 
   const switchHTML = (k, label) => `<button type="button" class="switch ${cur[k] ? "on" : ""}" data-k="${k}" role="switch" aria-checked="${cur[k]}" aria-label="${label}"></button>`;
 
@@ -2772,10 +2829,41 @@ function openPersonalizeModal() {
         </div>`;
     }).join("");
 
+    const ruleRow = (r) => `
+      <div class="switch-row" style="padding:6px 0; border-bottom:1px solid var(--border);">
+        <div style="flex:1; min-width:0; font-size:13px; font-weight:800;">${r.t}</div>
+        <span style="display:flex; align-items:center; gap:6px; flex:none;">
+          <button type="button" class="btn btn-secondary btn-sm" data-rule="${r.k}" data-rd="-1" style="padding:4px 10px;" aria-label="Diminuir ${r.t}">−</button>
+          <strong style="min-width:28px; text-align:center; font-size:13px;">${rules[r.k]}</strong>
+          <button type="button" class="btn btn-secondary btn-sm" data-rule="${r.k}" data-rd="1" style="padding:4px 10px;" aria-label="Aumentar ${r.t}">+</button>
+        </span>
+      </div>`;
+    const coinRows = `
+      <p class="hint-text" style="margin:14px 0 4px;">Pontos e moedas. Coloque 0 pra não dar (ou não cobrar) nada naquela ação.</p>
+      <p class="hint-text" style="margin:8px 0 2px;">Ganha moedas</p>
+      ${RULE_LIST.filter((r) => r.kind === "earn").map(ruleRow).join("")}
+      <p class="hint-text" style="margin:12px 0 2px;">Gasta moedas</p>
+      ${RULE_LIST.filter((r) => r.kind === "cost").map(ruleRow).join("")}
+      <div class="switch-row" style="padding:8px 0; border-bottom:1px solid var(--border);">
+        <div style="min-width:0; flex:1;">
+          <div style="font-weight:800; font-size:14px;">Dia da sorte</div>
+          <div class="hint-text" style="margin:0;">De vez em quando, 1 em cada 10, uma recompensa vem em dobro</div>
+        </div>
+        <button type="button" class="switch ${lucky ? "on" : ""}" data-lucky="1" role="switch" aria-checked="${lucky}" aria-label="Dia da sorte"></button>
+      </div>
+      <p class="hint-text" style="margin:14px 0 4px;">Itens prontos da lojinha. Desligue os que não combinam com vocês (vocês também podem criar os seus).</p>
+      ${PERKS.map((x) => `
+        <div class="switch-row" style="padding:6px 0; border-bottom:1px solid var(--border);">
+          <div style="min-width:0; flex:1; font-size:13px; font-weight:800;">${x.emoji} ${gen(x.title, genderOf(State.role))} <span class="hint-text">${x.cost}💰</span></div>
+          <button type="button" class="switch ${perksOff.has(x.id) ? "" : "on"}" data-perk="${x.id}" role="switch" aria-checked="${!perksOff.has(x.id)}" aria-label="${x.title}"></button>
+        </div>`).join("")}
+      <button type="button" class="btn btn-ghost btn-sm" id="pz-reset-rules" style="margin-top:10px;">Voltar aos valores padrão</button>`;
+
     $("#pz-list").innerHTML = `
       <p class="hint-text" style="margin:14px 0 4px;">Tela inicial. Use as setas pra mudar a ordem e o botão pra ligar ou desligar.</p>
       ${homeRows}
-      ${otherRows}`;
+      ${otherRows}
+      ${cur.shop ? coinRows : ""}`;
     const list = $("#pz-list");
     list.querySelectorAll("[data-k]").forEach((b) => b.addEventListener("click", () => { cur[b.dataset.k] = !cur[b.dataset.k]; paint(); }));
     list.querySelectorAll("[data-goal]").forEach((b) => b.addEventListener("click", () => {
@@ -2789,6 +2877,23 @@ function openPersonalizeModal() {
       paint();
     }));
     $("#pz-since")?.addEventListener("change", (e) => { since = e.target.value; });
+    list.querySelectorAll("[data-rule]").forEach((b) => b.addEventListener("click", () => {
+      const k = b.dataset.rule, r = RULE_LIST.find((x) => x.k === k);
+      rules[k] = Math.min(r.max || 20, Math.max(0, rules[k] + parseInt(b.dataset.rd, 10)));
+      paint();
+    }));
+    list.querySelector("[data-lucky]")?.addEventListener("click", () => { lucky = !lucky; paint(); });
+    list.querySelectorAll("[data-perk]").forEach((b) => b.addEventListener("click", () => {
+      const id = b.dataset.perk;
+      if (perksOff.has(id)) perksOff.delete(id); else perksOff.add(id);
+      paint();
+    }));
+    $("#pz-reset-rules")?.addEventListener("click", () => {
+      RULE_LIST.forEach((r) => { rules[r.k] = COIN_DEFAULTS[r.k]; });
+      lucky = true;
+      perksOff.clear();
+      paint();
+    });
   };
 
   openModal(`
@@ -2812,6 +2917,7 @@ function openPersonalizeModal() {
       const goalChanged = goal !== goalTarget();
       State.settings = await db.updateCoupleFeatures(State.coupleId, (f) => ({
         ...f, ...cur, home_order: order, together_since: since || null, goal_target: goal,
+        coin_rules: { ...rules, lucky }, perks_off: [...perksOff],
         last_editor: State.role, last_edit_at: new Date().toISOString(),
       }));
       setPeopleSettings(State.settings);
