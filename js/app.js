@@ -881,12 +881,10 @@ function openSaudadeModal() {
 async function renderCalendar() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const mk = monthKey(State.calendarMonth);
-  const moodSince = toISODate(addDays(new Date(), -60));
-  const [plan, encounters, weekend, moodHistory] = await Promise.all([
+  const [plan, encounters, weekend] = await Promise.all([
     db.ensureMonthPlan(State.coupleId, mk),
     db.listEncountersForMonth(State.coupleId, mk),
     db.getWeekendRecharge(State.coupleId, mk),
-    db.getMoodHistory(State.coupleId, moodSince),
   ]);
   const yearlyDates = await db.listYearlyDates(State.coupleId).catch(() => []);
   const [viewYear, viewMonth] = mk.split("-").map(Number);
@@ -905,27 +903,11 @@ async function renderCalendar() {
   const planejadosCount = encounters.filter((e) => e.kind === "planejado").length;
   const happened = encounters.filter((e) => e.kind === "planejado" && e.status === "aconteceu").length;
 
-  const myMoodStreak = countMoodStreakFromHistory(moodHistory, State.role);
-  const myMoodDays = moodHistory.filter((h) => h.role === State.role).map((h) => h.day).sort();
-  const lastMoodDay = myMoodDays[myMoodDays.length - 1];
-  const daysSinceMood = lastMoodDay ? Math.round((parseISODate(todayISO()) - parseISODate(lastMoodDay)) / 86400000) : null;
-  const moodStreakText = myMoodStreak > 1
-    ? `🔥 ${myMoodStreak} dias seguidos atualizando seu humor diário`
-    : lastMoodDay === todayISO()
-    ? "💛 Você já atualizou seu humor diário hoje"
-    : daysSinceMood != null
-    ? `💛 Você atualizou seu humor diário pela última vez há ${daysSinceMood} dia${daysSinceMood === 1 ? "" : "s"}`
-    : "💛 Ainda não tem humor diário registrado por aqui";
-
   view.innerHTML = `
     <div class="month-nav">
       <button id="prev-month">‹</button>
       <h2>${monthLabel(mk)}</h2>
       <button id="next-month">›</button>
-    </div>
-
-    <div class="card" style="text-align:center; background:var(--accent-soft);">
-      <div style="font-size:15px; font-weight:800; color:var(--accent-strong);">${moodStreakText}</div>
     </div>
 
     <div class="card">
@@ -1289,10 +1271,24 @@ async function renderMood() {
   const myAnswer = weeklyAnswers.find((a) => a.role === State.role);
   const theirAnswer = weeklyAnswers.find((a) => a.role !== State.role);
 
+    const myMoodDays = history.filter((h) => h.role === State.role).map((h) => h.day).sort();
+  const lastMoodDay = myMoodDays[myMoodDays.length - 1];
+  const daysSinceMood = lastMoodDay ? Math.round((parseISODate(todayISO()) - parseISODate(lastMoodDay)) / 86400000) : null;
+  const moodStreakText = myMoodStreak > 1
+    ? `🔥 ${myMoodStreak} dias seguidos atualizando seu humor diário`
+    : lastMoodDay === todayISO()
+    ? "💛 Você já atualizou seu humor diário hoje"
+    : daysSinceMood != null
+    ? `💛 Você atualizou seu humor diário pela última vez há ${daysSinceMood} dia${daysSinceMood === 1 ? "" : "s"}`
+    : "💛 Ainda não tem humor diário registrado por aqui";
+
   view.innerHTML = `
+    <div class="card" style="text-align:center; background:var(--accent-soft);">
+      <div style="font-size:15px; font-weight:800; color:var(--accent-strong);">${moodStreakText}</div>
+    </div>
+
     <div class="card">
       <div class="card-title">Como você está?</div>
-      ${myMoodStreak > 1 ? `<p class="hint-text" style="margin:2px 0 12px;">🔥 ${myMoodStreak} dias seguidos registrando seu humor</p>` : ""}
       <div class="mood-grid" id="mood-grid">
         ${MOODS.map((m) => `
           <button class="mood-btn ${mine?.mood === m.id ? "selected" : ""}" data-mood="${m.id}">
