@@ -656,3 +656,14 @@ alter table cycle_settings add constraint cycle_settings_role_check check (role 
 drop policy if exists "cycle_settings: insert own" on cycle_settings;
 create policy "cycle_settings: insert own" on cycle_settings
   for insert with check (couple_id = my_couple_id() and role = my_role() and my_gender() = 'mulher');
+
+-- ------------------------------------------------------------
+-- FASE 2: tempo real das configuracoes - igual a migration_fase2_personalizar.sql
+-- ------------------------------------------------------------
+-- Fase 2: mudanças de configuração aparecem na hora pro outro do casal (tempo real).
+-- É seguro rodar mais de uma vez.
+do $$
+begin
+  alter publication supabase_realtime add table couple_settings;
+exception when duplicate_object then null;
+end $$;

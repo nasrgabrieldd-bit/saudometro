@@ -117,7 +117,7 @@ export async function getPartnerProfile(coupleId, myRole) {
 
 // ---------- plano do mês (meta + saldo acumulado) ----------
 
-export async function ensureMonthPlan(coupleId, mk) {
+export async function ensureMonthPlan(coupleId, mk, baseTarget = 2) {
   let { data, error } = await supabase
     .from("month_plans")
     .select("*")
@@ -145,7 +145,7 @@ export async function ensureMonthPlan(coupleId, mk) {
 
   const inserted = await supabase
     .from("month_plans")
-    .insert({ couple_id: coupleId, month: mk, base_target: 2, carry_in: carryIn })
+    .insert({ couple_id: coupleId, month: mk, base_target: baseTarget, carry_in: carryIn })
     .select()
     .single();
   if (inserted.error) throw inserted.error;
@@ -598,7 +598,7 @@ export async function undoRedemptionFulfilled(id) {
 
 // ---------- realtime ----------
 
-export function subscribeCoupleChanges(coupleId, onChange) {
+export function subscribeCoupleChanges(coupleId, onChange, onSettings) {
   const channel = supabase
     .channel(`couple-${coupleId}`)
     .on("postgres_changes", { event: "*", schema: "public", table: "encounters", filter: `couple_id=eq.${coupleId}` }, onChange)
@@ -614,6 +614,7 @@ export function subscribeCoupleChanges(coupleId, onChange) {
     .on("postgres_changes", { event: "*", schema: "public", table: "daily_challenge_answers", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "secret_wishes", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "wish_redemptions", filter: `couple_id=eq.${coupleId}` }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "couple_settings", filter: `couple_id=eq.${coupleId}` }, onSettings || onChange)
     .subscribe();
   return () => supabase.removeChannel(channel);
 }
@@ -681,5 +682,17 @@ export async function saveCycle(coupleId, role, fields) {
 
 export async function deleteCycle(coupleId, role) {
   const { error } = await supabase.from("cycle_settings").delete().eq("couple_id", coupleId).eq("role", role);
+  if (error) throw error;
+}
+
+// lê a configuração mais recente antes de mudar, pra dois aparelhos não apagarem a mudança um do outro
+export async function updateCoupleFeatures(coupleId, mutate) {
+  const cur = await getCoupleSettings(coupleId);
+  const features = mutate({ ...(cur?.features || {}) });
+  return saveCoupleSettings(coupleId, { features });
+}
+
+export async function setMonthBaseTarget(coupleId, mk, baseTarget) {
+  const { error } = await supabase.from("month_plans").update({ base_target: baseTarget }).eq("couple_id", coupleId).eq("month", mk);
   if (error) throw error;
 }

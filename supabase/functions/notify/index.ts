@@ -83,6 +83,24 @@ function messageFor(table: string, type: string, record: any, oldRecord: any): M
     return null;
   }
 
+  // personalização do app (recursos ligados/desligados): avisa o outro. Ignora nomes e o aviso inicial.
+  if (table === "couple_settings" && type === "UPDATE") {
+    const strip = (f: any) => {
+      const { tour: _t, last_edit_at: _l, ...rest } = f || {};
+      return JSON.stringify(rest);
+    };
+    const editor = record.features?.last_editor;
+    if (editor && strip(record.features) !== strip(oldRecord?.features)) {
+      return {
+        targetRole: otherRole(editor),
+        title: "Configurações do app mudaram 🎛️",
+        body: `${ROLE_LABEL[editor]} personalizou o app de vocês.`,
+        path: "?tab=profile",
+      };
+    }
+    return null;
+  }
+
   if (table === "weekly_answers" && type === "INSERT") {
     return {
       targetRole: otherRole(record.role),

@@ -63,3 +63,13 @@ export function genMixed(text, ownGender, partnerGender) {
     .replace(/(\w*)a\(e\)/g, (_, p) => p + (par ? "a" : "e"))
     .replace(/(\w*)e\(a\)/g, (_, p) => p + (par ? "a" : "e"));
 }
+
+// recursos que o casal pode ligar/desligar. Sem configuração salva, tudo fica ligado (como sempre foi).
+export function feat(key) {
+  return settings?.features?.[key] !== false;
+}
+
+export function goalTarget() {
+  const n = settings?.features?.goal_target;
+  return Number.isInteger(n) && n >= 1 && n <= 30 ? n : 2;
+}
