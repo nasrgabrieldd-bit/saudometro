@@ -25,6 +25,7 @@ const State = {
   coupleId: null,
   role: null,
   activeTab: "home",
+  notesView: "hub",
   calendarMonth: startOfMonth(new Date()),
   calendarEncounters: [],
   calendarPlan: null,
@@ -87,10 +88,28 @@ async function enterApp(profile) {
   });
 
   if (State.unsubscribe) State.unsubscribe();
-  State.unsubscribe = db.subscribeCoupleChanges(State.coupleId, () => renderActiveTab());
+  State.unsubscribe = db.subscribeCoupleChanges(State.coupleId, () => { renderActiveTab(); updateNotesNavBadge(); });
 
   setActiveTab("home");
   updateStreakBadge();
+  updateNotesNavBadge();
+}
+
+// selo discreto no ícone de Recados quando tem convite esperando resposta
+// ou desejo resgatado já revelado — já que essas coisas não têm mais aba própria
+async function updateNotesNavBadge() {
+  const dot = document.getElementById("notes-nav-dot");
+  if (!dot) return;
+  try {
+    const [invites, redemptions] = await Promise.all([
+      db.listAllInvites(State.coupleId),
+      db.listWishRedemptions(State.coupleId),
+    ]);
+    const todayStr = todayISO();
+    const pendingInvites = invites.filter((e) => e.status === "pendente" && e.created_by !== State.role).length;
+    const readyRedemptions = redemptions.filter((r) => r.redeemed_by === State.role && r.reveal_on <= todayStr && !r.fulfilled).length;
+    dot.hidden = pendingInvites + readyRedemptions === 0;
+  } catch (e) { /* selo é só um indicador visual, falha calada */ }
 }
 
 // dá moeda com 10% de chance de vir em dobro ("dia da sorte")
@@ -196,6 +215,7 @@ function offerStreakFreeze(missedDayISO) {
 
 function setActiveTab(tab) {
   State.activeTab = tab;
+  if (tab === "notes") State.notesView = "hub";
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   renderActiveTab();
 }
@@ -208,7 +228,7 @@ function clearKissTimer() {
 function renderActiveTab() {
   if (!State.coupleId) return;
   clearKissTimer();
-  const map = { home: renderHome, calendar: renderCalendar, mood: renderMood, invites: renderInvites, notes: renderNotes, shop: renderShop, profile: renderProfile };
+  const map = { home: renderHome, calendar: renderCalendar, mood: renderMood, notes: renderNotes, shop: renderShop, profile: renderProfile };
   (map[State.activeTab] || renderHome)();
 }
 
@@ -1242,6 +1262,19 @@ function escapeHTML(s) {
   return d.innerHTML;
 }
 
+// cabeçalho com "← Voltar" usado por toda tela dentro do hub de Recadinhos
+function subViewHeader(title) {
+  return `
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+      <button class="btn btn-ghost btn-sm" id="btn-notes-back" style="flex:none; padding:9px 12px;">← Voltar</button>
+      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">${title}</h2>
+    </div>
+  `;
+}
+function wireNotesBack() {
+  $("#btn-notes-back")?.addEventListener("click", () => { State.notesView = "hub"; renderNotes(); });
+}
+
 // ================= CONVITES =================
 
 async function renderInvites() {
@@ -1253,6 +1286,7 @@ async function renderInvites() {
   const myCoins = coins[State.role] || 0;
 
   view.innerHTML = `
+    ${subViewHeader("✉️ Convites")}
     ${pendingForMe.length ? `
       <div class="section-title">Esperando sua resposta</div>
       <div class="card"><div class="stack" id="pending-list">${pendingForMe.map(entryItemHTML).join("")}</div></div>
@@ -1282,6 +1316,7 @@ async function renderInvites() {
     ` : ""}
   `;
 
+  wireNotesBack();
   $("#send-invite").addEventListener("click", async () => {
     const title = $("#invite-title").value.trim();
     if (!title) { alert("Escreve um título pro convite :)"); return; }
@@ -1321,6 +1356,7 @@ async function renderInvites() {
           if (!deleted) { btn.disabled = false; return; }
         }
         await renderInvites();
+        updateNotesNavBadge();
       } catch (e) {
         alert("Não deu: " + (e.message || e));
         btn.disabled = false;
@@ -1331,23 +1367,107 @@ async function renderInvites() {
 
 // ================= RECADINHOS =================
 
+// aba Recadinhos virou uma central: essa função só roteia pra tela certa
 async function renderNotes() {
+  const map = {
+    hub: renderNotesHub, history: renderNotesHistory,
+    challenge: renderChallengeView, capsule: renderCapsuleView,
+    wishes: renderWishesView, invites: renderInvites,
+  };
+  (map[State.notesView] || renderNotesHub)();
+}
+
+async function renderNotesHub() {
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const todayStr = todayISO();
+
+  const [notes, todayAnswers, capsules, redemptions, invites] = await Promise.all([
+    db.listRecentSweetNotes(State.coupleId, 5),
+    db.getChallengeAnswersForDay(State.coupleId, todayStr),
+    db.listTimeCapsules(State.coupleId),
+    db.listWishRedemptions(State.coupleId),
+    db.listAllInvites(State.coupleId),
+  ]);
+
+  const iSentToday = notes.some((n) => n.role === State.role && n.created_at.slice(0, 10) === todayStr);
+  const theirNoteToday = notes.find((n) => n.role !== State.role && n.created_at.slice(0, 10) === todayStr);
+  const myAnswerToday = todayAnswers.find((a) => a.role === State.role);
+  const pendingInvites = invites.filter((e) => e.status === "pendente" && e.created_by !== State.role);
+  const readyRedemptions = redemptions.filter((r) => r.redeemed_by === State.role && r.reveal_on <= todayStr && !r.fulfilled);
+
+  view.innerHTML = `
+    <div class="section-title">💌 Recadinho fofo</div>
+    <div class="card">
+      ${theirNoteToday ? `<div class="entry-meta" style="margin-bottom:10px; color:var(--text);">${ROLE_LABEL[otherRole()]}: "${escapeHTML(theirNoteToday.message)}"</div>` : ""}
+      <div class="card-sub">${iSentToday ? "Você já mandou um hoje. Pode mandar outro, mas a moeda já foi." : "O primeiro recadinho do dia já dá 1 moeda pra você."}</div>
+      <button class="btn btn-primary btn-block" style="margin-top:12px;" id="btn-send-note">💌 Mandar recadinho</button>
+      <button class="btn btn-ghost btn-block" style="margin-top:8px;" id="btn-notes-history">Ver histórico completo →</button>
+    </div>
+
+    <div class="section-title">Atalhos</div>
+    <div class="shortcut-grid">
+      <button class="shortcut-card" data-view="challenge">
+        <span class="shortcut-icon">🎯</span>
+        <span class="shortcut-title">Desafio do dia</span>
+        <span class="shortcut-sub">${myAnswerToday ? "Respondido ✓" : "Responder agora"}</span>
+      </button>
+      <button class="shortcut-card" data-view="capsule">
+        <span class="shortcut-icon">🕰️</span>
+        <span class="shortcut-title">Cápsula do tempo</span>
+        <span class="shortcut-sub">${capsules.length ? `${capsules.length} guardada${capsules.length === 1 ? "" : "s"}` : "Nenhuma ainda"}</span>
+      </button>
+      <button class="shortcut-card" data-view="wishes">
+        <span class="shortcut-icon">🎁</span>
+        <span class="shortcut-title">Desejos secretos</span>
+        <span class="shortcut-sub">${readyRedemptions.length ? "Tem resgate revelado!" : "Ver desejos"}</span>
+        ${readyRedemptions.length ? `<span class="dot-badge" style="position:absolute; top:10px; right:10px;"></span>` : ""}
+      </button>
+      <button class="shortcut-card" data-view="invites">
+        <span class="shortcut-icon">✉️</span>
+        <span class="shortcut-title">Convites</span>
+        <span class="shortcut-sub">${pendingInvites.length ? `${pendingInvites.length} esperando você` : "Nenhum pendente"}</span>
+        ${pendingInvites.length ? `<span class="dot-badge" style="position:absolute; top:10px; right:10px;"></span>` : ""}
+      </button>
+    </div>
+  `;
+
+  $("#btn-send-note")?.addEventListener("click", () => openSweetNoteModal(iSentToday));
+  $("#btn-notes-history")?.addEventListener("click", () => { State.notesView = "history"; renderNotes(); });
+  document.querySelectorAll(".shortcut-card").forEach((btn) => {
+    btn.addEventListener("click", () => { State.notesView = btn.dataset.view; renderNotes(); });
+  });
+}
+
+async function renderNotesHistory() {
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const notes = await db.listRecentSweetNotes(State.coupleId, 500);
+  view.innerHTML = `
+    ${subViewHeader("💌 Histórico de recadinhos")}
+    <div class="card">
+      ${notes.length ? `<div class="stack">${notes.map((n) => `
+        <div class="entry-item">
+          <div class="entry-icon">${ROLE_EMOJI[n.role]}</div>
+          <div class="entry-body">
+            <div class="entry-title">${ROLE_LABEL[n.role]}</div>
+            <div class="entry-meta">"${escapeHTML(n.message)}"</div>
+            <div class="entry-meta" style="opacity:.7; margin-top:2px;">${formatNoteTimestamp(n.created_at)}</div>
+          </div>
+        </div>
+      `).join("")}</div>` : `<div class="empty-state"><span class="emoji">💌</span>Nenhum recadinho ainda. Manda o primeiro!</div>`}
+    </div>
+  `;
+  wireNotesBack();
+}
+
+async function renderChallengeView() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const todayStr = todayISO();
   const since60 = toISODate(addDays(new Date(), -60));
 
-  const [notes, capsules, todayAnswers, challengeHistory, myWishes, redemptions, coins] = await Promise.all([
-    db.listRecentSweetNotes(State.coupleId, 500),
-    db.listTimeCapsules(State.coupleId),
+  const [todayAnswers, challengeHistory] = await Promise.all([
     db.getChallengeAnswersForDay(State.coupleId, todayStr),
     db.listChallengeAnswersHistory(State.coupleId, since60),
-    db.getWishesForRole(State.coupleId, State.role),
-    db.listWishRedemptions(State.coupleId),
-    db.getCoinBalances(State.coupleId),
   ]);
-
-  const iSentToday = notes.some((n) => n.role === State.role && n.created_at.slice(0, 10) === todayStr);
-  const myCoins = coins[State.role] || 0;
 
   const todayIdx = dayIndexSince(State.coupleCreatedAt);
   const todayChallenge = challengeForDay(todayIdx);
@@ -1360,13 +1480,7 @@ async function renderNotes() {
     .slice(0, 10);
 
   view.innerHTML = `
-    <div class="section-title">💌 Recadinhos fofos</div>
-    <div class="card">
-      <div class="card-sub">${iSentToday ? "Você já mandou um hoje. Pode mandar outro, mas a moeda já foi." : "O primeiro recadinho do dia já dá 1 moeda pra você."}</div>
-      <button class="btn btn-primary btn-block" style="margin-top:12px;" id="btn-send-note">💌 Mandar recadinho</button>
-    </div>
-
-    <div class="section-title">🎯 Desafio do dia</div>
+    ${subViewHeader("🎯 Desafio do dia")}
     <div class="card" style="background:var(--warm-soft);">
       <div class="card-title" style="font-size:15.5px; font-family:'Baloo 2', sans-serif;">"${todayChallenge}"</div>
       ${myAnswerToday ? `
@@ -1398,8 +1512,30 @@ async function renderNotes() {
         }).join("")}</div>
       </div>
     ` : ""}
+  `;
 
-    <div class="section-title">🕰️ Cápsula do tempo</div>
+  wireNotesBack();
+  $("#btn-answer-challenge")?.addEventListener("click", async () => {
+    const answer = $("#challenge-answer").value.trim();
+    if (!answer) { alert("Escreve uma resposta primeiro :)"); return; }
+    setBusy("#btn-answer-challenge", true);
+    try {
+      await db.upsertChallengeAnswer(State.coupleId, todayStr, State.role, answer);
+      await earnCoins(State.role, 1, "respondeu o desafio do dia");
+      await renderNotes();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#btn-answer-challenge", false);
+    }
+  });
+}
+
+async function renderCapsuleView() {
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const capsules = await db.listTimeCapsules(State.coupleId);
+
+  view.innerHTML = `
+    ${subViewHeader("🕰️ Cápsula do tempo")}
     <div class="card">
       <div class="card-sub">Escreva algo agora — só pode ser aberta na data que você escolher.</div>
       <textarea id="capsule-text" rows="3" placeholder="daqui uns anos, quero que você lembre que..."></textarea>
@@ -1410,8 +1546,37 @@ async function renderNotes() {
     <div class="card">
       ${capsules.length ? `<div class="stack">${capsules.map(capsuleItemHTML).join("")}</div>` : `<div class="empty-state"><span class="emoji">🕰️</span>Nenhuma cápsula ainda.</div>`}
     </div>
+  `;
 
-    <div class="section-title">🎁 Desejos secretos</div>
+  wireNotesBack();
+  $("#btn-seal-capsule")?.addEventListener("click", async () => {
+    const message = $("#capsule-text").value.trim();
+    const openOn = $("#capsule-date").value;
+    if (!message) { alert("Escreve alguma coisa primeiro :)"); return; }
+    if (!openOn) { alert("Escolhe uma data pra abrir :)"); return; }
+    setBusy("#btn-seal-capsule", true);
+    try {
+      await db.createTimeCapsule(State.coupleId, State.role, message, openOn);
+      await renderNotes();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#btn-seal-capsule", false);
+    }
+  });
+}
+
+async function renderWishesView() {
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const todayStr = todayISO();
+  const [myWishes, redemptions, coins] = await Promise.all([
+    db.getWishesForRole(State.coupleId, State.role),
+    db.listWishRedemptions(State.coupleId),
+    db.getCoinBalances(State.coupleId),
+  ]);
+  const myCoins = coins[State.role] || 0;
+
+  view.innerHTML = `
+    ${subViewHeader("🎁 Desejos secretos")}
     <div class="card">
       <div class="card-sub">Até 3 desejos guardados só seus — ${ROLE_LABEL[otherRole()]} não vê o que você escreveu aqui.</div>
       ${[1, 2, 3].map((slot) => {
@@ -1434,53 +1599,9 @@ async function renderNotes() {
         <div class="stack">${redemptions.map(redemptionItemHTML).join("")}</div>
       </div>
     ` : ""}
-
-    <div class="section-title">Histórico de recadinhos</div>
-    <div class="card">
-      ${notes.length ? `<div class="stack">${notes.map((n) => `
-        <div class="entry-item">
-          <div class="entry-icon">${ROLE_EMOJI[n.role]}</div>
-          <div class="entry-body">
-            <div class="entry-title">${ROLE_LABEL[n.role]}</div>
-            <div class="entry-meta">"${escapeHTML(n.message)}"</div>
-            <div class="entry-meta" style="opacity:.7; margin-top:2px;">${formatNoteTimestamp(n.created_at)}</div>
-          </div>
-        </div>
-      `).join("")}</div>` : `<div class="empty-state"><span class="emoji">💌</span>Nenhum recadinho ainda. Manda o primeiro!</div>`}
-    </div>
   `;
 
-  $("#btn-send-note")?.addEventListener("click", () => openSweetNoteModal(iSentToday));
-
-  $("#btn-answer-challenge")?.addEventListener("click", async () => {
-    const answer = $("#challenge-answer").value.trim();
-    if (!answer) { alert("Escreve uma resposta primeiro :)"); return; }
-    setBusy("#btn-answer-challenge", true);
-    try {
-      await db.upsertChallengeAnswer(State.coupleId, todayStr, State.role, answer);
-      await earnCoins(State.role, 1, "respondeu o desafio do dia");
-      await renderNotes();
-    } catch (e) {
-      alert("Não deu: " + (e.message || e));
-      setBusy("#btn-answer-challenge", false);
-    }
-  });
-
-  $("#btn-seal-capsule")?.addEventListener("click", async () => {
-    const message = $("#capsule-text").value.trim();
-    const openOn = $("#capsule-date").value;
-    if (!message) { alert("Escreve alguma coisa primeiro :)"); return; }
-    if (!openOn) { alert("Escolhe uma data pra abrir :)"); return; }
-    setBusy("#btn-seal-capsule", true);
-    try {
-      await db.createTimeCapsule(State.coupleId, State.role, message, openOn);
-      await renderNotes();
-    } catch (e) {
-      alert("Não deu: " + (e.message || e));
-      setBusy("#btn-seal-capsule", false);
-    }
-  });
-
+  wireNotesBack();
   $("#btn-save-wishes")?.addEventListener("click", async () => {
     setBusy("#btn-save-wishes", true);
     try {
@@ -1520,6 +1641,7 @@ async function renderNotes() {
       try {
         await db.markWishFulfilled(btn.dataset.id);
         await renderNotes();
+        updateNotesNavBadge();
       } catch (e) {
         alert("Não deu: " + (e.message || e));
         btn.disabled = false;

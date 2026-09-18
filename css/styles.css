@@ -601,6 +601,13 @@ label.field-label:first-child { margin-top: 0; }
 .nav-btn .nav-icon { font-size: 21px; }
 .nav-btn .nav-label { font-size: 10px; font-weight: 800; }
 .nav-btn.active { color: var(--accent-strong); }
+.dot-badge {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+}
 .nav-btn .nav-dot {
   position: absolute;
   top: 2px;
@@ -742,3 +749,30 @@ label.field-label:first-child { margin-top: 0; }
 .stack { display: flex; flex-direction: column; gap: 10px; }
 .row { display: flex; gap: 10px; }
 .row > *:not(.avatar):not(.theme-toggle) { flex: 1; min-width: 0; }
+
+/* ---------- atalhos (hub da aba Recadinhos) ---------- */
+
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.shortcut-card {
+  position: relative;
+  background: var(--surface);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 18px 14px;
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  text-align: center;
+}
+.shortcut-card:active { transform: scale(0.97); }
+.shortcut-icon { font-size: 28px; }
+.shortcut-title { font-weight: 800; font-size: 13.5px; color: var(--text); font-family: "Baloo 2", sans-serif; }
+.shortcut-sub { font-size: 11px; color: var(--text-muted); }
