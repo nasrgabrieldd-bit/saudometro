@@ -2318,7 +2318,7 @@ async function renderProfile() {
         <div>
           <div class="card-title">${escapeHTML(myDisplayName())}</div>
           <div class="card-sub" style="margin-bottom:0;">você é ${ROLE_LABEL[State.role]} · par de ${State.partner ? escapeHTML(partnerDisplayName()) : "..."}</div>
-          <button class="btn btn-ghost btn-sm" id="btn-edit-names" style="margin-top:6px; padding:6px 10px;">✏️ Editar nomes</button>
+          <button class="btn btn-ghost btn-sm" id="btn-edit-names" style="margin-top:6px; padding:6px 10px;">✏️ Nomes e emojis</button>
         </div>
       </div>
     </div>
@@ -2851,7 +2851,9 @@ function maybeShowTour() {
 
 // ================= NOMES DO CASAL =================
 
-// qualquer um dos dois pode editar os nomes e o gênero de ambos
+const EMOJI_POOL = ["🦋", "🌸", "🦁", "🐻", "🐰", "🐺", "🦊", "🐼", "🐱", "🐶", "🦄", "🌻", "⭐", "🌙", "🍀", "🔥", "🐯", "🐸", "🦉", "🍓"];
+
+// qualquer um dos dois pode editar os nomes, o gênero e o emoji de ambos
 function openNamesEditor() {
   const base = legacyPeople();
   const cur = {
@@ -2861,15 +2863,19 @@ function openNamesEditor() {
   };
   const roles = [State.role, otherRole()];
   const genders = { ...cur.genders };
+  const emojis = { ...cur.emojis };
   openModal(`
-    <h3 class="modal-title">✏️ Nomes do casal</h3>
-    <p class="card-sub">Os dois podem editar. O app usa o nome e o gênero pra escrever os textos do jeito certo.</p>
+    <h3 class="modal-title">✏️ Nomes e emojis</h3>
+    <p class="card-sub">Os dois podem editar. O app usa o nome e o gênero pra escrever os textos do jeito certo, e o emoji identifica cada um.</p>
     ${roles.map((r) => `
       <div class="card" style="padding:12px; margin-bottom:10px;">
         <label class="field-label">${r === State.role ? "Você" : "Seu par"}</label>
         <input type="text" data-nm="${r}" maxlength="24" value="${escapeHTML(nameOf(r))}" />
         <div class="row" style="gap:8px; margin-top:8px;" data-gr="${r}">
           ${[["mulher", "Mulher"], ["homem", "Homem"]].map(([v, l]) => `<button type="button" class="btn ${genders[r] === v ? "btn-primary" : "btn-secondary"} btn-sm" style="flex:1;" data-g="${v}">${l}</button>`).join("")}
+        </div>
+        <div class="row" style="gap:6px; flex-wrap:wrap; margin-top:10px;" data-er="${r}">
+          ${EMOJI_POOL.map((e) => `<button type="button" class="btn ${emojis[r] === e ? "btn-primary" : "btn-secondary"} btn-sm" style="padding:6px 9px; font-size:18px;" data-e="${e}" aria-label="Emoji ${e}">${e}</button>`).join("")}
         </div>
       </div>`).join("")}
     <p class="error-text" id="names-err"></p>
@@ -2881,14 +2887,21 @@ function openNamesEditor() {
       row.querySelectorAll("[data-g]").forEach((x) => { x.className = `btn ${x.dataset.g === b.dataset.g ? "btn-primary" : "btn-secondary"} btn-sm`; });
     }));
   });
+  $("#modal-sheet").querySelectorAll("[data-er]").forEach((row) => {
+    row.querySelectorAll("[data-e]").forEach((b) => b.addEventListener("click", () => {
+      emojis[row.dataset.er] = b.dataset.e;
+      row.querySelectorAll("[data-e]").forEach((x) => { x.className = `btn ${x.dataset.e === b.dataset.e ? "btn-primary" : "btn-secondary"} btn-sm`; });
+    }));
+  });
   $("#names-save").addEventListener("click", async () => {
     const names = { ...cur.names };
     $("#modal-sheet").querySelectorAll("[data-nm]").forEach((i) => { names[i.dataset.nm] = cleanName(i.value); });
     if (!names.gabriel || !names.tata) { $("#names-err").textContent = "Os dois nomes precisam estar preenchidos."; return; }
     if (names.gabriel.toLowerCase() === names.tata.toLowerCase()) { $("#names-err").textContent = "Os dois nomes precisam ser diferentes."; return; }
+    if (emojis.gabriel === emojis.tata) { $("#names-err").textContent = "Cada um precisa de um emoji diferente."; return; }
     setBusy("#names-save", true);
     try {
-      State.settings = await db.saveCoupleSettings(State.coupleId, { names, genders, emojis: cur.emojis, features: State.settings?.features || {} });
+      State.settings = await db.saveCoupleSettings(State.coupleId, { names, genders, emojis, features: State.settings?.features || {} });
       setPeopleSettings(State.settings);
       $("#greeting-name").textContent = myDisplayName();
       $("#avatar-badge").textContent = (myDisplayName() || "?").trim()[0]?.toUpperCase() || "?";
