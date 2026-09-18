@@ -25,9 +25,10 @@ alter table encounters drop constraint if exists encounters_kind_check;
 alter table encounters add constraint encounters_kind_check
   check (kind in ('planejado', 'saudade', 'convite', 'evento'));
 alter table encounters add column if not exists category text;
+alter table encounters add column if not exists yearly boolean not null default false; -- data especial que se repete todo ano
 alter table encounters drop constraint if exists encounters_category_check;
 alter table encounters add constraint encounters_category_check
-  check (category is null or category in ('casal', 'trabalho', 'outro'));
+  check (category is null or category in ('casal', 'trabalho', 'outro', 'comemorativa'));
 
 -- ---------- modo dono ----------
 -- a senha fica numa tabela SEM nenhuma policy: ninguém consegue ler pela API.

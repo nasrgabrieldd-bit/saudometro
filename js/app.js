@@ -6,7 +6,6 @@ import { weekIndexSince, questionForWeek } from "./questions.js";
 import { dayIndexSince, challengeForDay } from "./challenges.js";
 import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush, needsHomeScreenFirst } from "./push.js";
 import { PERKS, PERK_BY_ID, customToPerk, suggestedReward } from "./perks.js";
-import { holidaysForYear, holidayOn } from "./holidays.js";
 import { pickSaudadeNudge } from "./nudges.js";
 import {
   toISODate, monthKey, parseISODate, addDays, addMonths, startOfMonth,
@@ -735,6 +734,7 @@ async function findNextUpcoming(today) {
 }
 
 const EVENT_CATEGORIES = {
+  comemorativa: { emoji: "💝", label: "Data especial" },
   casal: { emoji: "💞", label: "Casal" },
   trabalho: { emoji: "💼", label: "Trabalho" },
   outro: { emoji: "📌", label: "Outro" },
@@ -888,6 +888,15 @@ async function renderCalendar() {
     db.getWeekendRecharge(State.coupleId, mk),
     db.getMoodHistory(State.coupleId, moodSince),
   ]);
+  const yearlyDates = await db.listYearlyDates(State.coupleId).catch(() => []);
+  const [viewYear, viewMonth] = mk.split("-").map(Number);
+  encounters.forEach((e) => { if (e.yearly) e.origYear = parseISODate(e.start_date).getFullYear(); });
+  for (const y of yearlyDates) {
+    const orig = parseISODate(y.start_date);
+    if (orig.getMonth() + 1 !== viewMonth || orig.getFullYear() >= viewYear) continue;
+    const day = Math.min(orig.getDate(), daysInMonth(new Date(viewYear, viewMonth - 1, 1)));
+    encounters.push({ ...y, start_date: toISODate(new Date(viewYear, viewMonth - 1, day)), end_date: null, month: mk, origYear: orig.getFullYear() });
+  }
   State.calendarPlan = plan;
   State.calendarEncounters = encounters;
   State.calendarWeekend = weekend;
@@ -927,26 +936,29 @@ async function renderCalendar() {
         </div>
         <button class="btn btn-primary btn-sm" id="btn-add-planejado">+ Encontro</button>
       </div>
-      <button class="btn btn-secondary btn-block" style="margin-top:10px;" id="btn-add-evento">📌 Adicionar evento</button>
+      <div class="row" style="margin-top:10px; gap:8px;">
+        <button class="btn btn-secondary" style="flex:1;" id="btn-add-especial">💝 Data especial</button>
+        <button class="btn btn-secondary" style="flex:1;" id="btn-add-evento">📌 Evento</button>
+      </div>
     </div>
 
     <div class="card">
       <div class="weekday-row"><span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span></div>
       <div class="day-grid" id="day-grid"></div>
       <div class="legend">
-        <span>💗 combinado</span><span>✅ aconteceu</span><span>📅 aceito</span><span>🫂 saudade</span><span>✉️ convite</span><span>🔋 recarregando</span><span>🎉 datas comemorativas</span><span>💞 evento casal</span><span>💼 trabalho</span><span>📌 outro</span>
+        <span>💗 combinado</span><span>✅ aconteceu</span><span>📅 aceito</span><span>🫂 saudade</span><span>✉️ convite</span><span>🔋 recarregando</span><span>💝 data especial</span><span>💞 evento casal</span><span>💼 trabalho</span><span>📌 outro</span>
       </div>
     </div>
 
-    ${monthHolidaysHTML(State.calendarMonth)}
+    ${specialDatesCardHTML()}
 
     <div id="day-detail"></div>
   `;
 
   buildDayGrid();
-  view.querySelectorAll("[data-holiday-date]").forEach((el) => {
+  view.querySelectorAll("[data-special-date]").forEach((el) => {
     el.addEventListener("click", () => {
-      showDayDetail(el.dataset.holidayDate);
+      showDayDetail(el.dataset.specialDate);
       $("#day-detail").scrollIntoView({ behavior: "smooth", block: "start" });
     });
   });
@@ -955,29 +967,34 @@ async function renderCalendar() {
   $("#next-month").addEventListener("click", () => { State.calendarMonth = addMonths(State.calendarMonth, 1); renderCalendar(); });
   $("#btn-add-planejado").addEventListener("click", () => openAddEncounterModal("planejado"));
   $("#btn-add-evento").addEventListener("click", () => openAddEventModal());
+  $("#btn-add-especial").addEventListener("click", () => openAddEventModal(undefined, "comemorativa"));
 }
 
-function monthHolidaysHTML(month) {
-  const prefix = monthKey(month);
-  const list = Object.entries(holidaysForYear(month.getFullYear()))
-    .filter(([iso]) => iso.startsWith(prefix))
-    .sort(([a], [b]) => a.localeCompare(b));
+function specialDatesCardHTML() {
+  const list = State.calendarEncounters
+    .filter((e) => e.category === "comemorativa")
+    .sort((x, y) => x.start_date.localeCompare(y.start_date));
   if (!list.length) return "";
   return `
     <div class="card">
-      <div class="card-title" style="font-size:15px;">🎉 Datas do mês</div>
+      <div class="card-title" style="font-size:15px;">💝 Datas especiais do mês</div>
       <div class="stack" style="margin-top:8px;">
-        ${list.map(([iso, h]) => `
-          <div class="entry-item" style="cursor:pointer;" data-holiday-date="${iso}">
-            <div class="entry-icon">${h.emoji}</div>
+        ${list.map((e) => `
+          <div class="entry-item" style="cursor:pointer;" data-special-date="${e.start_date}">
+            <div class="entry-icon">💝</div>
             <div class="entry-body">
-              <div class="entry-title">${h.label}</div>
-              <div class="entry-meta">${humanDateShort(parseISODate(iso))}</div>
+              <div class="entry-title">${escapeHTML(e.title) || "Data especial"}</div>
+              <div class="entry-meta">${humanDateShort(parseISODate(e.start_date))}${specialYearsLabel(e)}</div>
             </div>
           </div>`).join("")}
       </div>
     </div>
   `;
+}
+
+function specialYearsLabel(e) {
+  const n = e.origYear ? parseISODate(e.start_date).getFullYear() - e.origYear : 0;
+  return n > 0 ? ` · faz ${n} ano${n === 1 ? "" : "s"} 🎉` : "";
 }
 
 function buildDayGrid() {
@@ -995,10 +1012,9 @@ function buildDayGrid() {
     const isToday = isSameDate(date, new Date());
     const friday = fridayOfWeekend(date);
     const weekendActive = friday && State.calendarWeekend.some((w) => w.week_start === toISODate(friday) && w.active);
-    const holiday = holidayOn(date);
-    const dots = (holiday ? holiday.emoji : "") + entries.slice(0, holiday ? 2 : 3).map(iconFor).join("");
+    const dots = entries.slice(0, 3).map(iconFor).join("");
     html += `
-      <button class="day-cell ${isToday ? "today" : ""}" data-date="${iso}" ${holiday ? `title="${holiday.label}"` : ""}>
+      <button class="day-cell ${isToday ? "today" : ""}" data-date="${iso}">
         <span class="num">${day}</span>
         <span class="dots">${dots}${weekendActive ? "🔋" : ""}</span>
       </button>
@@ -1030,11 +1046,9 @@ function showDayDetail(iso) {
     <div class="empty-state"><span class="emoji">🗓️</span>Nada marcado nesse dia ainda.</div>
   `;
 
-  const holiday = holidayOn(date);
   $("#day-detail").innerHTML = `
     <div class="card">
       <div class="card-title">${humanDateLong(date)}</div>
-      ${holiday ? `<div class="pill" style="margin:6px 0 10px;">${holiday.emoji} ${holiday.label}</div>` : ""}
       <div class="stack" id="entries-list">${entriesHTML}</div>
       <div class="row" style="margin-top:14px;">
         <button class="btn btn-secondary" id="btn-add-saudade-day">🫂 Encontro de saudade</button>
@@ -1098,6 +1112,7 @@ function entryItemHTML(e) {
 }
 
 function statusLabel(e) {
+  if (e.kind === "evento" && e.category === "comemorativa") return `data especial${specialYearsLabel(e)}`;
   if (e.kind === "evento") return `evento de ${(EVENT_CATEGORIES[e.category] || EVENT_CATEGORIES.outro).label.toLowerCase()}`;
   const map = {
     agendado: "combinado", confirmado: "confirmado", aconteceu: "aconteceu",
@@ -1119,7 +1134,7 @@ async function undoEntryStatus(entry) {
 }
 
 async function deleteEntryWithConfirm(entry) {
-  const ok = confirm(`Apagar "${entry.title || defaultTitle(entry)}"? Isso não desfaz moedas já ganhas ou gastas por causa dele.`);
+  const ok = confirm(`Apagar "${entry.title || defaultTitle(entry)}"?${entry.yearly ? " Ela some de todos os anos." : ""} Isso não desfaz moedas já ganhas ou gastas por causa dele.`);
   if (!ok) return false;
   await db.deleteEncounter(entry.id);
   return true;
@@ -1196,29 +1211,35 @@ function openAddEncounterModal(kind, presetDate) {
   });
 }
 
-function openAddEventModal(presetDate) {
+function openAddEventModal(presetDate, presetCategory) {
   const dateVal = presetDate ? toISODate(presetDate) : toISODate(new Date());
-  let category = "casal";
+  let category = presetCategory || "casal";
   openModal(`
     <h3 class="modal-title">📌 Novo evento no calendário</h3>
     <label class="field-label">Tipo</label>
-    <div class="row" id="event-cats" style="gap:8px;">
+    <div class="row" id="event-cats" style="gap:8px; flex-wrap:wrap;">
       ${Object.entries(EVENT_CATEGORIES).map(([id, c]) => `
-        <button type="button" class="btn ${id === category ? "btn-primary" : "btn-secondary"} btn-sm" data-cat="${id}" style="flex:1;">${c.emoji} ${c.label}</button>
+        <button type="button" class="btn ${id === category ? "btn-primary" : "btn-secondary"} btn-sm" data-cat="${id}" style="flex:1 1 40%;">${c.emoji} ${c.label}</button>
       `).join("")}
     </div>
     <label class="field-label">Título</label>
-    <input type="text" id="new-title" maxlength="80" placeholder="ex: reunião importante, aniversário da vó" />
+    <input type="text" id="new-title" maxlength="80" placeholder="ex: aniversário de namoro, reunião importante" />
     <label class="field-label">Data de início</label>
     <input type="date" id="new-start" value="${dateVal}" />
     <label class="field-label">Data final (se durar mais de um dia)</label>
     <input type="date" id="new-end" value="" />
+    <label id="yearly-wrap" style="display:flex; align-items:center; gap:8px; margin-top:12px; font-weight:700;">
+      <input type="checkbox" id="new-yearly" checked style="width:auto; margin:0;" /> 🔁 Repetir todo ano (aniversário de namoro, etc.)
+    </label>
     <p class="hint-text" style="margin-top:8px;">O evento aparece no calendário dos dois e não conta como encontro nem mexe nas moedas.</p>
     <button class="btn btn-primary btn-block" style="margin-top:16px;" id="save-encounter">Salvar</button>
   `);
+  const syncYearly = () => { $("#yearly-wrap").style.display = category === "comemorativa" ? "flex" : "none"; };
+  syncYearly();
   $("#event-cats").querySelectorAll("[data-cat]").forEach((b) => {
     b.addEventListener("click", () => {
       category = b.dataset.cat;
+      syncYearly();
       $("#event-cats").querySelectorAll("[data-cat]").forEach((x) => {
         x.className = `btn ${x.dataset.cat === category ? "btn-primary" : "btn-secondary"} btn-sm`;
       });
@@ -1236,6 +1257,7 @@ function openAddEventModal(presetDate) {
       await db.createEncounter({
         coupleId: State.coupleId, startDate: start, endDate: endVal ? parseISODate(endVal) : null,
         title, kind: "evento", category, createdBy: State.role, status: "agendado",
+        yearly: category === "comemorativa" && $("#new-yearly").checked,
       });
       closeModal();
       State.calendarMonth = startOfMonth(start);

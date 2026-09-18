@@ -115,7 +115,7 @@ create table if not exists encounters (
   end_date date, -- opcional, pra encontros de mais de um dia
   title text not null default '',
   kind text not null check (kind in ('planejado', 'saudade', 'convite', 'evento')),
-  category text check (category is null or category in ('casal', 'trabalho', 'outro')), -- só pra kind = 'evento'
+  category text check (category is null or category in ('casal', 'trabalho', 'outro', 'comemorativa')), -- só pra kind = 'evento'
   status text not null default 'agendado'
     check (status in ('agendado', 'confirmado', 'aconteceu', 'nao_aconteceu', 'pendente', 'recusado')),
   counts_as_point boolean not null default false,
@@ -428,9 +428,10 @@ alter table encounters drop constraint if exists encounters_kind_check;
 alter table encounters add constraint encounters_kind_check
   check (kind in ('planejado', 'saudade', 'convite', 'evento'));
 alter table encounters add column if not exists category text;
+alter table encounters add column if not exists yearly boolean not null default false; -- data especial que se repete todo ano
 alter table encounters drop constraint if exists encounters_category_check;
 alter table encounters add constraint encounters_category_check
-  check (category is null or category in ('casal', 'trabalho', 'outro'));
+  check (category is null or category in ('casal', 'trabalho', 'outro', 'comemorativa'));
 
 -- ---------- modo dono ----------
 -- a senha fica numa tabela SEM nenhuma policy: ninguém consegue ler pela API.

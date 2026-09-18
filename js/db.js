@@ -175,7 +175,7 @@ export async function setLastKiss(coupleId, isoDateTime) {
   return data;
 }
 
-export async function createEncounter({ coupleId, startDate, endDate, title, kind, createdBy, status, category }) {
+export async function createEncounter({ coupleId, startDate, endDate, title, kind, createdBy, status, category, yearly }) {
   const mk = monthKey(startDate);
   const { data, error } = await supabase
     .from("encounters")
@@ -188,13 +188,25 @@ export async function createEncounter({ coupleId, startDate, endDate, title, kin
       kind,
       status: status || (kind === "convite" ? "pendente" : "agendado"),
       counts_as_point: kind === "planejado",
-      ...(kind === "evento" ? { category: category || "outro" } : {}),
+      ...(kind === "evento" ? { category: category || "outro", yearly: !!yearly } : {}),
       created_by: createdBy,
     })
     .select()
     .single();
   if (error) throw error;
   return data;
+}
+
+// datas especiais que se repetem todo ano (aniversário de namoro etc.)
+export async function listYearlyDates(coupleId) {
+  const { data, error } = await supabase
+    .from("encounters")
+    .select("*")
+    .eq("couple_id", coupleId)
+    .eq("kind", "evento")
+    .eq("yearly", true);
+  if (error) throw error;
+  return data || [];
 }
 
 export async function updateEncounterStatus(id, status) {

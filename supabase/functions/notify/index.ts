@@ -47,7 +47,7 @@ function messageFor(table: string, type: string, record: any, oldRecord: any): M
       };
     }
     if (type === "INSERT" && record.kind === "evento") {
-      const cat = ({ casal: "de casal", trabalho: "de trabalho", outro: "" } as Record<string, string>)[record.category] ?? "";
+      const cat = ({ casal: "de casal", trabalho: "de trabalho", comemorativa: "especial", outro: "" } as Record<string, string>)[record.category] ?? "";
       return {
         targetRole: otherRole(record.created_by),
         title: "Novo evento no calendário 📌",
