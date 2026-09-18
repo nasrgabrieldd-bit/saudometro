@@ -39,13 +39,10 @@ export async function getCoupleMeta(coupleId) {
 }
 
 export async function createCouple(code) {
-  const { data, error } = await supabase
-    .from("couples")
-    .insert({ code })
-    .select("id, code")
-    .single();
+  // via função no servidor: quem está criando ainda não é membro, então não consegue ler a linha de volta
+  const { data, error } = await supabase.rpc("create_couple", { p_code: code });
   if (error) throw error;
-  return data;
+  return { id: data, code };
 }
 
 export async function getRolesTaken(coupleId) {

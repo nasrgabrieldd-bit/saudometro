@@ -536,3 +536,26 @@ create policy "cycle_settings: delete own" on cycle_settings
 -- garante que so a Tata tenha dados de ciclo (idempotente)
 alter table cycle_settings drop constraint if exists cycle_settings_role_check;
 alter table cycle_settings add constraint cycle_settings_role_check check (role = 'tata');
+
+-- ------------------------------------------------------------
+-- CRIAR CASAL via funcao (igual a migration_criar_casal.sql)
+-- ------------------------------------------------------------
+-- Corrige a criação de casal novo (quebrou quando a leitura da tabela couples ficou restrita aos membros).
+-- É seguro rodar mais de uma vez.
+
+create or replace function create_couple(p_code text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_id uuid;
+begin
+  insert into couples (code) values (upper(trim(p_code))) returning couples.id into new_id;
+  return new_id;
+end;
+$$;
+
+revoke all on function create_couple(text) from public;
+grant execute on function create_couple(text) to anon, authenticated;
