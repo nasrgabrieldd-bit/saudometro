@@ -8,7 +8,7 @@ import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscr
 import { PERKS, PERK_BY_ID, customToPerk, suggestedReward } from "./perks.js";
 import { cycleInfo, cycleRingSVG, cycleLegendHTML, cycleTilesHTML, cycleHelpHTML, cyclePhaseName, cycleTip, cyclePhaseOnDate, averageCycleLength, CYCLE_COLORS, CYCLE_DISCLAIMER } from "./cycle.js";
 import { pickSaudadeNudge } from "./nudges.js";
-import { nameOf, genderOf, emojiOf, gen, genMixed, cleanName, setPeopleSettings, defaultEmojis, legacyPeople, feat, goalTarget } from "./people.js";
+import { nameOf, genderOf, emojiOf, gen, genMixed, cleanName, setPeopleSettings, defaultEmojis, legacyPeople, feat, goalTarget, HOME_WIDGETS, homeOrder, homeWidgetOn, togetherSince } from "./people.js";
 import {
   toISODate, monthKey, parseISODate, addDays, addMonths, startOfMonth,
   daysInMonth, mondayIndex, mondayOfWeek, fridayOfWeekend, fridayOfWeekContaining, humanDateLong,
@@ -627,8 +627,66 @@ async function renderHome() {
   const iLoggedMoodToday = recentMoods.some((m) => m.role === State.role && m.day === todayStr);
   const showMoodReminder = new Date().getHours() >= 20 && !iLoggedMoodToday;
 
-  // casal que desligou todos os cards da tela inicial ainda vê como os dois estão hoje
-  const homeIsEmpty = !feat("kiss") && !feat("goal") && !feat("next") && !feat("recharge") && !feat("miss");
+  // cada card da tela inicial; a ordem e quais aparecem vêm da configuração do casal
+  const nextSpecial = homeWidgetOn("special") ? await findNextSpecialDate() : null;
+  const html = {};
+  html.kiss = feat("kiss") ? `    <div class="card" id="kiss-card" style="cursor:pointer; text-align:center;">
+      <div class="card-title" style="font-size:15px;">⏱️ Sem se beijar</div>
+      ${stats?.last_kiss_at ? `
+        <div class="flip-clock" id="kiss-counter">
+          <div class="flip-unit"><span class="flip-value" data-unit="d">00</span><span class="flip-label">dias</span></div>
+          <div class="flip-unit"><span class="flip-value" data-unit="h">00</span><span class="flip-label">hrs</span></div>
+          <div class="flip-unit"><span class="flip-value" data-unit="m">00</span><span class="flip-label">min</span></div>
+          <div class="flip-unit"><span class="flip-value" data-unit="s">00</span><span class="flip-label">seg</span></div>
+        </div>
+      ` : `<div class="card-sub" style="margin:10px 0;">—</div>`}
+      <p class="hint-text">Toca aqui pra ${stats?.last_kiss_at ? "atualizar" : "registrar"} a hora do último beijo</p>
+    </div>` : "";
+  html.goal = feat("goal") ? `    <div class="card">
+      <div class="card-title">${monthLabel(mk)}</div>
+      <div class="card-sub">Meta desse mês: <strong>${target} encontro${target === 1 ? "" : "s"}</strong>${plan.carry_in > 0 ? ` (${plan.carry_in} vindo${plan.carry_in > 1 ? "s" : ""} do mês passado)` : ""}</div>
+      <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <div class="row" style="margin-top:10px; align-items:center;">
+        <div class="progress-dots">${progressDots(happened, target)}</div>
+        <div style="text-align:right; flex:0 0 auto;"><span class="pill pill-success">${happened}/${target}</span></div>
+      </div>
+      ${planejados.length < target ? `<button class="btn btn-secondary btn-block" style="margin-top:14px;" id="btn-goto-define">Definir encontros do mês</button>` : ""}
+    </div>` : "";
+  html.next = feat("next") ? `    <div class="card">
+      <div class="card-title">Próximo encontro</div>
+      ${upcoming ? `
+        <div class="entry-item" style="border:none; padding:6px 0;">
+          <div class="entry-icon">${iconFor(upcoming)}</div>
+          <div class="entry-body">
+            <div class="entry-title">${escapeHTML(upcoming.title) || defaultTitle(upcoming)}</div>
+            <div class="entry-meta">${humanDateLong(parseISODate(upcoming.start_date))} · ${daysUntilLabel(parseISODate(upcoming.start_date))}</div>
+          </div>
+        </div>
+      ` : `<p class="center-note" style="padding:6px 0;">Nada marcado ainda. Que tal combinar um? 💕</p>`}
+    </div>` : "";
+  html.recharge = feat("recharge") ? `    <div class="card" id="weekend-card" style="cursor:pointer;">
+      <div class="switch-row">
+        <div>
+          <div class="card-title" style="font-size:15px;">🔋 Fim de semana de recarregar</div>
+          <div class="card-sub" style="margin-bottom:0;">${humanDateShort(nextWeekendFriday)} a ${humanDateShort(addDays(nextWeekendFriday, 2))}. ${myWeekendOn ? gen("Você está reclusa(o) recarregando", genderOf(State.role)) : "Tudo normal pra você"}${partnerWeekendOn ? `. ${ROLE_LABEL[State.partner?.role]} também recarregando` : ""}.</div>
+        </div>
+        <span class="switch ${myWeekendOn ? "on" : ""}" style="pointer-events:none;"></span>
+      </div>
+      <p class="hint-text" style="margin-top:8px;">Toca aqui pra escolher outro fim de semana</p>
+    </div>` : "";
+  html.miss = feat("miss") ? `    <div class="card">
+      <div class="card-title" style="font-size:15px;">Mandar sinal de saudade</div>
+      <div class="card-sub">${coinsOn() ? "Gasta 1 moeda 💰 e manda" : "Manda"} um pedido de visita pra ${ROLE_LABEL[otherRole()]} aprovar.</div>
+      <div class="row" style="align-items:center;">
+        ${coinsOn() ? `<span class="pill pill-coin">💰 você tem ${coins[State.role] || 0}</span>` : ""}
+        <button class="btn btn-warm" id="btn-saudade" ${(coinsOn() && (coins[State.role] || 0) < 1) ? "disabled" : ""}>🥺 Mandar sinal</button>
+      </div>
+    </div>` : "";
+  html.mood = todayMoodCardHTML(recentMoods, todayStr);
+  html.together = togetherCardHTML();
+  html.special = specialCardHTML(nextSpecial);
+  // sem nenhum card ligado, ainda mostra como os dois estão hoje
+  const widgetIds = homeOrder().filter(homeWidgetOn);
 
   view.innerHTML = `
     ${showMoodReminder ? `
@@ -644,68 +702,15 @@ async function renderHome() {
       </div>
     ` : ""}
 
-${feat("kiss") ? `    <div class="card" id="kiss-card" style="cursor:pointer; text-align:center;">
-      <div class="card-title" style="font-size:15px;">⏱️ Sem se beijar</div>
-      ${stats?.last_kiss_at ? `
-        <div class="flip-clock" id="kiss-counter">
-          <div class="flip-unit"><span class="flip-value" data-unit="d">00</span><span class="flip-label">dias</span></div>
-          <div class="flip-unit"><span class="flip-value" data-unit="h">00</span><span class="flip-label">hrs</span></div>
-          <div class="flip-unit"><span class="flip-value" data-unit="m">00</span><span class="flip-label">min</span></div>
-          <div class="flip-unit"><span class="flip-value" data-unit="s">00</span><span class="flip-label">seg</span></div>
-        </div>
-      ` : `<div class="card-sub" style="margin:10px 0;">—</div>`}
-      <p class="hint-text">Toca aqui pra ${stats?.last_kiss_at ? "atualizar" : "registrar"} a hora do último beijo</p>
-    </div>` : ""}
+${widgetIds.map((id) => html[id] || "").join("")}
 
-${feat("goal") ? `    <div class="card">
-      <div class="card-title">${monthLabel(mk)}</div>
-      <div class="card-sub">Meta desse mês: <strong>${target} encontro${target === 1 ? "" : "s"}</strong>${plan.carry_in > 0 ? ` (${plan.carry_in} vindo${plan.carry_in > 1 ? "s" : ""} do mês passado)` : ""}</div>
-      <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
-      <div class="row" style="margin-top:10px; align-items:center;">
-        <div class="progress-dots">${progressDots(happened, target)}</div>
-        <div style="text-align:right; flex:0 0 auto;"><span class="pill pill-success">${happened}/${target}</span></div>
-      </div>
-      ${planejados.length < target ? `<button class="btn btn-secondary btn-block" style="margin-top:14px;" id="btn-goto-define">Definir encontros do mês</button>` : ""}
-    </div>` : ""}
-
-${feat("next") ? `    <div class="card">
-      <div class="card-title">Próximo encontro</div>
-      ${upcoming ? `
-        <div class="entry-item" style="border:none; padding:6px 0;">
-          <div class="entry-icon">${iconFor(upcoming)}</div>
-          <div class="entry-body">
-            <div class="entry-title">${escapeHTML(upcoming.title) || defaultTitle(upcoming)}</div>
-            <div class="entry-meta">${humanDateLong(parseISODate(upcoming.start_date))} · ${daysUntilLabel(parseISODate(upcoming.start_date))}</div>
-          </div>
-        </div>
-      ` : `<p class="center-note" style="padding:6px 0;">Nada marcado ainda. Que tal combinar um? 💕</p>`}
-    </div>` : ""}
-
-${feat("recharge") ? `    <div class="card" id="weekend-card" style="cursor:pointer;">
-      <div class="switch-row">
-        <div>
-          <div class="card-title" style="font-size:15px;">🔋 Fim de semana de recarregar</div>
-          <div class="card-sub" style="margin-bottom:0;">${humanDateShort(nextWeekendFriday)} a ${humanDateShort(addDays(nextWeekendFriday, 2))}. ${myWeekendOn ? gen("Você está reclusa(o) recarregando", genderOf(State.role)) : "Tudo normal pra você"}${partnerWeekendOn ? `. ${ROLE_LABEL[State.partner?.role]} também recarregando` : ""}.</div>
-        </div>
-        <span class="switch ${myWeekendOn ? "on" : ""}" style="pointer-events:none;"></span>
-      </div>
-      <p class="hint-text" style="margin-top:8px;">Toca aqui pra escolher outro fim de semana</p>
-    </div>` : ""}
-
-${feat("miss") ? `    <div class="card">
-      <div class="card-title" style="font-size:15px;">Mandar sinal de saudade</div>
-      <div class="card-sub">${coinsOn() ? "Gasta 1 moeda 💰 e manda" : "Manda"} um pedido de visita pra ${ROLE_LABEL[otherRole()]} aprovar.</div>
-      <div class="row" style="align-items:center;">
-        ${coinsOn() ? `<span class="pill pill-coin">💰 você tem ${coins[State.role] || 0}</span>` : ""}
-        <button class="btn btn-warm" id="btn-saudade" ${(coinsOn() && (coins[State.role] || 0) < 1) ? "disabled" : ""}>🥺 Mandar sinal</button>
-      </div>
-    </div>` : ""}
-
-    ${homeIsEmpty ? todayMoodCardHTML(recentMoods, todayStr) : ""}
+    ${widgetIds.length ? "" : todayMoodCardHTML(recentMoods, todayStr)}
   `;
 
   $("#btn-goto-define")?.addEventListener("click", () => setActiveTab("calendar"));
   $("#today-mood-card")?.addEventListener("click", () => setActiveTab("mood"));
+  $("#together-card")?.addEventListener("click", openTogetherModal);
+  $("#special-card")?.addEventListener("click", () => setActiveTab("calendar"));
   $("#weekend-card")?.addEventListener("click", () => openWeekendModal(nextWeekendFriday));
   $("#mood-reminder-banner")?.addEventListener("click", () => setActiveTab("mood"));
   $("#btn-saudade")?.addEventListener("click", openSaudadeModal);
@@ -2581,12 +2586,18 @@ function openCycleEditor(existing) {
 
 // ================= PERSONALIZAR =================
 
+const HOME_META = {
+  kiss: { t: "Cronômetro do último beijo", d: "Dias sem se beijar e os avisos de saudade ligados a ele" },
+  goal: { t: "Meta de encontros do mês", d: "Card com a meta, o progresso e a moeda por encontro" },
+  next: { t: "Próximo encontro", d: "Card com o próximo encontro combinado" },
+  recharge: { t: "Fim de semana de recarregar", d: "Card, botões no calendário e recusar convite sem custo" },
+  miss: { t: "Sinal de saudade", d: "Pedir visita, encontro de saudade e mensagens de saudade" },
+  mood: { t: "Humor de hoje", d: "Como cada um está hoje", nw: true },
+  together: { t: "Dias juntos", d: "Contador desde a data que vocês escolherem", nw: true },
+  special: { t: "Próxima data especial", d: "Aniversário de namoro e outras datas que vocês criaram", nw: true },
+};
+
 const FEATURE_LIST = [
-  { k: "kiss", g: "Tela inicial", t: "Cronômetro do último beijo", d: "Contador de dias sem se beijar e os avisos de saudade ligados a ele" },
-  { k: "goal", g: "Tela inicial", t: "Meta de encontros do mês", d: "Card com a meta, o progresso e a moeda por encontro" },
-  { k: "next", g: "Tela inicial", t: "Próximo encontro", d: "Card com o próximo encontro combinado" },
-  { k: "recharge", g: "Tela inicial", t: "Fim de semana de recarregar", d: "Card, botões no calendário e recusar convite sem custo" },
-  { k: "miss", g: "Tela inicial", t: "Sinal de saudade", d: "Pedir visita, encontro de saudade e mensagens de saudade" },
   { k: "weekly", g: "Recados e brincadeiras", t: "Pergunta da semana", d: "Uma pergunta nova por semana, na aba Humor" },
   { k: "daily", g: "Recados e brincadeiras", t: "Desafio do dia", d: "Uma pergunta por dia, no hub de Recados" },
   { k: "capsule", g: "Recados e brincadeiras", t: "Cápsula do tempo", d: "Mensagem que só abre numa data futura" },
@@ -2599,43 +2610,190 @@ function applyNavVisibility() {
   if (shopBtn) shopBtn.style.display = feat("shop") ? "" : "none";
 }
 
+// ---- cards novos da tela inicial ----
+
+function togetherParts(sinceISO) {
+  const d = parseISODate(sinceISO);
+  const t = startOfDay(new Date());
+  const days = Math.max(0, Math.round((t - d) / 86400000));
+  let years = t.getFullYear() - d.getFullYear();
+  let months = t.getMonth() - d.getMonth();
+  if (t.getDate() < d.getDate()) months--;
+  if (months < 0) { years--; months += 12; }
+  return { days, years: Math.max(0, years), months };
+}
+
+function togetherCardHTML() {
+  const since = togetherSince();
+  if (!since) {
+    return `
+      <div class="card" id="together-card" style="cursor:pointer; text-align:center;">
+        <div class="card-title" style="font-size:15px;">💞 Dias juntos</div>
+        <div class="card-sub" style="margin-bottom:0;">Toque pra escolher a data em que vocês começaram.</div>
+      </div>`;
+  }
+  const { days, years, months } = togetherParts(since);
+  const parts = [years ? `${years} ${years === 1 ? "ano" : "anos"}` : "", months ? `${months} ${months === 1 ? "mês" : "meses"}` : ""].filter(Boolean).join(" e ");
+  return `
+    <div class="card" id="together-card" style="cursor:pointer; text-align:center;">
+      <div class="card-title" style="font-size:15px;">💞 Dias juntos</div>
+      <div style="font-family:'Baloo 2', sans-serif; font-size:36px; font-weight:800; color:var(--accent-strong); line-height:1.2;">${days.toLocaleString("pt-BR")}</div>
+      <div class="card-sub" style="margin-bottom:0;">${parts ? `${parts} · ` : ""}desde ${parseISODate(since).toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" })}</div>
+    </div>`;
+}
+
+function openTogetherModal() {
+  const today = todayISO();
+  openModal(`
+    <h3 class="modal-title">💞 Dias juntos</h3>
+    <label class="field-label">Estamos juntos desde</label>
+    <input type="date" id="together-date" value="${togetherSince() || ""}" max="${today}" />
+    <p class="error-text" id="together-err"></p>
+    <button class="btn btn-primary btn-block" style="margin-top:14px;" id="together-save">Salvar</button>
+    ${togetherSince() ? `<button class="btn btn-ghost btn-block" style="margin-top:6px;" id="together-clear">Remover a data</button>` : ""}
+  `);
+  const save = async (value) => {
+    setBusy("#together-save", true);
+    try {
+      State.settings = await db.updateCoupleFeatures(State.coupleId, (f) => ({
+        ...f, together_since: value, last_editor: State.role, last_edit_at: new Date().toISOString(),
+      }));
+      setPeopleSettings(State.settings);
+      closeModal();
+      renderActiveTab();
+    } catch (e) {
+      $("#together-err").textContent = "Não deu: " + (e.message || e);
+      setBusy("#together-save", false);
+    }
+  };
+  $("#together-save").addEventListener("click", () => {
+    const v = $("#together-date").value;
+    if (!v || v > today) { $("#together-err").textContent = "Escolha uma data que já passou."; return; }
+    save(v);
+  });
+  $("#together-clear")?.addEventListener("click", () => save(null));
+}
+
+async function findNextSpecialDate() {
+  let rows = [];
+  try { rows = await db.listSpecialDates(State.coupleId); } catch (e) { return null; }
+  const today = startOfDay(new Date());
+  let best = null;
+  for (const r of rows) {
+    const o = parseISODate(r.start_date);
+    let d = o, years = 0;
+    if (r.yearly) {
+      d = new Date(today.getFullYear(), o.getMonth(), o.getDate());
+      if (d < today) d = new Date(today.getFullYear() + 1, o.getMonth(), o.getDate());
+      years = d.getFullYear() - o.getFullYear();
+    } else if (d < today) continue;
+    if (!best || d < best.date) best = { title: r.title, date: d, years };
+  }
+  return best;
+}
+
+function specialCardHTML(n) {
+  if (!n) {
+    return `
+      <div class="card" id="special-card" style="cursor:pointer;">
+        <div class="card-title" style="font-size:15px;">💝 Próxima data especial</div>
+        <div class="card-sub" style="margin-bottom:0;">Nenhuma ainda. Toque pra criar uma no calendário.</div>
+      </div>`;
+  }
+  return `
+    <div class="card" id="special-card" style="cursor:pointer;">
+      <div class="card-title" style="font-size:15px;">💝 Próxima data especial</div>
+      <div class="entry-item" style="border:none; padding:6px 0 0;">
+        <div class="entry-icon">💝</div>
+        <div class="entry-body">
+          <div class="entry-title">${escapeHTML(n.title) || "Data especial"}</div>
+          <div class="entry-meta">${humanDateLong(n.date)} · ${daysUntilLabel(n.date)}${n.years > 0 ? ` · faz ${n.years} ano${n.years === 1 ? "" : "s"} 🎉` : ""}</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ---- tela Personalizar ----
+
 function openPersonalizeModal() {
   const cur = {};
+  HOME_WIDGETS.forEach((id) => { cur[id] = homeWidgetOn(id); });
   FEATURE_LIST.forEach((f) => { cur[f.k] = feat(f.k); });
+  let order = homeOrder();
   let goal = goalTarget();
+  let since = togetherSince() || "";
+  const today = todayISO();
+
+  const switchHTML = (k, label) => `<button type="button" class="switch ${cur[k] ? "on" : ""}" data-k="${k}" role="switch" aria-checked="${cur[k]}" aria-label="${label}"></button>`;
 
   const paint = () => {
-    let g = "";
-    const rows = FEATURE_LIST.map((f) => {
-      const head = f.g !== g ? `<p class="hint-text" style="margin:14px 0 6px;">${f.g}</p>` : "";
-      g = f.g;
-      const stepper = f.k === "goal" && cur.goal
+    const homeRows = order.map((id, i) => {
+      const m = HOME_META[id];
+      const stepper = id === "goal" && cur.goal
         ? `<span style="display:flex; align-items:center; gap:6px; flex:none;">
              <button type="button" class="btn btn-secondary btn-sm" data-goal="-1" style="padding:4px 10px;">−</button>
              <strong style="min-width:56px; text-align:center; font-size:13px;">${goal} / mês</strong>
              <button type="button" class="btn btn-secondary btn-sm" data-goal="1" style="padding:4px 10px;">+</button>
            </span>` : "";
+      const together = id === "together" && cur.together
+        ? `<div style="padding:8px 0 4px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+             <label class="hint-text" for="pz-since" style="margin:0;">Estamos juntos desde</label>
+             <input type="date" id="pz-since" value="${since}" max="${today}" style="width:auto; flex:1; min-width:150px;" />
+           </div>` : "";
+      return `
+        <div style="border-bottom:1px solid var(--border);">
+          <div class="switch-row" style="padding:8px 0;">
+            <div style="display:flex; flex-direction:column; gap:2px; flex:none;">
+              <button type="button" class="btn btn-ghost btn-sm" data-mv="${i}" data-d="-1" aria-label="Subir ${m.t}" style="padding:2px 8px; min-height:0;" ${i === 0 ? "disabled" : ""}>▲</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-mv="${i}" data-d="1" aria-label="Descer ${m.t}" style="padding:2px 8px; min-height:0;" ${i === order.length - 1 ? "disabled" : ""}>▼</button>
+            </div>
+            <div style="min-width:0; flex:1;">
+              <div style="font-weight:800; font-size:14px;">${m.t}${m.nw ? ` <span class="pill pill-success" style="font-size:10px; padding:1px 7px;">novo</span>` : ""}</div>
+              <div class="hint-text" style="margin:0;">${m.d}</div>
+            </div>
+            ${stepper}
+            ${switchHTML(id, m.t)}
+          </div>
+          ${together}
+        </div>`;
+    }).join("");
+
+    let g = "";
+    const otherRows = FEATURE_LIST.map((f) => {
+      const head = f.g !== g ? `<p class="hint-text" style="margin:14px 0 6px;">${f.g}</p>` : "";
+      g = f.g;
       return `${head}
         <div class="switch-row" style="padding:8px 0; border-bottom:1px solid var(--border);">
           <div style="min-width:0; flex:1;">
             <div style="font-weight:800; font-size:14px;">${f.t}</div>
             <div class="hint-text" style="margin:0;">${f.d}</div>
           </div>
-          ${stepper}
-          <button type="button" class="switch ${cur[f.k] ? "on" : ""}" data-k="${f.k}" role="switch" aria-checked="${cur[f.k]}" aria-label="${f.t}"></button>
+          ${switchHTML(f.k, f.t)}
         </div>`;
     }).join("");
-    $("#pz-list").innerHTML = rows;
-    $("#pz-list").querySelectorAll("[data-k]").forEach((b) => b.addEventListener("click", () => { cur[b.dataset.k] = !cur[b.dataset.k]; paint(); }));
-    $("#pz-list").querySelectorAll("[data-goal]").forEach((b) => b.addEventListener("click", () => {
+
+    $("#pz-list").innerHTML = `
+      <p class="hint-text" style="margin:14px 0 4px;">Tela inicial. Use as setas pra mudar a ordem e o botão pra ligar ou desligar.</p>
+      ${homeRows}
+      ${otherRows}`;
+    const list = $("#pz-list");
+    list.querySelectorAll("[data-k]").forEach((b) => b.addEventListener("click", () => { cur[b.dataset.k] = !cur[b.dataset.k]; paint(); }));
+    list.querySelectorAll("[data-goal]").forEach((b) => b.addEventListener("click", () => {
       goal = Math.min(30, Math.max(1, goal + parseInt(b.dataset.goal, 10)));
       paint();
     }));
+    list.querySelectorAll("[data-mv]").forEach((b) => b.addEventListener("click", () => {
+      const i = parseInt(b.dataset.mv, 10), j = i + parseInt(b.dataset.d, 10);
+      if (j < 0 || j >= order.length) return;
+      [order[i], order[j]] = [order[j], order[i]];
+      paint();
+    }));
+    $("#pz-since")?.addEventListener("change", (e) => { since = e.target.value; });
   };
 
   openModal(`
     <h3 class="modal-title">🎛️ Personalizar nosso app</h3>
-    <p class="card-sub">Ligue só o que faz sentido pra vocês. Qualquer um dos dois pode mudar, e o outro é avisado. Nada do que já foi registrado é apagado.</p>
+    <p class="card-sub">Ligue só o que faz sentido pra vocês e escolha a ordem da tela inicial. Qualquer um dos dois pode mudar, e o outro é avisado. Nada do que já foi registrado é apagado.</p>
     <button type="button" class="btn btn-ghost btn-sm" id="pz-live-together">Atalho: moramos juntos</button>
     <div id="pz-list"></div>
     <p class="error-text" id="pz-err"></p>
@@ -2644,14 +2802,17 @@ function openPersonalizeModal() {
   paint();
   $("#pz-live-together").addEventListener("click", () => {
     ["kiss", "goal", "next", "recharge", "miss"].forEach((k) => { cur[k] = false; });
+    cur.mood = true;
     paint();
   });
   $("#pz-save").addEventListener("click", async () => {
+    if (since && since > today) { $("#pz-err").textContent = "A data de início precisa já ter passado."; return; }
     setBusy("#pz-save", true);
     try {
       const goalChanged = goal !== goalTarget();
       State.settings = await db.updateCoupleFeatures(State.coupleId, (f) => ({
-        ...f, ...cur, goal_target: goal, last_editor: State.role, last_edit_at: new Date().toISOString(),
+        ...f, ...cur, home_order: order, together_since: since || null, goal_target: goal,
+        last_editor: State.role, last_edit_at: new Date().toISOString(),
       }));
       setPeopleSettings(State.settings);
       if (goalChanged && cur.goal) await db.setMonthBaseTarget(State.coupleId, monthKey(new Date()), goal).catch(() => {});

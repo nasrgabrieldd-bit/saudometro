@@ -73,3 +73,27 @@ export function goalTarget() {
   const n = settings?.features?.goal_target;
   return Number.isInteger(n) && n >= 1 && n <= 30 ? n : 2;
 }
+
+// cards da tela inicial: os antigos ficam ligados por padrão; os novos (humor, dias juntos, data especial) só se o casal ligar
+export const HOME_WIDGETS = ["kiss", "goal", "next", "recharge", "miss", "mood", "together", "special"];
+const OPT_IN_WIDGETS = ["mood", "together", "special"];
+
+export function featOn(key) {
+  return settings?.features?.[key] === true;
+}
+
+export function homeWidgetOn(id) {
+  return OPT_IN_WIDGETS.includes(id) ? featOn(id) : feat(id);
+}
+
+export function homeOrder() {
+  const saved = settings?.features?.home_order;
+  const order = Array.isArray(saved) ? saved.filter((id, i) => HOME_WIDGETS.includes(id) && saved.indexOf(id) === i) : [];
+  HOME_WIDGETS.forEach((id) => { if (!order.includes(id)) order.push(id); });
+  return order;
+}
+
+export function togetherSince() {
+  const v = settings?.features?.together_since;
+  return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+}

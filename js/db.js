@@ -696,3 +696,15 @@ export async function setMonthBaseTarget(coupleId, mk, baseTarget) {
   const { error } = await supabase.from("month_plans").update({ base_target: baseTarget }).eq("couple_id", coupleId).eq("month", mk);
   if (error) throw error;
 }
+
+// datas especiais (aniversário de namoro etc.), pra mostrar a próxima na tela inicial
+export async function listSpecialDates(coupleId) {
+  const { data, error } = await supabase
+    .from("encounters")
+    .select("title,start_date,yearly")
+    .eq("couple_id", coupleId)
+    .eq("kind", "evento")
+    .eq("category", "comemorativa");
+  if (error) throw error;
+  return data || [];
+}
