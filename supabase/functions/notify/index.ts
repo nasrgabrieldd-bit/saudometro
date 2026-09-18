@@ -33,6 +33,9 @@ function messageFor(table: string, record: any): { title: string; body: string }
   if (table === "weekly_answers") {
     return { title: "Pergunta da semana 💭", body: `${ROLE_LABEL[record.role]} respondeu a pergunta da semana!` };
   }
+  if (table === "shop_redemptions") {
+    return { title: "Resgate na lojinha 🎁", body: `${ROLE_LABEL[record.role]} resgatou "${record.title}"! Já sabe o que fazer 😉` };
+  }
   return null;
 }
 
