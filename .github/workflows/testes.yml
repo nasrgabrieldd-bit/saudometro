@@ -35,11 +35,17 @@ jobs:
 
       - name: Esperar o site publicar a versão nova
         run: |
-          local_hash=$(sha256sum js/app.js | cut -d' ' -f1)
+          # compara todos os arquivos do app com o que está no ar; só segue quando estiverem idênticos
+          arquivos="index.html sw.js css/styles.css $(ls js/*.js)"
           for i in $(seq 1 30); do
-            remote_hash=$(curl -fsS "$SITE/js/app.js?t=$(date +%s)" | sha256sum | cut -d' ' -f1 || true)
-            if [ "$remote_hash" = "$local_hash" ]; then echo "Versão nova no ar (tentativa $i)."; exit 0; fi
-            echo "Ainda não publicou (tentativa $i)..."; sleep 15
+            diferente=""
+            for f in $arquivos; do
+              a=$(sha256sum "$f" | cut -d" " -f1)
+              b=$(curl -fsS "$SITE/$f?t=$(date +%s)" | sha256sum | cut -d" " -f1 || true)
+              [ "$a" = "$b" ] || diferente="$diferente $f"
+            done
+            if [ -z "$diferente" ]; then echo "Versão nova no ar (tentativa $i)."; exit 0; fi
+            echo "Ainda não publicou (tentativa $i):$diferente"; sleep 15
           done
           echo "O site não publicou a versão nova em 7 minutos."; exit 1
 
