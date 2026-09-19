@@ -637,6 +637,12 @@ export async function adminStats(key) {
   return data;
 }
 
+export async function adminErrors(key) {
+  const { data, error } = await supabase.rpc("admin_errors", { p_key: key });
+  if (error) throw error;
+  return data;
+}
+
 // ---------- ciclo menstrual (opcional; o banco só entrega ao parceiro se ela compartilhar) ----------
 
 export async function getCycle(coupleId, role) {

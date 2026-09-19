@@ -1,4 +1,5 @@
 import { initTheme } from "./theme.js";
+import { initErrorReporting } from "./errors.js";
 import { supabase, isConfigured } from "./supabaseClient.js";
 import * as db from "./db.js";
 import { MOODS, MOOD_BY_ID, TALK_OPTIONS, TALK_BY_ID } from "./moods.js";
@@ -3158,6 +3159,8 @@ async function showAdminStats(key) {
   if (busyBtn) setBusy("#admin-go", true);
   try {
     const s = await db.adminStats(key);
+    let errs = [];
+    try { errs = await db.adminErrors(key); } catch (e) { errs = null; } // migração de erros ainda não rodou
     try { sessionStorage.setItem("adminKey", key); } catch (e) { /* sem storage */ }
     const fmt = (iso) => (iso ? humanDateShort(parseISODate(String(iso).slice(0, 10))) : "—");
     const stat = (n, label) => `<div class="card" style="text-align:center; margin:0;"><div style="font-family:'Baloo 2',sans-serif; font-size:28px; font-weight:800; color:var(--accent-strong);">${n}</div><div class="hint-text" style="margin:0;">${label}</div></div>`;
@@ -3182,6 +3185,18 @@ async function showAdminStats(key) {
             </div>
           </div>`).join("") : `<div class="empty-state">Nenhum casal ainda.</div>`}
       </div>
+      <div class="section-title">Erros no app (7 dias)</div>
+      <div class="stack" style="max-height:30vh; overflow-y:auto;">
+        ${errs === null ? `<div class="empty-state">Monitoramento ainda não ativado no banco.</div>`
+          : errs.length ? errs.map((x) => `
+          <div class="entry-item">
+            <div class="entry-icon">⚠️</div>
+            <div class="entry-body">
+              <div class="entry-title" style="word-break:break-word;">${escapeHTML(x.message)}</div>
+              <div class="entry-meta">${escapeHTML(x.place || "")} · ${x.times}x · ${x.people} pessoa(s) · último: ${fmt(x.last_at)}</div>
+            </div>
+          </div>`).join("") : `<div class="empty-state">Nenhum erro nos últimos 7 dias 🎉</div>`}
+      </div>
       <p class="hint-text" style="margin-top:12px;">Só números e datas — nenhum código de casal ou conteúdo privado aparece aqui.</p>
       <button class="btn btn-ghost btn-block" style="margin-top:10px;" id="admin-logout">Sair do modo dono</button>
     `);
@@ -3205,4 +3220,5 @@ async function showAdminStats(key) {
 // ---------------- start ----------------
 
 initTheme();
+initErrorReporting();
 boot();
