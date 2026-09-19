@@ -66,13 +66,31 @@ function watchForAppUpdates() {
   });
 }
 
+function showBootError(e) {
+  const captcha = /captcha/i.test(String(e?.message || e));
+  $("#screen-onboarding").style.display = "flex";
+  $("#screen-onboarding").innerHTML = `
+    <div class="logo">💗</div>
+    <h1>Saudômetro</h1>
+    <p class="tagline">${captcha ? "Não deu pra confirmar que você é uma pessoa. Desligue bloqueadores de anúncio pra este site e tente de novo." : "Não deu pra conectar agora. Confere a internet e tenta de novo."}</p>
+    <button class="btn btn-primary btn-block" id="btn-retry">Tentar de novo</button>
+  `;
+  $("#btn-retry").addEventListener("click", () => location.reload());
+}
+
 async function boot() {
   watchForAppUpdates();
   if (!isConfigured) {
     $("#screen-setup").style.display = "flex";
     return;
   }
-  const session = await db.ensureAnonSession();
+  let session;
+  try {
+    session = await db.ensureAnonSession();
+  } catch (e) {
+    showBootError(e);
+    return;
+  }
   State.userId = session.user.id;
   const profile = await db.getMyProfile(State.userId);
   if (profile) {

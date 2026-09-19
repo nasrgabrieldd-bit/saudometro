@@ -1,5 +1,6 @@
 import { supabase } from "./supabaseClient.js";
 import { monthKey, prevMonthKey, nextMonthKey, toISODate } from "./util.js";
+import { getCaptchaToken } from "./captcha.js";
 
 // ---------- auth / casal / perfil ----------
 
@@ -17,7 +18,9 @@ export async function ensureAnonSession() {
       // refresh token também inválido/vencido: cai pra criar um login novo abaixo
     }
   }
-  const { data: signed, error } = await supabase.auth.signInAnonymously();
+  // conta nova: confirma que é uma pessoa (a verificação só vale quando ligada no Supabase)
+  const captchaToken = await getCaptchaToken();
+  const { data: signed, error } = await supabase.auth.signInAnonymously(captchaToken ? { options: { captchaToken } } : undefined);
   if (error) throw error;
   return signed.session;
 }
