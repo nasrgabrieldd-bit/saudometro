@@ -7,12 +7,21 @@
   --surface-sunk: #f6e0e9;
   --border: #f3d4e0;
   --text: #3a2233;
-  --text-muted: #8b6b7a;
-  --text-faint: #b596a4;
+  --text-muted: #7d5f6e;
+  --text-faint: #7a5c6b;
 
   --accent: #ff6f91;
-  --accent-strong: #e94f77;
+  --accent-strong: #bd2b55;
   --accent-soft: #ffd6e2;
+  /* versões mais fechadas só onde há texto sobre a cor (contraste mínimo 4,5:1 do WCAG AA) */
+  --accent-btn: #c9305a;
+  --on-accent-btn: #ffffff;
+  --success-btn: #3d7a5a;
+  --on-success-btn: #ffffff;
+  --success-text: #276b4b;
+  --danger-text: #a83722;
+  --plum-btn: #85558a;
+  --on-plum-btn: #ffffff;
 
   --warm: #ffb562;
   --warm-soft: #ffe6c2;
@@ -45,7 +54,7 @@
     --border: #4a2f43;
     --text: #f6e9ef;
     --text-muted: #cba7ba;
-    --text-faint: #8d6c7d;
+    --text-faint: #a88a9a;
 
     --accent: #ff87a3;
     --accent-strong: #ff9fb7;
@@ -64,6 +73,22 @@
     --danger-soft: #3a231d;
 
     --plum: #c79fca;
+  --accent-btn: #ff87a3;
+  --on-accent-btn: #2b1226;
+  --success-btn: #6fd2a8;
+  --on-success-btn: #0f2a1f;
+  --success-text: #6fd2a8;
+  --danger-text: #ff9c85;
+  --plum-btn: #c79fca;
+  --on-plum-btn: #2b1226;
+    --accent-btn: #ff87a3;
+    --on-accent-btn: #2b1226;
+    --success-btn: #6fd2a8;
+    --on-success-btn: #0f2a1f;
+    --success-text: #6fd2a8;
+    --danger-text: #ff9c85;
+    --plum-btn: #c79fca;
+    --on-plum-btn: #2b1226;
     --plum-soft: #302636;
 
     --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.35);
@@ -79,7 +104,7 @@
   --border: #4a2f43;
   --text: #f6e9ef;
   --text-muted: #cba7ba;
-  --text-faint: #8d6c7d;
+  --text-faint: #a88a9a;
 
   --accent: #ff87a3;
   --accent-strong: #ff9fb7;
@@ -278,13 +303,13 @@ button, input, textarea, select {
 .btn:active { transform: scale(0.96); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.btn-primary { background: var(--accent); color: white; box-shadow: var(--shadow-tap); }
+.btn-primary { background: var(--accent-btn); color: var(--on-accent-btn); box-shadow: var(--shadow-tap); }
 .btn-secondary { background: var(--surface-alt); color: var(--accent-strong); }
 .btn-warm { background: var(--warm); color: #4a2c07; }
-.btn-success { background: var(--success); color: white; }
-.btn-danger { background: var(--danger-soft); color: var(--danger); }
+.btn-success { background: var(--success-btn); color: var(--on-success-btn); }
+.btn-danger { background: var(--danger-soft); color: var(--danger-text); }
 .btn-ghost { background: transparent; color: var(--text-muted); }
-.btn-plum { background: var(--plum); color: white; }
+.btn-plum { background: var(--plum-btn); color: var(--on-plum-btn); }
 .btn-block { width: 100%; }
 .btn-sm { padding: 9px 14px; font-size: 13px; }
 
@@ -302,7 +327,7 @@ button, input, textarea, select {
   white-space: nowrap;
 }
 .pill-coin { background: var(--coin-soft); color: #8a6100; }
-.pill-success { background: var(--success-soft); color: var(--success); }
+.pill-success { background: var(--success-soft); color: var(--success-text); }
 .pill-muted { background: var(--surface-sunk); color: var(--text-muted); }
 
 /* ---------- progress ---------- */
@@ -530,8 +555,8 @@ button, input, textarea, select {
   min-width: 44px;
   padding: 10px 6px;
   border-radius: 12px;
-  background: var(--accent);
-  color: white;
+  background: var(--accent-btn);
+  color: var(--on-accent-btn);
   font-family: "Baloo 2", sans-serif;
   font-weight: 800;
   font-size: 22px;
@@ -660,7 +685,7 @@ label.field-label:first-child { margin-top: 0; }
 .role-btn.selected { border-color: var(--accent); background: var(--accent-soft); }
 .role-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
-.error-text { color: var(--danger); font-size: 13px; font-weight: 700; }
+.error-text { color: var(--danger-text); font-size: 13px; font-weight: 700; }
 .hint-text { color: var(--text-faint); font-size: 12.5px; }
 
 /* ---------- modal ---------- */
