@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#ff6f91" />
+<title>Política de Privacidade – Saudômetro</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Nunito:wght@400;700;800&display=swap" />
+<style>
+  :root { --bg:#fdf2f6; --surface:#ffffff; --text:#3a2233; --muted:#7d5f6e; --accent:#c9305a; --line:#f3d4e0; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#221521; --surface:#2e1d2c; --text:#f6e9ef; --muted:#cba7ba; --accent:#ff87a3; --line:#4a2f43; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.7 "Nunito", system-ui, sans-serif; padding:28px 20px 64px; }
+  main { max-width:720px; margin:0 auto; }
+  h1, h2 { font-family:"Baloo 2", "Nunito", sans-serif; line-height:1.2; }
+  h1 { font-size:2rem; margin:0 0 4px; }
+  h2 { font-size:1.25rem; margin:2rem 0 .3rem; padding-top:1.2rem; border-top:1px solid var(--line); }
+  p, li { margin:.5rem 0; }
+  a { color:var(--accent); }
+  .muted { color:var(--muted); font-size:.92rem; }
+  .box { background:var(--surface); border:1px solid var(--line); border-radius:18px; padding:14px 18px; margin:1rem 0; }
+  table { border-collapse:collapse; width:100%; font-size:.95rem; }
+  th, td { text-align:left; padding:.5rem .6rem; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-size:.8rem; text-transform:uppercase; letter-spacing:.05em; }
+  .scroll { overflow-x:auto; }
+</style>
+</head>
+<body>
+<main>
+  <p class="muted"><a href="./">← Voltar ao Saudômetro</a></p>
+  <h1>Política de Privacidade</h1>
+  <p class="muted">Saudômetro · Última atualização: setembro de 2026</p>
+
+  <p>O Saudômetro é um aplicativo para casais acompanharem o humor, os encontros e os recados um do outro. Esta página explica, em linguagem simples, quais dados o app guarda, para quê, com quem são compartilhados e quais são os seus direitos, conforme a Lei Geral de Proteção de Dados (LGPD, Lei 13.709/2018).</p>
+
+  <h2>1. Quem é o responsável</h2>
+  <p>O aplicativo foi criado e é mantido por <strong>Gabriel Nascimento Santos</strong>, controlador dos dados. Para qualquer pedido sobre seus dados, escreva para <a href="mailto:nasrgabrieldd@gmail.com">nasrgabrieldd@gmail.com</a>.</p>
+
+  <h2>2. Quais dados o app guarda</h2>
+  <div class="box scroll">
+    <table>
+      <thead><tr><th>Dado</th><th>Para quê</th></tr></thead>
+      <tbody>
+        <tr><td>Nome, gênero e emoji que você escolhe; papel no casal; código do casal</td><td>Identificar vocês dois e escrever os textos do jeito certo.</td></tr>
+        <tr><td>Humor do dia, recadinhos, respostas, encontros, datas especiais, moedas e itens da lojinha</td><td>Funcionar o app e mostrar ao seu par o que você registra.</td></tr>
+        <tr><td>Dias em que você abriu o app</td><td>Sequências de uso e estatísticas gerais do serviço.</td></tr>
+        <tr><td>Identificador anônimo de acesso (sem e-mail nem senha) e dados técnicos de conexão (como o endereço de IP)</td><td>Manter você conectado, proteger o app contra abuso e limitar tentativas de acesso.</td></tr>
+        <tr><td>Endereço de notificação do seu aparelho</td><td>Enviar os avisos que você ativar.</td></tr>
+        <tr><td><strong>Ciclo menstrual (opcional):</strong> data do último início, duração do ciclo, duração da menstruação e com quem você compartilha</td><td>Mostrar previsões só pra você e, se você escolher, ao seu par.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>3. Dado sensível: ciclo menstrual</h2>
+  <p>Informações sobre o ciclo menstrual são dados pessoais <strong>sensíveis</strong> (dados de saúde). Por isso:</p>
+  <ul>
+    <li>o recurso é <strong>opcional</strong> e só é ativado depois de você aceitar um aviso de consentimento específico;</li>
+    <li>por padrão, <strong>só você</strong> vê esses dados. Seu par só vê se você escolher compartilhar, e a regra é aplicada no servidor;</li>
+    <li>você pode <strong>desativar e apagar</strong> tudo a qualquer momento, e retirar o consentimento quando quiser;</li>
+    <li>as previsões são <strong>estimativas</strong>. O app não substitui orientação médica e não é método anticoncepcional.</li>
+  </ul>
+  <p>A base legal para esse dado é o seu <strong>consentimento</strong> (LGPD, art. 11, I). Para os demais dados, a base é a execução do serviço que você pediu ao usar o app (art. 7º, V) e o legítimo interesse de segurança (art. 7º, IX).</p>
+
+  <h2>4. Com quem os dados são compartilhados</h2>
+  <ul>
+    <li><strong>Seu par:</strong> vê o que faz parte da vida a dois no app (humor, recados, encontros etc.). O ciclo só se você compartilhar.</li>
+    <li><strong>Supabase:</strong> serviço de banco de dados e acesso onde os dados ficam guardados.</li>
+    <li><strong>Cloudflare (Turnstile):</strong> verificação anti-robô ao criar uma conta nova.</li>
+    <li><strong>GitHub Pages:</strong> hospedagem das páginas do app.</li>
+    <li><strong>Google Fonts:</strong> fornece as fontes de letra do app.</li>
+    <li><strong>Serviços de notificação do seu aparelho</strong> (Apple, Google ou Mozilla), apenas se você ativar os avisos.</li>
+  </ul>
+  <p>Não vendemos seus dados, não usamos anúncios e não compartilhamos com terceiros para publicidade. Alguns desses serviços podem armazenar dados em servidores fora do Brasil.</p>
+
+  <h2>5. Por quanto tempo guardamos</h2>
+  <p>Enquanto o casal usar o app ou até você pedir a exclusão. Ao desativar o ciclo, os dados dele são apagados. Contas sem uso podem ser removidas depois de um longo período de inatividade.</p>
+
+  <h2>6. Seus direitos</h2>
+  <p>Você pode, a qualquer momento (LGPD, art. 18): confirmar se tratamos seus dados, acessá-los, corrigi-los, pedir a eliminação, pedir a portabilidade, saber com quem compartilhamos e retirar o consentimento. No app, em <strong>Perfil</strong>, há o botão <strong>Baixar meus dados</strong> e, no ciclo, <strong>Desativar e apagar meus dados do ciclo</strong>. Para os demais pedidos, use o e-mail acima. Você também pode reclamar à Autoridade Nacional de Proteção de Dados (ANPD).</p>
+
+  <h2>7. Segurança</h2>
+  <p>Os dados trafegam com conexão segura (HTTPS). Cada casal só acessa os próprios dados, por regras de acesso aplicadas no banco. O acesso à área de administração exige senha, e ela mostra apenas totais, sem dados pessoais dos casais. Nenhum sistema é perfeito: se houver um incidente que afete você, avisaremos.</p>
+
+  <h2>8. Crianças e adolescentes</h2>
+  <p>O app é destinado a maiores de 18 anos.</p>
+
+  <h2>9. Mudanças nesta política</h2>
+  <p>Se algo mudar, atualizaremos esta página e a data no topo. Mudanças importantes serão avisadas no app.</p>
+
+  <p class="muted" style="margin-top:2.5rem">Dúvidas? <a href="mailto:nasrgabrieldd@gmail.com">nasrgabrieldd@gmail.com</a></p>
+</main>
+</body>
+</html>

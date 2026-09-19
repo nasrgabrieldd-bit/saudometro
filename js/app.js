@@ -359,6 +359,7 @@ function renderOnboarding() {
       <button class="btn btn-secondary btn-block" id="btn-join">Já tenho um código</button>
     </div>
     <div id="onboarding-flow"></div>
+    <p class="hint-text" style="text-align:center; font-size:11.5px; margin:16px 8px 0;"><a href="privacidade.html" target="_blank" rel="noopener" style="color:inherit;">Política de privacidade</a></p>
     <p class="hint-text" id="egg-text" style="text-align:center; font-size:11.5px; font-style:italic; margin:14px 8px 0; display:none;">Um app feito com amor: o Gabriel quis entender melhor a Tata, e criou um jeito de matar a saudade e falar de sentimentos. Que ele ajude você e quem você ama também.</p>
   `;
   $("#btn-create").addEventListener("click", startCreateFlow);
@@ -2383,6 +2384,13 @@ ${feat("streaks") ? `    <div class="section-title">Sequências 🔥</div>
       <div class="onboarding-code" style="font-size:24px; padding:12px;">${escapeHTML(couple.data?.code || "") || "----"}</div>
     </div>
 
+    <div class="section-title">Privacidade 🔒</div>
+    <div class="card">
+      <div class="card-sub">Seus dados são seus. Você pode baixar tudo que registrou aqui e ler como cuidamos deles.</div>
+      <button class="btn btn-secondary btn-block" id="btn-export-data">Baixar meus dados</button>
+      <p class="hint-text" style="text-align:center; margin:10px 0 0;"><a href="privacidade.html" target="_blank" rel="noopener" style="color:var(--accent-strong);">Política de privacidade</a></p>
+    </div>
+
     <div class="section-title">Notificações 🔔</div>
     <div class="card">
       ${needsHomeScreenFirst() ? `
@@ -2444,6 +2452,7 @@ ${coinsOn() ? `    <div class="section-title">Moedas 💰</div>
 
   $("#btn-edit-names")?.addEventListener("click", openNamesEditor);
   $("#btn-personalize")?.addEventListener("click", openPersonalizeModal);
+  $("#btn-export-data")?.addEventListener("click", openMyDataModal);
 
   $("#btn-enable-push")?.addEventListener("click", () => {
     openModal(`
@@ -2548,6 +2557,29 @@ function wireCycleSection(mine, theirs) {
 }
 
 function openCycleEditor(existing) {
+  if (existing?.consent_at) { openCycleEditorForm(existing, existing.consent_at); return; }
+  openModal(`
+    <h3 class="modal-title">🌸 Antes de ativar</h3>
+    <p class="card-sub">Os dados do ciclo menstrual são <strong>dados de saúde</strong>, considerados sensíveis pela LGPD. Por isso, precisamos do seu consentimento.</p>
+    <ul class="card-sub" style="padding-left:18px; margin:6px 0 10px;">
+      <li><strong>O que guardamos:</strong> a data em que sua última menstruação começou, a duração do ciclo e da menstruação, e com quem você quer compartilhar.</li>
+      <li><strong>Só você vê</strong> por padrão. ${partnerName()} só vê se você escolher, e você muda isso quando quiser.</li>
+      <li>Você pode <strong>desativar e apagar tudo</strong> a qualquer momento, e baixar seus dados em Perfil.</li>
+      <li>As previsões são <strong>estimativas</strong>: não substituem orientação médica nem servem como método anticoncepcional.</li>
+    </ul>
+    <label style="display:flex; gap:10px; align-items:flex-start; margin:12px 0; font-size:14px; cursor:pointer;">
+      <input type="checkbox" id="cy-consent" style="width:auto; margin-top:3px; flex:none;" />
+      <span>Li a <a href="privacidade.html" target="_blank" rel="noopener">Política de privacidade</a> e aceito que o Saudômetro guarde esses dados para essa finalidade.</span>
+    </label>
+    <button class="btn btn-primary btn-block" id="cy-consent-go" disabled>Continuar</button>
+    <button class="btn btn-ghost btn-block" style="margin-top:6px;" id="cy-consent-no">Agora não</button>
+  `);
+  $("#cy-consent").addEventListener("change", (e) => { $("#cy-consent-go").disabled = !e.target.checked; });
+  $("#cy-consent-no").addEventListener("click", closeModal);
+  $("#cy-consent-go").addEventListener("click", () => openCycleEditorForm(existing, new Date().toISOString()));
+}
+
+function openCycleEditorForm(existing, consentAt) {
   const today = todayISO();
   let start = existing?.last_period_start || today;
   let L = existing?.cycle_length || 28, P = existing?.period_length || 5;
@@ -2611,7 +2643,7 @@ function openCycleEditor(existing) {
       let len = L;
       if (!lengthTouched) { const avg = averageCycleLength(list); if (avg) len = avg; }
       await db.saveCycle(State.coupleId, State.role, {
-        visibility: vis, last_period_start: list[list.length - 1], cycle_length: len, period_length: P, period_starts: list,
+        visibility: vis, last_period_start: list[list.length - 1], cycle_length: len, period_length: P, period_starts: list, consent_at: consentAt,
       });
       closeModal();
       await renderCalendar();
@@ -2985,6 +3017,58 @@ function maybeShowTour() {
   $("#tour-later").addEventListener("click", async () => { await markSeen(); closeModal(); });
 }
 
+
+// ================= MEUS DADOS =================
+
+// só o que a própria pessoa registrou (não inclui o que o par escreveu nem segredos dele)
+async function collectMyData() {
+  const mine = State.role;
+  const spec = [
+    ["moods", "role"], ["sweet_notes", "role"], ["coin_ledger", "role"], ["weekly_answers", "role"],
+    ["daily_challenge_answers", "role"], ["secret_wishes", "role"], ["time_capsules", "from_role"],
+    ["wish_redemptions", "redeemed_by"], ["shop_redemptions", "role"], ["encounters", "created_by"],
+    ["app_opens", "role"], ["cycle_settings", "role"],
+  ];
+  const out = { exportado_em: new Date().toISOString(), nome: myDisplayName(), papel: mine, casal_id: State.coupleId, dados: {} };
+  for (const [table, col] of spec) {
+    const { data, error } = await supabase.from(table).select("*").eq("couple_id", State.coupleId).eq(col, mine);
+    out.dados[table] = error ? `não foi possível ler (${error.message})` : data || [];
+  }
+  return out;
+}
+
+async function openMyDataModal() {
+  openModal(`<h3 class="modal-title">📦 Meus dados</h3><div class="center-note">Juntando seus dados...</div>`);
+  let json;
+  try {
+    json = JSON.stringify(await collectMyData(), null, 2);
+  } catch (e) {
+    $("#modal-sheet").innerHTML = `<h3 class="modal-title">📦 Meus dados</h3><p class="error-text">Não deu: ${escapeHTML(e.message || String(e))}</p>`;
+    return;
+  }
+  $("#modal-sheet").innerHTML = `
+    <h3 class="modal-title">📦 Meus dados</h3>
+    <p class="card-sub">Tudo que você registrou no app, em formato aberto (JSON). Não inclui o que o seu par escreveu.</p>
+    <textarea id="mydata-text" rows="9" readonly style="font-family:monospace; font-size:11px;">${escapeHTML(json)}</textarea>
+    <div class="row" style="gap:8px; margin-top:12px;">
+      <button class="btn btn-primary" style="flex:1;" id="mydata-copy">Copiar</button>
+      <button class="btn btn-secondary" style="flex:1;" id="mydata-save">Baixar arquivo</button>
+    </div>
+    <p class="hint-text" id="mydata-msg" style="margin-top:8px;"></p>`;
+  $("#mydata-copy").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(json); $("#mydata-msg").textContent = "Copiado."; }
+    catch (e) { $("#mydata-text").select(); $("#mydata-msg").textContent = "Selecione o texto e copie."; }
+  });
+  $("#mydata-save").addEventListener("click", () => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+    a.download = `saudometro-meus-dados-${todayISO()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    $("#mydata-msg").textContent = "Se o arquivo não baixar no seu celular, use Copiar.";
+  });
+}
 
 // ================= NOMES DO CASAL =================
 
