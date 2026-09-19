@@ -1,0 +1,65 @@
+name: Manutenção do banco
+
+# Todo dia: "acorda" o banco pra o Supabase gratuito não pausar por inatividade.
+# Todo domingo: guarda uma cópia criptografada de todos os dados (fica 90 dias na aba Actions).
+# Também dá pra rodar na mão: Actions > Manutenção do banco > Run workflow.
+on:
+  schedule:
+    - cron: "17 9 * * *"
+    - cron: "43 9 * * 0"
+  workflow_dispatch:
+    inputs:
+      tarefa:
+        description: "O que rodar"
+        type: choice
+        options: [tudo, acordar, backup]
+        default: tudo
+
+permissions:
+  contents: read
+
+env:
+  SUPABASE_URL: https://dqnkgzumwwildwrlioer.supabase.co
+
+jobs:
+  acordar:
+    if: github.event_name == 'workflow_dispatch' && inputs.tarefa != 'backup' || github.event.schedule == '17 9 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Acordar o banco
+        env:
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_vqTLMORo1lr0Rs8fZb1gNw_B60LAlpL
+        run: |
+          curl -fsS --retry 3 --retry-delay 5 -X POST "$SUPABASE_URL/rest/v1/rpc/keepalive" \
+            -H "apikey: $SUPABASE_PUBLISHABLE_KEY" -H "Content-Type: application/json" -d '{}'
+          echo
+
+  backup:
+    if: github.event_name == 'workflow_dispatch' && inputs.tarefa != 'acordar' || github.event.schedule == '43 9 * * 0'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Copiar os dados
+        env:
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: node scripts/backup.mjs backup.json
+      - name: Comprimir e criptografar
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          test -n "$BACKUP_PASSPHRASE" || { echo "Falta o Secret BACKUP_PASSPHRASE"; exit 1; }
+          gzip -9 backup.json
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -in backup.json.gz \
+            -out "saudometro-$(date +%F).json.gz.enc" -pass env:BACKUP_PASSPHRASE
+          rm -f backup.json.gz
+          ls -l saudometro-*.enc
+      - name: Guardar a cópia criptografada
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-saudometro
+          path: saudometro-*.json.gz.enc
+          retention-days: 90
+          if-no-files-found: error
