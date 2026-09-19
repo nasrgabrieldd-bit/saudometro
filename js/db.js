@@ -4,6 +4,11 @@ import { getCaptchaToken } from "./captcha.js";
 
 // ---------- auth / casal / perfil ----------
 
+// falha de rede/servidor (não de sessão inválida): nesse caso NÃO pode criar conta nova, senão a pessoa perde o perfil
+function isNetworkError(e) {
+  return !navigator.onLine || e?.name === "AuthRetryableFetchError" || e?.status === 0 || e?.status >= 500;
+}
+
 export async function ensureAnonSession() {
   const { data } = await supabase.auth.getSession();
   if (data.session) {
@@ -11,10 +16,13 @@ export async function ensureAnonSession() {
     // getUser confirma de verdade com o servidor
     const check = await supabase.auth.getUser();
     if (!check.error) return data.session;
+    if (isNetworkError(check.error)) throw check.error;
     try {
       const refreshed = await supabase.auth.refreshSession();
       if (!refreshed.error && refreshed.data.session) return refreshed.data.session;
+      if (refreshed.error && isNetworkError(refreshed.error)) throw refreshed.error;
     } catch (e) {
+      if (isNetworkError(e)) throw e;
       // refresh token também inválido/vencido: cai pra criar um login novo abaixo
     }
   }

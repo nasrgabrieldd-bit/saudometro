@@ -66,3 +66,28 @@ test("nenhuma chave secreta foi parar no código", () => {
     for (const p of padroes) assert.ok(!p.test(src), `${f} parece conter um segredo (${p})`);
   }
 });
+
+test("service worker: lista de arquivos guardados está completa e sem arquivo faltando", () => {
+  const sw = ler("sw.js");
+  const bloco = /const SHELL = \[([\s\S]*?)\];/.exec(sw)?.[1] || "";
+  const lista = [...bloco.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(lista.length > 10, "não achei a lista SHELL no sw.js");
+  for (const f of lista) if (f !== "./") assert.ok(existsSync(join(raiz, f)), `sw.js guarda ${f}, que não existe`);
+  const obrigatorios = [...jsDoApp().map((f) => f.split("\\").join("/")), "index.html", "css/styles.css", "css/fonts.css", "manifest.json"];
+  for (const f of obrigatorios) assert.ok(lista.includes(f), `sw.js não guarda ${f}: o app não abriria offline`);
+  for (const f of readdirSync(join(raiz, "fonts"))) assert.ok(lista.includes(`fonts/${f}`), `sw.js não guarda fonts/${f}`);
+});
+
+test("app não depende de CDN nem de fontes de terceiros (só Supabase e o CAPTCHA)", () => {
+  const arquivos = [...jsDoApp().filter((f) => !f.includes("vendor")), "index.html", "css/styles.css", "css/fonts.css", "privacidade.html", "sw.js"];
+  for (const f of arquivos) {
+    const src = ler(f);
+    assert.ok(!/googleapis|gstatic|jsdelivr|unpkg|cdnjs|esm\.sh/.test(src), `${f} usa serviço externo de fontes/bibliotecas`);
+  }
+});
+
+test("todo arquivo de fonte citado no css existe", () => {
+  for (const m of ler("css/fonts.css").matchAll(/url\("([^"]+)"\)/g)) {
+    assert.ok(existsSync(resolve(raiz, "css", m[1])), `fonts.css cita ${m[1]}, que não existe`);
+  }
+});

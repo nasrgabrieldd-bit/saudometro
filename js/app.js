@@ -77,6 +77,7 @@ function showBootError(e) {
     <button class="btn btn-primary btn-block" id="btn-retry">Tentar de novo</button>
   `;
   $("#btn-retry").addEventListener("click", () => location.reload());
+  window.addEventListener("online", () => location.reload(), { once: true }); // a internet voltou: tenta sozinho
 }
 
 async function boot() {

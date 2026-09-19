@@ -1,4 +1,4 @@
-import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+import { createClient } from "./vendor/supabase.js";
 
 // Preencha com os dados do SEU projeto Supabase:
 // Project Settings > API > "Project URL" e "anon public" key.

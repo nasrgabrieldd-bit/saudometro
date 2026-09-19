@@ -1,0 +1,9 @@
+supabase.js = biblioteca @supabase/supabase-js (versão no cabeçalho do arquivo), empacotada num arquivo só.
+
+Pra atualizar (raramente preciso; faça se o Supabase avisar de correção de segurança):
+  mkdir /tmp/sb && cd /tmp/sb && npm init -y
+  npm install @supabase/supabase-js@2 esbuild
+  echo 'export { createClient } from "@supabase/supabase-js";' > entry.mjs
+  npx esbuild entry.mjs --bundle --format=esm --minify --platform=browser --target=es2020 --outfile=supabase.js
+Depois copie o resultado pra js/vendor/supabase.js (mantendo as 2 linhas de cabeçalho com a versão nova),
+suba a CACHE_VERSION do sw.js e rode npm test.
