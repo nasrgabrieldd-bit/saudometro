@@ -1,5 +1,6 @@
 import { initTheme } from "./theme.js";
 import { initErrorReporting } from "./errors.js";
+import { installGuideHTML, isInstalled, canPromptInstall, promptInstall, shouldShowInstallHint, dismissInstallHint } from "./install.js";
 import { supabase, isConfigured } from "./supabaseClient.js";
 import * as db from "./db.js";
 import { MOODS, MOOD_BY_ID, TALK_OPTIONS, TALK_BY_ID } from "./moods.js";
@@ -52,6 +53,12 @@ function openModal(html) {
 function closeModal() {
   $("#modal-root").classList.remove("open");
   $("#modal-sheet").innerHTML = "";
+}
+
+function openInstallGuide() {
+  openModal(installGuideHTML());
+  $("#install-now")?.addEventListener("click", async () => { if (await promptInstall()) closeModal(); });
+  $("#install-dismiss")?.addEventListener("click", () => { dismissInstallHint(); closeModal(); renderActiveTab(); });
 }
 
 // ---------------- boot ----------------
@@ -737,6 +744,12 @@ async function renderHome() {
         <div class="banner-text"><strong>O dia tá quase acabando!</strong>Você ainda não registrou seu humor de hoje. Não esquece 💗</div>
       </div>
     ` : ""}
+    ${shouldShowInstallHint() ? `
+      <div class="banner banner-warm" id="install-banner" style="cursor:pointer;">
+        <div class="banner-icon">📲</div>
+        <div class="banner-text"><strong>Instale o app no celular</strong>Vira um ícone na tela inicial e abre em tela cheia. Toque pra ver como.</div>
+      </div>
+    ` : ""}
     ${nudgeText ? `
       <div class="banner banner-warm">
         <div class="banner-icon">🥹</div>
@@ -755,6 +768,7 @@ ${widgetIds.map((id) => html[id] || "").join("")}
   $("#special-card")?.addEventListener("click", () => setActiveTab("calendar"));
   $("#weekend-card")?.addEventListener("click", () => openWeekendModal(nextWeekendFriday));
   $("#mood-reminder-banner")?.addEventListener("click", () => setActiveTab("mood"));
+  $("#install-banner")?.addEventListener("click", openInstallGuide);
   $("#btn-saudade")?.addEventListener("click", openSaudadeModal);
   $("#kiss-card")?.addEventListener("click", () => openKissModal(stats?.last_kiss_at));
 
@@ -2393,11 +2407,20 @@ ${feat("streaks") ? `    <div class="section-title">Sequências 🔥</div>
       <p class="hint-text" style="text-align:center; margin:10px 0 0;"><a href="privacidade.html" target="_blank" rel="noopener" style="color:var(--accent-strong);">Política de privacidade</a></p>
     </div>
 
+    <div class="section-title">Instalar no celular 📲</div>
+    <div class="card">
+      ${isInstalled()
+        ? `<p class="card-sub" style="margin-bottom:0;">✅ O Saudômetro já está instalado neste aparelho.</p>`
+        : `<div class="card-sub">Coloque o Saudômetro na tela inicial: abre em tela cheia, mais rápido, e no iPhone é o que libera as notificações.</div>
+           <button class="btn btn-secondary btn-block" id="btn-install-guide">Ver o passo a passo</button>`}
+    </div>
+
     <div class="section-title">Notificações 🔔</div>
     <div class="card">
       ${needsHomeScreenFirst() ? `
         <p class="card-sub">No iPhone, notificação só funciona depois de adicionar o Saudômetro à tela de início.</p>
         <p class="hint-text">Toca no ícone de compartilhar do Safari (⬆️) → "Adicionar à Tela de Início" → abre o app por esse ícone novo, aí sim ativa as notificações por aqui.</p>
+        <button class="btn btn-secondary btn-block" id="btn-install-guide-2">Ver o passo a passo</button>
       ` : pushPerm === "unsupported" ? `
         <p class="hint-text">Esse navegador não suporta notificações. Tenta pelo Chrome ou pelo app já adicionado à tela inicial.</p>
       ` : alreadySubscribed ? `
@@ -2455,6 +2478,8 @@ ${coinsOn() ? `    <div class="section-title">Moedas 💰</div>
   $("#btn-edit-names")?.addEventListener("click", openNamesEditor);
   $("#btn-personalize")?.addEventListener("click", openPersonalizeModal);
   $("#btn-export-data")?.addEventListener("click", openMyDataModal);
+  $("#btn-install-guide")?.addEventListener("click", openInstallGuide);
+  $("#btn-install-guide-2")?.addEventListener("click", openInstallGuide);
 
   $("#btn-enable-push")?.addEventListener("click", () => {
     openModal(`

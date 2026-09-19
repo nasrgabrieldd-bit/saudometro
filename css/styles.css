@@ -800,3 +800,9 @@ label.field-label:first-child { margin-top: 0; }
 .shortcut-icon { font-size: 28px; }
 .shortcut-title { font-weight: 800; font-size: 13.5px; color: var(--text); font-family: "Baloo 2", sans-serif; }
 .shortcut-sub { font-size: 11px; color: var(--text-muted); }
+
+/* guia de instalação */
+.install-steps { margin: 6px 0 10px; padding-left: 22px; font-size: 14px; line-height: 1.55; }
+.install-steps li { margin-bottom: 8px; }
+.install-more { margin-top: 8px; font-size: 14px; }
+.install-more summary { cursor: pointer; font-weight: 700; color: var(--accent-strong); padding: 6px 0; }
