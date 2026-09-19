@@ -4,7 +4,7 @@
     {
       "name": "saudometro-demo",
       "runtimeExecutable": "node",
-      "runtimeArgs": [".claude/dev-server.js"],
+      "runtimeArgs": [".claude/dev-server.cjs"],
       "port": 8765
     }
   ]
