@@ -1,0 +1,58 @@
+name: Testes
+
+# A cada publicação (push na main) e em pull requests: roda os testes automáticos.
+# Depois que o GitHub Pages termina de publicar, confere se o site no ar está inteiro (teste rápido).
+# Se algo falhar, o GitHub manda e-mail pra quem fez o push.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_run:
+    workflows: ["pages build and deployment"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SITE: https://nasrgabrieldd-bit.github.io/saudometro
+
+jobs:
+  testes:
+    if: github.event_name != 'workflow_run'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
+
+  site-no-ar:
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Conferir o site publicado
+        run: |
+          set -e
+          # o Pages pode levar alguns segundos pra servir a versão nova
+          sleep 20
+          falhou=0
+          for f in "" index.html js/app.js js/db.js js/people.js css/styles.css sw.js manifest.json privacidade.html icons/icon.png; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --retry 3 --retry-delay 5 "$SITE/$f")
+            echo "$code  /$f"
+            [ "$code" = "200" ] || falhou=1
+          done
+          curl -fsS "$SITE/index.html" | grep -q 'js/app.js' || { echo "index.html não chama js/app.js"; falhou=1; }
+          curl -fsS "$SITE/js/app.js" | grep -q 'initErrorReporting' || { echo "app.js publicado parece desatualizado ou quebrado"; falhou=1; }
+          exit $falhou
+
+      - name: Conferir que o banco responde
+        env:
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_vqTLMORo1lr0Rs8fZb1gNw_B60LAlpL
+          SUPABASE_URL: https://dqnkgzumwwildwrlioer.supabase.co
+        run: |
+          curl -fsS --retry 3 --retry-delay 5 -X POST "$SUPABASE_URL/rest/v1/rpc/keepalive" \
+            -H "apikey: $SUPABASE_PUBLISHABLE_KEY" -H "Content-Type: application/json" -d '{}'
+          echo
