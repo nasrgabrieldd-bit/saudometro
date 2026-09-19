@@ -806,3 +806,16 @@ label.field-label:first-child { margin-top: 0; }
 .install-steps li { margin-bottom: 8px; }
 .install-more { margin-top: 8px; font-size: 14px; }
 .install-more summary { cursor: pointer; font-weight: 700; color: var(--accent-strong); padding: 6px 0; }
+
+/* reações */
+.react-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.react-btn {
+  min-width: 44px; height: 44px; padding: 0 10px; font-size: 22px; line-height: 1; cursor: pointer;
+  background: var(--surface); border: 1.5px solid var(--border); border-radius: 999px;
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+}
+.react-btn:active { transform: scale(.92); }
+.react-btn.selected { background: var(--accent-soft); border-color: var(--accent-btn); transform: scale(1.06); }
+.react-card { padding-top: 14px; padding-bottom: 14px; }
+.react-got { margin-top: 8px; font-size: 13.5px; font-weight: 700; color: var(--accent-strong); display: flex; align-items: center; gap: 8px; }
+.react-got-emoji { font-size: 22px; line-height: 1; }

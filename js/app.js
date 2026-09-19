@@ -55,6 +55,43 @@ function closeModal() {
   $("#modal-sheet").innerHTML = "";
 }
 
+// ---------------- reações (um toque no humor ou no recadinho do par) ----------
+
+const REACTION_EMOJIS = ["❤️", "🤗", "😘", "🥹", "💪"];
+
+function reactionBarHTML(kind, targetId, reactions) {
+  const mine = reactions.find((r) => r.target_id === targetId && r.role === State.role)?.emoji;
+  return `<div class="react-bar" data-kind="${kind}" data-target="${targetId}">${REACTION_EMOJIS.map((e) =>
+    `<button type="button" class="react-btn ${mine === e ? "selected" : ""}" data-emoji="${e}" aria-pressed="${mine === e}" aria-label="Reagir com ${e}">${e}</button>`).join("")}</div>`;
+}
+
+// o que o par reagiu ao MEU item (some se ele não reagiu)
+function reactionGotHTML(targetId, reactions, what) {
+  const r = reactions.find((x) => x.target_id === targetId && x.role !== State.role);
+  return r ? `<div class="react-got"><span class="react-got-emoji">${r.emoji}</span> ${escapeHTML(ROLE_LABEL[otherRole()])} reagiu ${what}</div>` : "";
+}
+
+function wireReactions(root = view) {
+  root.querySelectorAll(".react-bar").forEach((bar) => {
+    bar.addEventListener("click", async (ev) => {
+      ev.stopPropagation();
+      const btn = ev.target.closest(".react-btn");
+      if (!btn) return;
+      const { kind, target } = bar.dataset;
+      const wasOn = btn.classList.contains("selected");
+      bar.querySelectorAll(".react-btn").forEach((b) => { b.classList.remove("selected"); b.setAttribute("aria-pressed", "false"); });
+      if (!wasOn) { btn.classList.add("selected"); btn.setAttribute("aria-pressed", "true"); }
+      try {
+        if (wasOn) await db.removeReaction(kind, target, State.role);
+        else await db.setReaction(State.coupleId, kind, target, State.role, btn.dataset.emoji);
+      } catch (e) {
+        alert("Não deu pra enviar agora. Tenta de novo.");
+        renderActiveTab();
+      }
+    });
+  });
+}
+
 function openInstallGuide() {
   openModal(installGuideHTML());
   $("#install-now")?.addEventListener("click", async () => { if (await promptInstall()) closeModal(); });
@@ -142,7 +179,11 @@ async function enterApp(profile) {
   if (State.unsubscribe) State.unsubscribe();
   State.unsubscribe = db.subscribeCoupleChanges(
     State.coupleId,
-    () => { renderActiveTab(); updateNotesNavBadge(); },
+    (p) => {
+      if (p?.table === "reactions" && p.new?.role === State.role) return; // já está na tela
+      renderActiveTab();
+      updateNotesNavBadge();
+    },
     async () => {
       try {
         State.settings = await db.getCoupleSettings(State.coupleId);
@@ -1488,6 +1529,7 @@ async function renderMood() {
   const weeklyAnswers = await db.getWeeklyAnswers(State.coupleId, weekIndex);
   const myAnswer = weeklyAnswers.find((a) => a.role === State.role);
   const theirAnswer = weeklyAnswers.find((a) => a.role !== State.role);
+  const moodReactions = await db.listReactions(State.coupleId, "mood").catch(() => null); // null = recurso ainda não ativado no banco
 
     const myMoodDays = history.filter((h) => h.role === State.role).map((h) => h.day).sort();
   const lastMoodDay = myMoodDays[myMoodDays.length - 1];
@@ -1562,6 +1604,13 @@ async function renderMood() {
       <p class="hint-text" style="margin:12px 0 0; text-align:center; font-weight:800; color:var(--accent-strong);">Toque pra ver os últimos 7 dias 📅 ›</p>
     </div>
 
+    ${moodReactions && theirs ? `
+      <div class="card react-card">
+        <div class="card-sub" style="margin-bottom:8px;">Mande um carinho pra ${ROLE_LABEL[otherRole()]}</div>
+        ${reactionBarHTML("mood", theirs.id, moodReactions)}
+      </div>` : ""}
+    ${(() => { const got = moodReactions && mine ? reactionGotHTML(mine.id, moodReactions, "ao seu humor de hoje") : ""; return got ? `<div class="card react-card">${got}</div>` : ""; })()}
+
     <div class="section-title">Últimos 7 dias</div>
     <div class="card">
       ${historyStripHTML(history)}
@@ -1588,6 +1637,7 @@ ${feat("weekly") ? `    <div class="section-title">💭 Pergunta da semana</div>
 
   $("#partner-mood-tap").addEventListener("click", () => openMoodHistoryModal(history, otherRole()));
   $("#btn-mood-history").addEventListener("click", () => openMoodHistoryModal(history, otherRole()));
+  wireReactions();
 
   let selectedMood = mine?.mood || null;
   let selectedMoodPartner = mine?.mood_partner || null;
@@ -1836,14 +1886,16 @@ async function renderNotesHub() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const todayStr = todayISO();
 
-  const [notes, todayAnswers, capsules, redemptions, invites] = await Promise.all([
+  const [notes, noteReactions, todayAnswers, capsules, redemptions, invites] = await Promise.all([
     db.listRecentSweetNotes(State.coupleId, 5),
+    db.listReactions(State.coupleId, "note").catch(() => null), // null = recurso ainda não ativado no banco
     db.getChallengeAnswersForDay(State.coupleId, todayStr),
     db.listTimeCapsules(State.coupleId),
     db.listWishRedemptions(State.coupleId),
     db.listAllInvites(State.coupleId),
   ]);
 
+  const myLastNote = notes.find((n) => n.role === State.role);
   const iSentToday = notes.some((n) => n.role === State.role && n.created_at.slice(0, 10) === todayStr);
   const theirNoteToday = notes.find((n) => n.role !== State.role && n.created_at.slice(0, 10) === todayStr);
   const myAnswerToday = todayAnswers.find((a) => a.role === State.role);
@@ -1853,7 +1905,8 @@ async function renderNotesHub() {
   view.innerHTML = `
     <div class="section-title">💌 Recadinho fofo</div>
     <div class="card">
-      ${theirNoteToday ? `<div class="entry-meta" style="margin-bottom:10px; color:var(--text);">${ROLE_LABEL[otherRole()]}: "${escapeHTML(theirNoteToday.message)}"</div>` : ""}
+      ${theirNoteToday ? `<div class="entry-meta" style="margin-bottom:10px; color:var(--text);">${ROLE_LABEL[otherRole()]}: "${escapeHTML(theirNoteToday.message)}"</div>${noteReactions ? reactionBarHTML("note", theirNoteToday.id, noteReactions) : ""}` : ""}
+      ${noteReactions && myLastNote ? reactionGotHTML(myLastNote.id, noteReactions, "ao seu último recadinho") : ""}
       <div class="card-sub">${!coinsOn() || coinRule("note") === 0 ? (iSentToday ? "Você já mandou um hoje. Pode mandar outro." : gen("Manda um recadinho fofo pra ele(a).", genderOf(otherRole()))) : iSentToday ? "Você já mandou um hoje. Pode mandar outro, mas a moeda já foi." : `O primeiro recadinho do dia já dá ${coinWord(coinRule("note"))} pra você.`}</div>
       <button class="btn btn-primary btn-block" style="margin-top:12px;" id="btn-send-note">💌 Mandar recadinho</button>
       <button class="btn btn-ghost btn-block" style="margin-top:8px;" id="btn-notes-history">Ver histórico completo →</button>
@@ -1887,6 +1940,7 @@ ${feat("wishes") ? `      <button class="shortcut-card" data-view="wishes">
   `;
 
   $("#btn-send-note")?.addEventListener("click", () => openSweetNoteModal(iSentToday));
+  wireReactions();
   $("#btn-notes-history")?.addEventListener("click", () => { State.notesView = "history"; renderNotes(); });
   document.querySelectorAll(".shortcut-card").forEach((btn) => {
     btn.addEventListener("click", () => { State.notesView = btn.dataset.view; renderNotes(); });
@@ -1895,7 +1949,10 @@ ${feat("wishes") ? `      <button class="shortcut-card" data-view="wishes">
 
 async function renderNotesHistory() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
-  const notes = await db.listRecentSweetNotes(State.coupleId, 500);
+  const [notes, noteReactions] = await Promise.all([
+    db.listRecentSweetNotes(State.coupleId, 500),
+    db.listReactions(State.coupleId, "note").catch(() => null),
+  ]);
   view.innerHTML = `
     ${subViewHeader("💌 Histórico de recadinhos")}
     <div class="card">
@@ -1906,12 +1963,14 @@ async function renderNotesHistory() {
             <div class="entry-title">${ROLE_LABEL[n.role]}</div>
             <div class="entry-meta">"${escapeHTML(n.message)}"</div>
             <div class="entry-meta" style="opacity:.7; margin-top:2px;">${formatNoteTimestamp(n.created_at)}</div>
+            ${noteReactions ? (n.role === State.role ? reactionGotHTML(n.id, noteReactions, "a esse recadinho") : reactionBarHTML("note", n.id, noteReactions)) : ""}
           </div>
         </div>
       `).join("")}</div>` : `<div class="empty-state"><span class="emoji">💌</span>Nenhum recadinho ainda. Manda o primeiro!</div>`}
     </div>
   `;
   wireNotesBack();
+  wireReactions();
 }
 
 async function renderChallengeView() {
@@ -3054,7 +3113,7 @@ async function collectMyData() {
     ["moods", "role"], ["sweet_notes", "role"], ["coin_ledger", "role"], ["weekly_answers", "role"],
     ["daily_challenge_answers", "role"], ["secret_wishes", "role"], ["time_capsules", "from_role"],
     ["wish_redemptions", "redeemed_by"], ["shop_redemptions", "role"], ["encounters", "created_by"],
-    ["app_opens", "role"], ["cycle_settings", "role"],
+    ["app_opens", "role"], ["cycle_settings", "role"], ["reactions", "role"],
   ];
   const out = { exportado_em: new Date().toISOString(), nome: myDisplayName(), papel: mine, casal_id: State.coupleId, dados: {} };
   for (const [table, col] of spec) {

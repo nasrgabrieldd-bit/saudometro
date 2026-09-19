@@ -402,6 +402,32 @@ export async function listRecentSweetNotes(coupleId, limit = 10) {
   return data || [];
 }
 
+// ---------- reações (um toque no humor ou no recadinho do par) ----------
+
+export async function listReactions(coupleId, kind) {
+  const { data, error } = await supabase
+    .from("reactions")
+    .select("target_id, role, emoji")
+    .eq("couple_id", coupleId)
+    .eq("kind", kind)
+    .order("created_at", { ascending: false })
+    .limit(2000);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function setReaction(coupleId, kind, targetId, role, emoji) {
+  const { error } = await supabase
+    .from("reactions")
+    .upsert({ couple_id: coupleId, kind, target_id: targetId, role, emoji, created_at: new Date().toISOString() }, { onConflict: "kind,target_id,role" });
+  if (error) throw error;
+}
+
+export async function removeReaction(kind, targetId, role) {
+  const { error } = await supabase.from("reactions").delete().eq("kind", kind).eq("target_id", targetId).eq("role", role);
+  if (error) throw error;
+}
+
 // ---------- cápsula do tempo ----------
 
 export async function createTimeCapsule(coupleId, fromRole, message, openOnISO) {
@@ -601,6 +627,7 @@ export function subscribeCoupleChanges(coupleId, onChange, onSettings) {
     .on("postgres_changes", { event: "*", schema: "public", table: "shop_redemptions", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "couple_stats", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "sweet_notes", filter: `couple_id=eq.${coupleId}` }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "reactions", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "time_capsules", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "daily_challenge_answers", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "secret_wishes", filter: `couple_id=eq.${coupleId}` }, onChange)

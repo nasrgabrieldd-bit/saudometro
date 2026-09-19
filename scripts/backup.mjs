@@ -20,7 +20,7 @@ const TABLES = [
   "couples", "couple_settings", "profiles", "month_plans", "encounters", "moods", "weekend_recharge",
   "coin_ledger", "weekly_answers", "shop_redemptions", "couple_stats", "sweet_notes", "time_capsules",
   "daily_challenge_answers", "secret_wishes", "wish_redemptions", "app_opens", "streak_freezes",
-  "custom_perks", "cycle_settings",
+  "custom_perks", "cycle_settings", "reactions",
 ];
 
 const headers = { apikey: KEY, Accept: "application/json", "Range-Unit": "items" };
