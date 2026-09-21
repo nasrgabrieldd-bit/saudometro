@@ -4,6 +4,17 @@ import { supabase } from "./supabaseClient.js";
 // Só vai mensagem curta + arquivo/linha; nada do conteúdo do casal.
 
 const MAX_PER_SESSION = 5;
+
+// o banco recusou por permissão (RLS): acontece, por exemplo, quando o casal foi apagado com o app aberto
+export function isAccessDenied(e) {
+  return e?.code === "42501" || /row-level security|permission denied/i.test(String(e?.message || e || ""));
+}
+
+// ruído que não dá pra consertar: erro de script de outro site (sem detalhe) e aviso inofensivo do navegador
+export function shouldIgnoreError(message) {
+  const m = String(message || "").trim();
+  return m === "" || /^Script error.?$/i.test(m) || /ResizeObserver loop/i.test(m);
+}
 const seen = new Set();
 
 function cleanText(s) {
@@ -31,7 +42,7 @@ async function report(message, place) {
 export function initErrorReporting() {
   window.addEventListener("error", (ev) => {
     // erro de carregar imagem/script vem sem mensagem; ignora
-    if (!ev.message) return;
+    if (shouldIgnoreError(ev.message)) return;
     const file = (ev.filename || "").split("/").pop();
     report(ev.message, `${file}:${ev.lineno || 0}`);
   });

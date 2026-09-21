@@ -210,3 +210,21 @@ test("mensagem de saudade: prioriza humor do par, depois beijo, depois semana va
   const a = pickSaudadeNudge({ ...base, daysSinceKiss: 10 });
   assert.equal(pickSaudadeNudge({ ...base, daysSinceKiss: 10 }), a);
 });
+
+// ---------- registro de erros ----------
+import { isAccessDenied, shouldIgnoreError } from "../js/errors.js";
+
+test("erro de permissão do banco (casal apagado) é reconhecido", () => {
+  assert.equal(isAccessDenied({ code: "42501", message: "x" }), true);
+  assert.equal(isAccessDenied(new Error('new row violates row-level security policy for table "month_plans"')), true);
+  assert.equal(isAccessDenied(new Error("permission denied for table couples")), true);
+  assert.equal(isAccessDenied(new Error("Failed to fetch")), false);
+  assert.equal(isAccessDenied(null), false);
+});
+
+test("ruído sem como consertar não vai pro registro de erros", () => {
+  assert.equal(shouldIgnoreError("Script error."), true);
+  assert.equal(shouldIgnoreError("ResizeObserver loop completed with undelivered notifications."), true);
+  assert.equal(shouldIgnoreError(""), true);
+  assert.equal(shouldIgnoreError("x is not defined"), false);
+});

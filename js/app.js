@@ -1,5 +1,5 @@
 import { initTheme } from "./theme.js";
-import { initErrorReporting } from "./errors.js";
+import { initErrorReporting, isAccessDenied } from "./errors.js";
 import { installGuideHTML, isInstalled, canPromptInstall, promptInstall, shouldShowInstallHint, dismissInstallHint } from "./install.js";
 import { supabase, isConfigured } from "./supabaseClient.js";
 import * as db from "./db.js";
@@ -393,7 +393,31 @@ function renderActiveTab() {
   if (!State.coupleId) return;
   clearKissTimer();
   const map = { home: renderHome, calendar: renderCalendar, mood: renderMood, notes: renderNotes, shop: renderShop, profile: renderProfile };
-  (map[State.activeTab] || renderHome)();
+  Promise.resolve((map[State.activeTab] || renderHome)()).catch(handleRenderError);
+}
+
+// se o banco recusou porque o casal não existe mais (foi apagado com o app aberto), volta pro início em vez de travar
+async function handleRenderError(e) {
+  if (isAccessDenied(e)) {
+    let profile = null;
+    try { profile = await db.getMyProfile(State.userId); } catch (e2) { /* sem rede: não é esse caso */ }
+    if (!profile && State.userId) { returnToOnboarding(); return; }
+  }
+  throw e; // outro tipo de erro: segue pro registro de erros
+}
+
+function returnToOnboarding() {
+  if (State.unsubscribe) State.unsubscribe();
+  State.unsubscribe = null;
+  State.coupleId = null;
+  State.profile = null;
+  State.partner = null;
+  setPeopleSettings(null);
+  clearKissTimer();
+  closeModal();
+  $("#screen-app").style.display = "none";
+  renderOnboarding();
+  $("#screen-onboarding").insertAdjacentHTML("afterbegin", `<p class="card-sub" style="text-align:center; margin:0 0 12px;">Não encontramos mais o casal desta conta (ele pode ter sido apagado). Dá pra criar um novo ou entrar com um código.</p>`);
 }
 
 // ================= ONBOARDING =================
