@@ -870,7 +870,17 @@ label.field-label:first-child { margin-top: 0; }
   text-align: center;
 }
 .shortcut-card:active { transform: scale(0.97); }
-.shortcut-icon { font-size: 28px; }
+.shortcut-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 2px;
+}
 .shortcut-title { font-weight: 800; font-size: 13.5px; color: var(--text); font-family: "Baloo 2", sans-serif; }
 .shortcut-sub { font-size: 11px; color: var(--text-muted); }
 
