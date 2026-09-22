@@ -1182,15 +1182,16 @@ async function renderCalendar() {
 
   view.innerHTML = `
     <div class="month-nav">
-      <button id="prev-month">‹</button>
+      <button id="prev-month">${icon("chevron-left", { size: 18 })}</button>
       <h2>${monthLabel(mk)}</h2>
-      <button id="next-month">›</button>
+      <button id="next-month">${icon("chevron-right", { size: 18 })}</button>
     </div>
 
     <div class="card">
       <div class="row" style="align-items:center;">
         <div>
           <div class="card-title" style="font-size:15px;">${feat("goal") ? `${happened}/${target} encontros aconteceram` : "Encontros do mês"}</div>
+          ${feat("goal") ? `<div class="progress-dots" style="margin:2px 0 4px;">${progressDots(happened, target)}</div>` : ""}
           <div class="card-sub" style="margin-bottom:0;">${feat("goal") ? `${planejadosCount} de ${target} já definidos nesse mês` : "Combine encontros e marque eventos"}</div>
         </div>
         <button class="btn btn-primary btn-sm" id="btn-add-planejado">+ Encontro</button>
