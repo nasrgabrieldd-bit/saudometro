@@ -278,6 +278,23 @@ button, input, textarea, select {
   margin-bottom: 4px;
 }
 
+/* etiqueta em aba, presa ao canto do cartão (ex.: "Pergunta da semana") */
+.card-tab-wrap { position: relative; margin-top: 22px; }
+.card-tab {
+  position: absolute;
+  top: -14px;
+  left: 16px;
+  background: var(--accent-btn);
+  color: var(--on-accent-btn);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 6px 12px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-tap);
+  z-index: 1;
+}
+
 /* cartão-herói: destaque em degradê pra 1 card por tela (ex.: próximo encontro) */
 .card-hero {
   background: var(--grad-hero);
