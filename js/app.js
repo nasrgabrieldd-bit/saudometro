@@ -1644,7 +1644,8 @@ async function renderMood() {
       <button class="btn btn-secondary btn-block" style="margin-top:14px;" id="btn-mood-history">📅 Ver detalhes de ${ROLE_LABEL[otherRole()]} (com você, conversa, recadinhos)</button>
     </div>
 
-${feat("weekly") ? `    <div class="section-title">💭 Pergunta da semana</div>
+${feat("weekly") ? `    <div class="card-tab-wrap">
+      <span class="card-tab">💭 Pergunta da semana</span>
     <div class="card">
       <div class="card-sub" style="font-size:15px; color:var(--text); font-weight:700;">${question}</div>
       <textarea id="weekly-answer" rows="3" style="margin-top:10px;" placeholder="escreve sua resposta...">${escapeHTML(myAnswer?.answer || "")}</textarea>
@@ -1658,6 +1659,7 @@ ${feat("weekly") ? `    <div class="section-title">💭 Pergunta da semana</div>
           </div>
         </div>
       ` : `<p class="hint-text" style="margin-top:12px;">${ROLE_LABEL[otherRole()]} ainda não respondeu essa semana.</p>`}
+    </div>
     </div>
     <p class="hint-text" style="text-align:center; margin-top:-8px;">🔮 Semana que vem: "${gen(questionForWeek(weekIndex + 1), genderOf(State.role))}"</p>` : ""}
   `;
