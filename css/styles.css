@@ -42,6 +42,14 @@
   --radius-lg: 26px;
   --radius-md: 18px;
   --radius-sm: 12px;
+
+  /* refinamento visual: só combinações novas das cores de cima, nenhum matiz novo.
+     --accent-hero-light é um tom intermediário entre --accent e --accent-strong: usar --accent puro
+     no degradê deixaria o texto branco por cima com contraste 2,65:1 (abaixo do mínimo AA de 4,5:1).
+     Esse tom garante 4,92:1 em qualquer ponto do degradê (o outro lado, --accent-strong, já dá 5,77:1). */
+  --accent-hero-light: #ca3961;
+  --grad-hero: linear-gradient(135deg, var(--accent-strong), var(--accent-hero-light));
+  --shadow-hero: 0 10px 28px rgba(189, 43, 85, 0.22);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -92,6 +100,9 @@
 
     --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.35);
     --shadow-tap: 0 2px 8px rgba(0, 0, 0, 0.4);
+
+    --grad-hero: linear-gradient(135deg, var(--accent-strong), var(--accent));
+    --shadow-hero: 0 10px 28px rgba(0, 0, 0, 0.4);
   }
 }
 
@@ -126,6 +137,9 @@
 
   --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.35);
   --shadow-tap: 0 2px 8px rgba(0, 0, 0, 0.4);
+
+  --grad-hero: linear-gradient(135deg, var(--accent-strong), var(--accent));
+  --shadow-hero: 0 10px 28px rgba(0, 0, 0, 0.4);
 }
 
 * { box-sizing: border-box; }
@@ -264,6 +278,38 @@ button, input, textarea, select {
   margin-bottom: 4px;
 }
 
+/* cartão-herói: destaque em degradê pra 1 card por tela (ex.: próximo encontro) */
+.card-hero {
+  background: var(--grad-hero);
+  box-shadow: var(--shadow-hero);
+  color: var(--on-accent-btn);
+}
+.card-hero-eyebrow {
+  /* sem opacity de propósito: reduziria o contraste do texto sobre o degradê abaixo do mínimo AA.
+     a hierarquia vem do peso/tamanho, não da transparência. */
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.card-hero-number {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 44px;
+  line-height: 1.15;
+  margin: 2px 0;
+}
+.card-hero-number span {
+  font-family: "Nunito", sans-serif;
+  font-weight: 700;
+  font-size: 17px;
+  opacity: 0.9;
+}
+.card-hero-sub {
+  /* sem opacity, pelo mesmo motivo do eyebrow acima */
+  font-size: 13.5px;
+}
+
 .card-sub {
   font-size: 13px;
   color: var(--text-muted);
@@ -342,6 +388,13 @@ button, input, textarea, select {
   border-radius: 999px;
   background: linear-gradient(90deg, var(--accent), var(--warm));
   transition: width 0.3s ease;
+}
+
+/* bolinhas de progresso (● preenchida / ○ vazia) vindas de progressDots() */
+.progress-dots {
+  font-size: 15px;
+  letter-spacing: 4px;
+  color: var(--accent-strong);
 }
 
 .hearts-row { display: flex; gap: 6px; font-size: 20px; }
@@ -622,7 +675,8 @@ label.field-label:first-child { margin-top: 0; }
   border-radius: 14px;
   position: relative;
 }
-.nav-btn .nav-icon { font-size: 21px; }
+.nav-btn .nav-icon { display: flex; }
+.icon { display: inline-block; vertical-align: middle; flex: none; }
 .nav-btn .nav-label { font-size: 10px; font-weight: 800; }
 .nav-btn.active { color: var(--accent-strong); }
 .dot-badge {
