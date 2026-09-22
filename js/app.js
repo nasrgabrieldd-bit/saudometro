@@ -2297,8 +2297,11 @@ async function renderShop() {
 
   view.innerHTML = `
     <div class="card">
-      <div class="card-title" style="font-size:15px;">Sua carteira</div>
-      <div class="row" style="margin-top:8px;">
+      <div class="row" style="align-items:center; gap:10px;">
+        <span class="icon-badge">${icon("wallet", { size: 20 })}</span>
+        <div class="card-title" style="font-size:15px; margin-bottom:0;">Sua carteira</div>
+      </div>
+      <div class="row" style="margin-top:10px;">
         <span class="pill pill-coin">💰 você tem ${myCoins}</span>
         <span class="pill pill-muted">${ROLE_LABEL[otherRole()]}: ${coins[otherRole()] || 0}💰</span>
       </div>
