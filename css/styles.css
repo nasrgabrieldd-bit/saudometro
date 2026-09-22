@@ -845,7 +845,7 @@ label.field-label:first-child { margin-top: 0; }
 
 .stack { display: flex; flex-direction: column; gap: 10px; }
 .row { display: flex; gap: 10px; }
-.row > *:not(.avatar):not(.theme-toggle) { flex: 1; min-width: 0; }
+.row > *:not(.avatar):not(.theme-toggle):not(.icon-badge) { flex: 1; min-width: 0; }
 
 /* ---------- atalhos (hub da aba Recadinhos) ---------- */
 
@@ -870,6 +870,19 @@ label.field-label:first-child { margin-top: 0; }
   text-align: center;
 }
 .shortcut-card:active { transform: scale(0.97); }
+/* selo circular reutilizável pra um ícone ao lado de um título (ex.: carteira, seções) */
+.icon-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
 .shortcut-icon {
   width: 44px;
   height: 44px;
