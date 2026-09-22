@@ -1,3 +1,5 @@
+import { icon } from "./icons.js";
+
 const KEY = "saudometro-theme";
 
 function isDarkNow() {
@@ -8,7 +10,7 @@ function isDarkNow() {
 
 function updateIcons() {
   document.querySelectorAll(".theme-toggle").forEach((btn) => {
-    btn.textContent = isDarkNow() ? "☀️" : "🌙";
+    btn.innerHTML = icon(isDarkNow() ? "sun" : "moon", { size: 18 });
   });
 }
 

@@ -1,4 +1,5 @@
 import { initTheme } from "./theme.js";
+import { icon } from "./icons.js";
 import { initErrorReporting, isAccessDenied } from "./errors.js";
 import { installGuideHTML, isInstalled, canPromptInstall, promptInstall, shouldShowInstallHint, dismissInstallHint } from "./install.js";
 import { supabase, isConfigured } from "./supabaseClient.js";
@@ -316,7 +317,7 @@ async function updateStreakBadge() {
   if (badge) {
     if (streak > 1) {
       badge.hidden = false;
-      badge.textContent = `🔥${streak}`;
+      badge.innerHTML = `${icon("flame", { size: 14 })}${streak}`;
     } else {
       badge.hidden = true;
     }
@@ -766,18 +767,19 @@ async function renderHome() {
       </div>
       ${planejados.length < target ? `<button class="btn btn-secondary btn-block" style="margin-top:14px;" id="btn-goto-define">Definir encontros do mês</button>` : ""}
     </div>` : "";
-  html.next = feat("next") ? `    <div class="card">
+  html.next = feat("next") ? (upcoming ? `    <div class="card card-hero">
+      <div class="card-hero-eyebrow">Próximo encontro</div>
+      ${(() => {
+        const days = Math.round((startOfDay(parseISODate(upcoming.start_date)) - startOfDay(new Date())) / 86400000);
+        return days >= 0
+          ? `<div class="card-hero-number">${days} <span>${days === 1 ? "dia" : "dias"}</span></div>`
+          : `<div class="card-hero-number" style="font-size:22px;">${escapeHTML(upcoming.title) || defaultTitle(upcoming)}</div>`;
+      })()}
+      <div class="card-hero-sub">${humanDateLong(parseISODate(upcoming.start_date))}${upcoming.title ? ` · ${escapeHTML(upcoming.title)}` : ""}</div>
+    </div>` : `    <div class="card">
       <div class="card-title">Próximo encontro</div>
-      ${upcoming ? `
-        <div class="entry-item" style="border:none; padding:6px 0;">
-          <div class="entry-icon">${iconFor(upcoming)}</div>
-          <div class="entry-body">
-            <div class="entry-title">${escapeHTML(upcoming.title) || defaultTitle(upcoming)}</div>
-            <div class="entry-meta">${humanDateLong(parseISODate(upcoming.start_date))} · ${daysUntilLabel(parseISODate(upcoming.start_date))}</div>
-          </div>
-        </div>
-      ` : `<p class="center-note" style="padding:6px 0;">Nada marcado ainda. Que tal combinar um? 💕</p>`}
-    </div>` : "";
+      <p class="center-note" style="padding:6px 0;">Nada marcado ainda. Que tal combinar um? 💕</p>
+    </div>`) : "";
   html.recharge = feat("recharge") ? `    <div class="card" id="weekend-card" style="cursor:pointer;">
       <div class="switch-row">
         <div>
@@ -3328,6 +3330,13 @@ async function showAdminStats(key) {
 
 // ---------------- start ----------------
 
+function applyStaticIcons() {
+  document.querySelectorAll("[data-icon]").forEach((el) => {
+    el.innerHTML = icon(el.dataset.icon, { size: 22 });
+  });
+}
+
 initTheme();
+applyStaticIcons();
 initErrorReporting();
 boot();
