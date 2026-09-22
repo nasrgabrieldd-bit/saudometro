@@ -883,6 +883,25 @@ label.field-label:first-child { margin-top: 0; }
   flex: none;
 }
 
+.icon-badge.done { background: var(--success-soft); color: var(--success-text); }
+
+/* checklist do dia (Home) */
+.checklist-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: var(--surface-alt);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: left;
+}
+.checklist-row .icon-badge { width: 32px; height: 32px; }
+.checklist-label { flex: 1; font-size: 13.5px; font-weight: 700; color: var(--text); }
+.checklist-status { color: var(--success-text); display: flex; }
+
 .shortcut-icon {
   width: 44px;
   height: 44px;

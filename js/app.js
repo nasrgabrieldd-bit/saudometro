@@ -694,6 +694,30 @@ function todayMoodCardHTML(recentMoods, todayStr) {
     </div>`;
 }
 
+// checklist do dia na Home: só o que a própria pessoa já fez hoje (não expõe o do par)
+function checklistCardHTML(done) {
+  const items = [
+    { tab: "mood", tabIcon: "heart", label: "Registrar seu humor", done: done.mood },
+    { tab: "notes", tabIcon: "mail", label: "Mandar um recadinho", done: done.note },
+  ];
+  if (done.daily !== null) items.push({ tab: "notes", tabIcon: "target", label: "Responder o desafio do dia", done: done.daily });
+  const doneCount = items.filter((i) => i.done).length;
+  return `
+    <div class="card">
+      <div class="card-title" style="font-size:15px;">Hoje você já:</div>
+      <div class="hint-text" style="margin:-2px 0 10px;">${doneCount} de ${items.length}</div>
+      <div class="stack" style="gap:8px;">
+        ${items.map((i) => `
+          <button type="button" class="checklist-row" data-tab="${i.tab}">
+            <span class="icon-badge ${i.done ? "done" : ""}">${icon(i.tabIcon, { size: 18 })}</span>
+            <span class="checklist-label">${i.label}</span>
+            <span class="checklist-status">${i.done ? icon("check", { size: 16 }) : ""}</span>
+          </button>
+        `).join("")}
+      </div>
+    </div>`;
+}
+
 async function renderHome() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const mk = monthKey(new Date());
@@ -705,6 +729,15 @@ async function renderHome() {
     db.getMoodHistory(State.coupleId, toISODate(addDays(new Date(), -2))),
   ]);
   const todayStr = todayISO();
+
+  // só busca se o casal tiver o checklist ligado (evita 2 consultas extras à toa pros outros casais)
+  let checklistNotes = null, checklistDaily = null;
+  if (homeWidgetOn("checklist")) {
+    [checklistNotes, checklistDaily] = await Promise.all([
+      db.listRecentSweetNotes(State.coupleId, 5),
+      feat("daily") ? db.getChallengeAnswersForDay(State.coupleId, todayStr) : Promise.resolve([]),
+    ]);
+  }
 
   const target = plan.base_target + plan.carry_in;
   const planejados = encounters.filter((e) => e.kind === "planejado");
@@ -801,6 +834,11 @@ async function renderHome() {
   html.mood = todayMoodCardHTML(recentMoods, todayStr);
   html.together = togetherCardHTML();
   html.special = specialCardHTML(nextSpecial);
+  html.checklist = checklistNotes ? checklistCardHTML({
+    mood: recentMoods.some((m) => m.role === State.role && m.day === todayStr),
+    note: checklistNotes.some((n) => n.role === State.role && n.created_at.slice(0, 10) === todayStr),
+    daily: feat("daily") ? checklistDaily.some((a) => a.role === State.role) : null,
+  }) : "";
   // sem nenhum card ligado, ainda mostra como os dois estão hoje
   const widgetIds = homeOrder().filter(homeWidgetOn);
 
@@ -833,6 +871,9 @@ ${widgetIds.map((id) => html[id] || "").join("")}
   $("#today-mood-card")?.addEventListener("click", () => setActiveTab("mood"));
   $("#together-card")?.addEventListener("click", openTogetherModal);
   $("#special-card")?.addEventListener("click", () => setActiveTab("calendar"));
+  view.querySelectorAll(".checklist-row").forEach((btn) => {
+    btn.addEventListener("click", () => setActiveTab(btn.dataset.tab));
+  });
   $("#weekend-card")?.addEventListener("click", () => openWeekendModal(nextWeekendFriday));
   $("#mood-reminder-banner")?.addEventListener("click", () => setActiveTab("mood"));
   $("#install-banner")?.addEventListener("click", openInstallGuide);
@@ -2788,6 +2829,7 @@ const HOME_META = {
   mood: { t: "Humor de hoje", d: "Como cada um está hoje", nw: true },
   together: { t: "Dias juntos", d: "Contador desde a data que vocês escolherem", nw: true },
   special: { t: "Próxima data especial", d: "Aniversário de namoro e outras datas que vocês criaram", nw: true },
+  checklist: { t: "Checklist do dia", d: "O que você já fez hoje: humor, recadinho e desafio do dia", nw: true },
 };
 
 const FEATURE_LIST = [

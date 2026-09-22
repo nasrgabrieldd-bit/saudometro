@@ -77,8 +77,8 @@ export function goalTarget() {
 }
 
 // cards da tela inicial: os antigos ficam ligados por padrão; os novos (humor, dias juntos, data especial) só se o casal ligar
-export const HOME_WIDGETS = ["kiss", "goal", "next", "recharge", "miss", "mood", "together", "special"];
-const OPT_IN_WIDGETS = ["mood", "together", "special"];
+export const HOME_WIDGETS = ["kiss", "goal", "next", "recharge", "miss", "mood", "together", "special", "checklist"];
+const OPT_IN_WIDGETS = ["mood", "together", "special", "checklist"];
 
 export function featOn(key) {
   return settings?.features?.[key] === true;
