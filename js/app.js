@@ -2473,8 +2473,11 @@ async function renderProfile() {
     </div>
 
     <div class="card">
-      <div class="card-title" style="font-size:15px;">🎛️ Personalizar nosso app</div>
-      <div class="card-sub">Ligue e desligue recursos e ajuste a tela inicial do jeito de vocês.</div>
+      <div class="row" style="align-items:center; gap:10px;">
+        <span class="icon-badge">${icon("settings", { size: 20 })}</span>
+        <div class="card-title" style="font-size:15px; margin-bottom:0;">Personalizar nosso app</div>
+      </div>
+      <div class="card-sub" style="margin-top:10px;">Ligue e desligue recursos e ajuste a tela inicial do jeito de vocês.</div>
       <button class="btn btn-secondary btn-block" id="btn-personalize">Personalizar</button>
     </div>
 
