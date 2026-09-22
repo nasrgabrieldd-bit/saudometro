@@ -16,6 +16,9 @@ const PATHS = {
   flame: '<path d="M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4" />',
   "chevron-left": '<path d="m15 18-6-6 6-6" />',
   "chevron-right": '<path d="m9 18 6-6-6-6" />',
+  target: '<circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" />',
+  clock: '<circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />',
+  gift: '<path d="M12 7v14" /><path d="M20 11v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8" /><path d="M7.5 7a1 1 0 0 1 0-5A4.8 8 0 0 1 12 7a4.8 8 0 0 1 4.5-5 1 1 0 0 1 0 5" /><rect x="3" y="7" width="18" height="4" rx="1" />',
 };
 
 // devolve o <svg> pronto pra colar no HTML. size em px; class extra opcional.

@@ -1932,7 +1932,8 @@ async function renderNotesHub() {
   const readyRedemptions = redemptions.filter((r) => r.redeemed_by === State.role && r.reveal_on <= todayStr && !r.fulfilled);
 
   view.innerHTML = `
-    <div class="section-title">💌 Recadinho fofo</div>
+    <div class="card-tab-wrap">
+      <span class="card-tab">💌 Recadinho fofo</span>
     <div class="card">
       ${theirNoteToday ? `<div class="entry-meta" style="margin-bottom:10px; color:var(--text);">${ROLE_LABEL[otherRole()]}: "${escapeHTML(theirNoteToday.message)}"</div>${noteReactions ? reactionBarHTML("note", theirNoteToday.id, noteReactions) : ""}` : ""}
       ${noteReactions && myLastNote ? reactionGotHTML(myLastNote.id, noteReactions, "ao seu último recadinho") : ""}
@@ -1940,27 +1941,28 @@ async function renderNotesHub() {
       <button class="btn btn-primary btn-block" style="margin-top:12px;" id="btn-send-note">💌 Mandar recadinho</button>
       <button class="btn btn-ghost btn-block" style="margin-top:8px;" id="btn-notes-history">Ver histórico completo →</button>
     </div>
+    </div>
 
     <div class="section-title">Atalhos</div>
     <div class="shortcut-grid">
 ${feat("daily") ? `      <button class="shortcut-card" data-view="challenge">
-        <span class="shortcut-icon">🎯</span>
+        <span class="shortcut-icon">${icon("target", { size: 24 })}</span>
         <span class="shortcut-title">Desafio do dia</span>
         <span class="shortcut-sub">${myAnswerToday ? "Respondido ✓" : "Responder agora"}</span>
       </button>` : ""}
 ${feat("capsule") ? `      <button class="shortcut-card" data-view="capsule">
-        <span class="shortcut-icon">🕰️</span>
+        <span class="shortcut-icon">${icon("clock", { size: 24 })}</span>
         <span class="shortcut-title">Cápsula do tempo</span>
         <span class="shortcut-sub">${capsules.length ? `${capsules.length} guardada${capsules.length === 1 ? "" : "s"}` : "Nenhuma ainda"}</span>
       </button>` : ""}
 ${feat("wishes") ? `      <button class="shortcut-card" data-view="wishes">
-        <span class="shortcut-icon">🎁</span>
+        <span class="shortcut-icon">${icon("gift", { size: 24 })}</span>
         <span class="shortcut-title">Desejos secretos</span>
         <span class="shortcut-sub">${readyRedemptions.length ? "Tem resgate revelado!" : "Ver desejos"}</span>
         ${readyRedemptions.length ? `<span class="dot-badge" style="position:absolute; top:10px; right:10px;"></span>` : ""}
       </button>` : ""}
       <button class="shortcut-card" data-view="invites">
-        <span class="shortcut-icon">✉️</span>
+        <span class="shortcut-icon">${icon("mail", { size: 24 })}</span>
         <span class="shortcut-title">Convites</span>
         <span class="shortcut-sub">${pendingInvites.length ? `${pendingInvites.length} esperando você` : "Nenhum pendente"}</span>
         ${pendingInvites.length ? `<span class="dot-badge" style="position:absolute; top:10px; right:10px;"></span>` : ""}
