@@ -2444,6 +2444,12 @@ async function renderShop() {
   const fulfilled = redemptions.filter((r) => r.status === "cumprido");
   const customPerks = customRows.map(customToPerk);
   const perkById = { ...PERK_BY_ID, ...Object.fromEntries(customPerks.map((p) => [p.id, p])) };
+  // valor que o casal ajustou pra um item geral (não mexe nos outros casais, só no de vocês)
+  const perkCosts = State.settings?.features?.perk_costs || {};
+  for (const id of Object.keys(PERK_BY_ID)) {
+    const ov = perkCosts[id];
+    if (Number.isInteger(ov) && ov >= 1 && ov <= 200) perkById[id] = { ...PERK_BY_ID[id], cost: ov, fulfillReward: suggestedReward(ov) };
+  }
   // item apagado depois de resgatado: usa a recompensa sugerida pelo custo que ficou registrado
   const rewardFor = (r) => perkById[r.perk_id]?.fulfillReward ?? suggestedReward(r.cost);
 
@@ -2456,7 +2462,9 @@ async function renderShop() {
             <div class="card-title" style="font-size:15px;">${escapeHTML(gen(p.title, genderOf(State.role)))}</div>
             ${p.desc ? `<div class="card-sub">${escapeHTML(p.desc)}</div>` : ""}
           </div>
-          ${p.custom ? `<button class="btn btn-ghost btn-sm" style="flex:none;" data-act="edit-perk" data-id="${p.rowId}">✏️ Editar</button>` : ""}
+          ${p.custom
+            ? `<button class="btn btn-ghost btn-sm" style="flex:none;" data-act="edit-perk" data-id="${p.rowId}">✏️ Editar</button>`
+            : `<button class="btn btn-ghost btn-sm" style="flex:none;" data-act="edit-cost" data-id="${p.id}">✏️ Valor</button>`}
         </div>
         <button class="btn ${myCoins >= p.cost ? "btn-warm" : "btn-secondary"} btn-block" data-act="redeem" data-perk="${p.id}" ${myCoins < p.cost ? "disabled" : ""}>Resgatar (💰 ${p.cost})</button>
       </div>
@@ -2497,7 +2505,7 @@ async function renderShop() {
 
     <div class="section-title">Trocar moedas por</div>
     <div class="stack">
-      ${PERKS.filter((x) => !perkHidden(x.id)).map(perkCardHTML).join("")}
+      ${PERKS.filter((x) => !perkHidden(x.id)).map((x) => perkById[x.id] || x).map(perkCardHTML).join("")}
     </div>
 
     <div class="section-title">Criados por vocês 💡</div>
@@ -2553,6 +2561,9 @@ async function renderShop() {
   $("#btn-new-perk").addEventListener("click", () => openPerkModal(null));
   view.querySelectorAll("[data-act='edit-perk']").forEach((btn) => {
     btn.addEventListener("click", () => openPerkModal(customRows.find((r) => r.id === btn.dataset.id)));
+  });
+  view.querySelectorAll("[data-act='edit-cost']").forEach((btn) => {
+    btn.addEventListener("click", () => openPerkCostModal(perkById[btn.dataset.id]));
   });
   view.querySelectorAll("[data-act='undo-fulfill']").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -2623,6 +2634,50 @@ function openPerkModal(existing) {
     if (!confirm(`Apagar "${existing.title}" da lojinha? Resgates já feitos continuam valendo.`)) return;
     try {
       await db.deleteCustomPerk(existing.id);
+      closeModal();
+      await renderShop();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+    }
+  });
+}
+
+// deixa o casal ajustar o valor de um item GERAL da lojinha (não mexe nos outros casais).
+// pra itens criados por vocês, a edição completa já é pelo botão "✏️ Editar" (openPerkModal).
+function openPerkCostModal(perk) {
+  const base = PERK_BY_ID[perk.id];
+  const isCustomValue = perk.cost !== base.cost;
+  openModal(`
+    <h3 class="modal-title">✏️ Valor deste item</h3>
+    <p class="card-sub">${perk.emoji} ${escapeHTML(gen(perk.title, genderOf(State.role)))}</p>
+    <p class="hint-text">Isso só muda pro seu casal — outros casais continuam vendo o valor padrão (${base.cost}).</p>
+    <label class="field-label">Custo em moedas</label>
+    <input type="number" id="perk-cost-value" min="1" max="200" value="${perk.cost}" />
+    <button class="btn btn-primary btn-block" style="margin-top:16px;" id="save-perk-cost">Salvar</button>
+    ${isCustomValue ? `<button class="btn btn-ghost btn-block" style="margin-top:8px;" id="reset-perk-cost">Voltar ao valor padrão (${base.cost})</button>` : ""}
+  `);
+  $("#save-perk-cost").addEventListener("click", async () => {
+    const cost = parseInt($("#perk-cost-value").value, 10);
+    if (!cost || cost < 1 || cost > 200) { alert("O custo tem que ser entre 1 e 200 moedas."); return; }
+    setBusy("#save-perk-cost", true);
+    try {
+      State.settings = await db.updateCoupleFeatures(State.coupleId, (f) => ({ ...f, perk_costs: { ...(f.perk_costs || {}), [perk.id]: cost } }));
+      setPeopleSettings(State.settings);
+      closeModal();
+      await renderShop();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#save-perk-cost", false);
+    }
+  });
+  $("#reset-perk-cost")?.addEventListener("click", async () => {
+    try {
+      State.settings = await db.updateCoupleFeatures(State.coupleId, (f) => {
+        const perk_costs = { ...(f.perk_costs || {}) };
+        delete perk_costs[perk.id];
+        return { ...f, perk_costs };
+      });
+      setPeopleSettings(State.settings);
       closeModal();
       await renderShop();
     } catch (e) {
