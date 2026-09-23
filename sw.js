@@ -1,5 +1,5 @@
 // bump isso a cada deploy relevante: força limpar cache velho do celular
-const CACHE_VERSION = "v9";
+const CACHE_VERSION = "v10";
 const CACHE_NAME = `saudometro-${CACHE_VERSION}`;
 
 // o "casco" do app: guardado no aparelho pra o app abrir mesmo sem internet
@@ -9,7 +9,7 @@ const SHELL = [
   "./", "index.html", "manifest.json", "privacidade.html", "icons/icon.png",
   "css/fonts.css", "css/styles.css",
   "fonts/baloo2-latin-ext.woff2", "fonts/baloo2-latin.woff2", "fonts/nunito-latin-ext.woff2", "fonts/nunito-latin.woff2",
-  "js/app.js", "js/captcha.js", "js/challenges.js", "js/cycle.js", "js/db.js", "js/errors.js", "js/friends.js", "js/icons.js", "js/install.js", "js/moods.js",
+  "js/app.js", "js/captcha.js", "js/challenges.js", "js/cycle.js", "js/db.js", "js/errors.js", "js/friends.js", "js/friendsPerks.js", "js/icons.js", "js/install.js", "js/moods.js",
   "js/nudges.js", "js/people.js", "js/perks.js", "js/photo.js", "js/push.js", "js/questions.js", "js/supabaseClient.js",
   "js/theme.js", "js/util.js", "js/vendor/supabase.js",
 ];
