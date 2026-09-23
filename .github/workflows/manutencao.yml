@@ -1,6 +1,7 @@
 name: Manutenção do banco
 
-# Todo dia: "acorda" o banco pra o Supabase gratuito não pausar por inatividade.
+# Todo dia: "acorda" o banco pra o Supabase gratuito não pausar por inatividade, e apaga as fotos
+# de "Lembrei de você" que passaram de 30 dias (arquivo incluído, não só o registro).
 # Todo domingo: guarda uma cópia criptografada de todos os dados (fica 90 dias na aba Actions).
 # Também dá pra rodar na mão: Actions > Manutenção do banco > Run workflow.
 on:
@@ -12,7 +13,7 @@ on:
       tarefa:
         description: "O que rodar"
         type: choice
-        options: [tudo, acordar, backup]
+        options: [tudo, acordar, limpar-lembrancas, backup]
         default: tudo
 
 permissions:
@@ -23,7 +24,7 @@ env:
 
 jobs:
   acordar:
-    if: github.event_name == 'workflow_dispatch' && inputs.tarefa != 'backup' || github.event.schedule == '17 9 * * *'
+    if: github.event.schedule == '17 9 * * *' || github.event_name == 'workflow_dispatch' && (inputs.tarefa == 'tudo' || inputs.tarefa == 'acordar')
     runs-on: ubuntu-latest
     steps:
       - name: Acordar o banco
@@ -34,8 +35,21 @@ jobs:
             -H "apikey: $SUPABASE_PUBLISHABLE_KEY" -H "Content-Type: application/json" -d '{}'
           echo
 
+  limpar-lembrancas:
+    if: github.event.schedule == '17 9 * * *' || github.event_name == 'workflow_dispatch' && (inputs.tarefa == 'tudo' || inputs.tarefa == 'limpar-lembrancas')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Apagar fotos de "Lembrei de você" com mais de 30 dias
+        env:
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: node scripts/cleanup-memories.mjs
+
   backup:
-    if: github.event_name == 'workflow_dispatch' && inputs.tarefa != 'acordar' || github.event.schedule == '43 9 * * 0'
+    if: github.event.schedule == '43 9 * * 0' || github.event_name == 'workflow_dispatch' && (inputs.tarefa == 'tudo' || inputs.tarefa == 'backup')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

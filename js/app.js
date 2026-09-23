@@ -1,5 +1,6 @@
 import { initTheme } from "./theme.js";
 import { icon } from "./icons.js";
+import { compressImage } from "./photo.js";
 import { initErrorReporting, isAccessDenied } from "./errors.js";
 import { installGuideHTML, isInstalled, canPromptInstall, promptInstall, shouldShowInstallHint, dismissInstallHint } from "./install.js";
 import { supabase, isConfigured } from "./supabaseClient.js";
@@ -1937,7 +1938,7 @@ async function renderNotes() {
   const map = {
     hub: renderNotesHub, history: renderNotesHistory,
     challenge: renderChallengeView, capsule: renderCapsuleView,
-    wishes: renderWishesView, invites: renderInvites,
+    wishes: renderWishesView, invites: renderInvites, memories: renderMemoriesView,
   };
   (map[State.notesView] || renderNotesHub)();
 }
@@ -1946,7 +1947,7 @@ async function renderNotesHub() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const todayStr = todayISO();
 
-  const [notes, noteReactions, todayAnswers, capsules, redemptions, invites, coins] = await Promise.all([
+  const [notes, noteReactions, todayAnswers, capsules, redemptions, invites, coins, memories, memoryReactions] = await Promise.all([
     db.listRecentSweetNotes(State.coupleId, 5),
     db.listReactions(State.coupleId, "note").catch(() => null), // null = recurso ainda não ativado no banco
     db.getChallengeAnswersForDay(State.coupleId, todayStr),
@@ -1954,7 +1955,10 @@ async function renderNotesHub() {
     db.listWishRedemptions(State.coupleId),
     db.listAllInvites(State.coupleId),
     feat("miss") ? db.getCoinBalances(State.coupleId) : Promise.resolve({}),
+    db.listMemories(State.coupleId, 10).catch(() => null), // null = recurso ainda não ativado no banco
+    db.listReactions(State.coupleId, "memory").catch(() => null),
   ]);
+  const memoriesPending = memories ? memories.filter((m) => m.role !== State.role && m.reply_role !== State.role && !(memoryReactions || []).some((r) => r.target_id === m.id && r.role === State.role)).length : 0;
 
   const myLastNote = notes.find((n) => n.role === State.role);
   const iSentToday = notes.some((n) => n.role === State.role && n.created_at.slice(0, 10) === todayStr);
@@ -2007,6 +2011,12 @@ ${feat("wishes") ? `      <button class="shortcut-card" data-view="wishes">
         <span class="shortcut-title">Convites</span>
         <span class="shortcut-sub">${pendingInvites.length ? `${pendingInvites.length} esperando você` : "Nenhum pendente"}</span>
         ${pendingInvites.length ? `<span class="dot-badge" style="position:absolute; top:10px; right:10px;"></span>` : ""}
+      </button>
+      <button class="shortcut-card" data-view="memories">
+        <span class="shortcut-icon">${icon("camera", { size: 24 })}</span>
+        <span class="shortcut-title">Lembrei de você</span>
+        <span class="shortcut-sub">${memories === null ? "Ver" : memoriesPending ? `${memoriesPending} nova${memoriesPending === 1 ? "" : "s"}` : "Mandar uma foto"}</span>
+        ${memoriesPending ? `<span class="dot-badge" style="position:absolute; top:10px; right:10px;"></span>` : ""}
       </button>
     </div>
   `;
@@ -2149,6 +2159,142 @@ async function renderCapsuleView() {
       alert("Não deu: " + (e.message || e));
       setBusy("#btn-seal-capsule", false);
     }
+  });
+}
+
+// ---------------- Lembrei de você ----------------
+
+function memoryItemHTML(m, myReaction, partnerReaction) {
+  const mine = m.role === State.role;
+  const reactedByMe = mine ? partnerReaction : myReaction; // reação de quem NÃO postou essa foto
+  const canRespond = !mine;
+  return `
+    <div class="card" data-memory="${m.id}">
+      <div class="row" style="align-items:center; margin-bottom:8px;">
+        <div class="card-title" style="font-size:14px; margin-bottom:0;">${ROLE_LABEL[m.role]}${mine ? " (você)" : ""}</div>
+        <div class="hint-text" style="margin:0;">${formatNoteTimestamp(m.created_at)}</div>
+      </div>
+      <div class="memory-photo-wrap"><img class="memory-photo" data-path="${escapeHTML(m.photo_path)}" alt="" /></div>
+      <div class="entry-meta" style="margin-top:8px; color:var(--text);">"${escapeHTML(m.caption)}"</div>
+      ${m.reply_text ? `
+        <div class="entry-meta" style="margin-top:8px; padding-top:8px; border-top:1px solid var(--border);">
+          <strong>${ROLE_LABEL[m.reply_role]}:</strong> "${escapeHTML(m.reply_text)}"
+        </div>
+      ` : ""}
+      ${reactedByMe ? `<div class="react-got"><span class="react-got-emoji">${reactedByMe}</span> reagiu</div>` : ""}
+      ${canRespond ? `
+        <div class="react-bar" data-memory-react="${m.id}" style="margin-top:10px;">
+          ${REACTION_EMOJIS.map((e) => `<button type="button" class="react-btn ${myReaction === e ? "selected" : ""}" data-emoji="${e}">${e}</button>`).join("")}
+        </div>
+        ${!m.reply_text ? `
+          <div class="row" style="margin-top:8px; gap:8px;">
+            <input type="text" class="memory-reply-input" data-id="${m.id}" maxlength="300" placeholder="escreve um comentário (opcional)" style="flex:1;" />
+            <button type="button" class="btn btn-secondary btn-sm" data-act="memory-reply" data-id="${m.id}" style="flex:none;">Comentar</button>
+          </div>
+        ` : ""}
+      ` : ""}
+    </div>
+  `;
+}
+
+async function renderMemoriesView() {
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const [memories, memoryReactions, todayCount] = await Promise.all([
+    db.listMemories(State.coupleId, 30),
+    db.listReactions(State.coupleId, "memory"),
+    db.countMyMemoriesToday(State.coupleId, State.role),
+  ]);
+  const atLimit = todayCount >= 5;
+
+  view.innerHTML = `
+    ${subViewHeader("📷 Lembrei de você")}
+    <div class="card">
+      <div class="card-sub">Uma foto de algo que te lembrou ${ROLE_LABEL[otherRole()]} hoje, com uma observação. Ex.: "esse Danone me lembrou de você..."</div>
+      ${atLimit ? `<p class="hint-text" style="margin-top:8px;">Você já mandou 5 hoje — o limite volta amanhã.</p>` : `
+        <input type="file" id="memory-file" accept="image/*" capture="environment" style="margin:10px 0; width:100%;" />
+        <div id="memory-preview" style="display:none; margin-bottom:10px; text-align:center;"><img id="memory-preview-img" style="max-width:100%; max-height:200px; border-radius:12px;" /></div>
+        <textarea id="memory-caption" rows="2" maxlength="300" placeholder="esse Danone me lembrou de você..."></textarea>
+        <button class="btn btn-primary btn-block" style="margin-top:12px;" id="btn-send-memory">📷 Mandar lembrança</button>
+        <p class="error-text" id="memory-err" style="margin-top:8px;" hidden></p>
+      `}
+    </div>
+
+    <div class="section-title">Lembranças</div>
+    <div class="stack" id="memory-list">
+      ${memories.length ? memories.map((m) => {
+        const myReaction = memoryReactions.find((r) => r.target_id === m.id && r.role === State.role)?.emoji;
+        const partnerReaction = memoryReactions.find((r) => r.target_id === m.id && r.role !== State.role)?.emoji;
+        return memoryItemHTML(m, myReaction, partnerReaction);
+      }).join("") : `<div class="empty-state">${icon("camera", { size: 34, className: "empty-icon" })}Nenhuma lembrança ainda. Mande a primeira foto!</div>`}
+    </div>
+    <p class="hint-text" style="text-align:center; margin-top:8px;">As fotos ficam guardadas por 30 dias e depois somem sozinhas.</p>
+  `;
+
+  wireNotesBack();
+
+  // mostra as fotos (o espaço é privado, então cada uma precisa de um link temporário)
+  view.querySelectorAll(".memory-photo").forEach((img) => {
+    db.memoryPhotoUrl(img.dataset.path).then((url) => { img.src = url; }).catch(() => { img.alt = "Não deu pra carregar a foto"; });
+  });
+
+  let selectedBlob = null;
+  $("#memory-file")?.addEventListener("change", async (ev) => {
+    const file = ev.target.files?.[0];
+    if (!file) return;
+    setBusy("#btn-send-memory", true);
+    try {
+      selectedBlob = await compressImage(file);
+      $("#memory-preview-img").src = URL.createObjectURL(selectedBlob);
+      $("#memory-preview").style.display = "";
+    } catch (e) {
+      $("#memory-err").hidden = false;
+      $("#memory-err").textContent = "Não deu pra usar essa foto: " + (e.message || e);
+    } finally {
+      setBusy("#btn-send-memory", false);
+    }
+  });
+
+  $("#btn-send-memory")?.addEventListener("click", async () => {
+    const caption = $("#memory-caption").value.trim();
+    if (!selectedBlob) { $("#memory-err").hidden = false; $("#memory-err").textContent = "Escolhe uma foto primeiro."; return; }
+    if (!caption) { $("#memory-err").hidden = false; $("#memory-err").textContent = "Escreve o que essa foto te lembrou."; return; }
+    setBusy("#btn-send-memory", true);
+    try {
+      await db.createMemory(State.coupleId, State.role, selectedBlob, caption);
+      await renderNotes();
+    } catch (e) {
+      $("#memory-err").hidden = false;
+      $("#memory-err").textContent = e.message === "limite_diario" ? "Você já mandou 5 hoje — o limite volta amanhã." : "Não deu: " + (e.message || e);
+      setBusy("#btn-send-memory", false);
+    }
+  });
+
+  async function respondTo(id, { emoji, reply }) {
+    try {
+      await db.reactToMemory(State.coupleId, id, State.role, { emoji, reply });
+      const gotPoint = await db.markMemoryPointsAwarded(id);
+      if (gotPoint) {
+        const m = memories.find((x) => x.id === id);
+        await Promise.all([earnCoins(State.role, coinRule("memory"), "lembrei de você"), earnCoins(m.role, coinRule("memory"), "lembrei de você")]);
+      }
+      await renderNotes();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+    }
+  }
+
+  view.querySelectorAll("[data-memory-react]").forEach((bar) => {
+    bar.querySelectorAll(".react-btn").forEach((btn) => {
+      btn.addEventListener("click", () => respondTo(bar.dataset.memoryReact, { emoji: btn.dataset.emoji }));
+    });
+  });
+  view.querySelectorAll("[data-act='memory-reply']").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const input = view.querySelector(`.memory-reply-input[data-id="${btn.dataset.id}"]`);
+      const reply = input?.value.trim();
+      if (!reply) return;
+      respondTo(btn.dataset.id, { reply });
+    });
   });
 }
 
@@ -2958,6 +3104,7 @@ const RULE_LIST = [
   { k: "weekly", t: "Responder a pergunta da semana", kind: "earn" },
   { k: "daily", t: "Responder o desafio do dia (1x por dia)", kind: "earn" },
   { k: "meet", t: "Encontro combinado aconteceu (pra cada um)", kind: "earn" },
+  { k: "memory", t: "Lembrei de você: quando o par reage (pra cada um)", kind: "earn" },
   { k: "accept", t: "Aceitar um convite", kind: "earn" },
   { k: "moodStreak", t: "Bônus de 7 dias seguidos de humor", kind: "earn" },
   { k: "login15", t: "Bônus de 15 dias seguidos usando o app (1x)", kind: "earn" },
@@ -2980,6 +3127,7 @@ function coinRulesHTML() {
   if (feat("weekly") && r("weekly") > 0) earn.push(`responder a pergunta da semana (+${r("weekly")})`);
   if (feat("daily") && r("daily") > 0) earn.push(`responder o desafio do dia (+${r("daily")}, uma vez por dia)`);
   if (r("accept") > 0) earn.push(`aceitar um convite (+${r("accept")})`);
+  if (r("memory") > 0) earn.push(`mandar ou reagir a uma lembrança em "Lembrei de você" (+${r("memory")} pra cada um)`);
   if (feat("streaks") && r("login15") > 0) earn.push(`15 dias seguidos usando o app (+${r("login15")}, uma vez)`);
   if (feat("streaks") && r("login30") > 0) earn.push(`30 dias seguidos (+${r("login30")}, uma vez)`);
   if (r("invite") > 0) earn.push("convite que você mandou foi recusado, a moeda volta");
@@ -3193,7 +3341,7 @@ async function collectMyData() {
     ["moods", "role"], ["sweet_notes", "role"], ["coin_ledger", "role"], ["weekly_answers", "role"],
     ["daily_challenge_answers", "role"], ["secret_wishes", "role"], ["time_capsules", "from_role"],
     ["wish_redemptions", "redeemed_by"], ["shop_redemptions", "role"], ["encounters", "created_by"],
-    ["app_opens", "role"], ["cycle_settings", "role"], ["reactions", "role"],
+    ["app_opens", "role"], ["cycle_settings", "role"], ["reactions", "role"], ["memory_photos", "role"],
   ];
   const out = { exportado_em: new Date().toISOString(), nome: myDisplayName(), papel: mine, casal_id: State.coupleId, dados: {} };
   for (const [table, col] of spec) {

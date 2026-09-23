@@ -103,7 +103,7 @@ export function togetherSince() {
 // regras de moedas de cada casal (0 = não dá / não cobra). Sem configuração, valem os padrões de sempre.
 export const COIN_DEFAULTS = {
   mood: 1, note: 1, weekly: 1, daily: 1, meet: 1, accept: 1, moodStreak: 5, login15: 10, login30: 25,
-  invite: 1, miss: 1, decline: 1, freeze: 1, wish: 3,
+  invite: 1, miss: 1, decline: 1, freeze: 1, wish: 3, memory: 4,
 };
 
 export function coinRule(key) {
