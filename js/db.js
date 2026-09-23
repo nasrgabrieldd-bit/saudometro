@@ -67,6 +67,13 @@ export async function getGoogleLinkStatus() {
   return !!data.user?.identities?.some((i) => i.provider === "google");
 }
 
+// sessão do jeito antigo (anônima, sem Google ligado ainda)
+export async function isAnonymousUser() {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) return false;
+  return !!data.user?.is_anonymous;
+}
+
 export async function findCoupleByCode(code) {
   const { data, error } = await supabase.rpc("find_couple_by_code", { p_code: code.trim().toUpperCase() });
   if (error) throw error;

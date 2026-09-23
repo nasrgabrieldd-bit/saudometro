@@ -279,6 +279,7 @@ async function enterApp(profile) {
   updateNotesNavBadge();
   if (feat("shop")) checkPendingDebts();
   maybeShowTour();
+  maybeShowGoogleLinkNudge();
 }
 
 // avisa assim que abre o app se o par te resgatou algo na lojinha que você ainda não cumpriu
@@ -3710,6 +3711,41 @@ function maybeShowTour() {
   };
   $("#tour-now").addEventListener("click", async () => { await markSeen(); closeModal(); openPersonalizeModal(); });
   $("#tour-later").addEventListener("click", async () => { await markSeen(); closeModal(); });
+}
+
+const GOOGLE_NUDGE_DISMISSED_KEY = "googleLinkNudgeDismissed";
+
+// convida quem ainda está no jeito antigo (sessão anônima, sem Google ligado) a ligar a conta —
+// uma vez só (guardado no localStorage), pra não repetir toda vez que abrir o app
+async function maybeShowGoogleLinkNudge() {
+  try {
+    if (localStorage.getItem(GOOGLE_NUDGE_DISMISSED_KEY) === "1") return;
+  } catch (e) { /* sem storage: só mostra sempre */ }
+  let anon = false;
+  try { anon = await db.isAnonymousUser(); } catch (e) { return; }
+  if (!anon) return;
+
+  openModal(`
+    <h3 class="modal-title">🔐 Ligar sua conta Google</h3>
+    <p class="card-sub">Recomendamos ligar sua conta Google ao seu perfil: ajuda a recuperar o acesso se você trocar de celular ou perder o código do casal, e é por essa mesma conta que dá pra usar o Modo Amigos.</p>
+    <button class="btn btn-primary btn-block" style="margin-top:14px;" id="btn-google-nudge-link">Ligar minha conta Google</button>
+    <button class="btn btn-ghost btn-block" style="margin-top:6px;" id="btn-google-nudge-dismiss">Agora não</button>
+  `);
+  $("#btn-google-nudge-link")?.addEventListener("click", async () => {
+    setBusy("#btn-google-nudge-link", true);
+    try {
+      const { error } = await db.linkGoogleIdentity();
+      if (error) throw error;
+      // a página navega pro Google e volta sozinha; nada mais a fazer aqui
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#btn-google-nudge-link", false);
+    }
+  });
+  $("#btn-google-nudge-dismiss")?.addEventListener("click", () => {
+    try { localStorage.setItem(GOOGLE_NUDGE_DISMISSED_KEY, "1"); } catch (e) { /* sem storage: só volta a aparecer */ }
+    closeModal();
+  });
 }
 
 
