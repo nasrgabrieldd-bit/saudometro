@@ -33,6 +33,25 @@ export async function ensureAnonSession() {
   return signed.session;
 }
 
+// login com Google: além do código do casal, não no lugar dele. Serve pra recuperar o acesso
+// se a pessoa trocar de celular ou perder o código. A página navega pro Google e volta sozinha.
+export function signInWithGoogle() {
+  const redirectTo = window.location.origin + window.location.pathname;
+  return supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo } });
+}
+
+// liga uma conta Google à sessão atual, SEM criar um usuário novo nem perder o casal/perfil já existente
+export function linkGoogleIdentity() {
+  const redirectTo = window.location.origin + window.location.pathname;
+  return supabase.auth.linkIdentity({ provider: "google", options: { redirectTo } });
+}
+
+export async function getGoogleLinkStatus() {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) return false;
+  return !!data.user?.identities?.some((i) => i.provider === "google");
+}
+
 export async function findCoupleByCode(code) {
   const { data, error } = await supabase.rpc("find_couple_by_code", { p_code: code.trim().toUpperCase() });
   if (error) throw error;
