@@ -40,3 +40,56 @@ export async function joinFriendGroup(code, displayName) {
   if (data?.error) throw new Error(data.error);
   return data;
 }
+
+// ---------- humor da turma ----------
+
+export async function getMoodsForDay(friendGroupId, dayISO) {
+  const { data, error } = await supabase.from("friend_moods").select("*").eq("friend_group_id", friendGroupId).eq("day", dayISO);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function setMyMood(friendGroupId, dayISO, userId, mood) {
+  const { error } = await supabase
+    .from("friend_moods")
+    .upsert({ friend_group_id: friendGroupId, day: dayISO, user_id: userId, mood }, { onConflict: "friend_group_id,day,user_id" });
+  if (error) throw error;
+}
+
+// ---------- prêmios (cofre de moedas do grupo) ----------
+
+export async function getGroupCoinBalance(friendGroupId) {
+  const { data, error } = await supabase.from("friend_coin_balances").select("balance").eq("friend_group_id", friendGroupId).maybeSingle();
+  if (error) throw error;
+  return data?.balance || 0;
+}
+
+export async function listGroupRedemptions(friendGroupId, limit = 30) {
+  const { data, error } = await supabase
+    .from("friend_redemptions")
+    .select("*")
+    .eq("friend_group_id", friendGroupId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function redeemGroupPerk(friendGroupId, userId, perk) {
+  const { error: err1 } = await supabase
+    .from("friend_coin_ledger")
+    .insert({ friend_group_id: friendGroupId, user_id: userId, delta: -perk.cost, reason: `resgate: ${perk.title}` });
+  if (err1) throw err1;
+  const { data, error: err2 } = await supabase
+    .from("friend_redemptions")
+    .insert({ friend_group_id: friendGroupId, user_id: userId, perk_id: perk.id, title: perk.title, cost: perk.cost, status: "pendente" })
+    .select()
+    .single();
+  if (err2) throw err2;
+  return data;
+}
+
+export async function markGroupRedemptionFulfilled(id) {
+  const { error } = await supabase.from("friend_redemptions").update({ status: "cumprido", fulfilled_at: new Date().toISOString() }).eq("id", id);
+  if (error) throw error;
+}

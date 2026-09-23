@@ -5,6 +5,7 @@ import { initErrorReporting, isAccessDenied } from "./errors.js";
 import { installGuideHTML, isInstalled, canPromptInstall, promptInstall, shouldShowInstallHint, dismissInstallHint } from "./install.js";
 import { supabase, isConfigured } from "./supabaseClient.js";
 import * as friends from "./friends.js";
+import { FRIEND_PERKS, FRIEND_PERK_BY_ID } from "./friendsPerks.js";
 import * as db from "./db.js";
 import { MOODS, MOOD_BY_ID, TALK_OPTIONS, TALK_BY_ID } from "./moods.js";
 import { weekIndexSince, questionForWeek } from "./questions.js";
@@ -42,6 +43,7 @@ const State = {
   unsubscribe: null,
   friendGroups: [],
   friendGroup: null,
+  friendsTab: "home",
 };
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -916,13 +918,22 @@ function friendsModalJoinStep() {
 
 // tela mínima do Modo Amigos (fundação) — as abas de verdade (rolês, humor, recados,
 // prêmios) chegam nas próximas etapas; por enquanto mostra o código e quem já entrou.
+const FRIENDS_TABS = [
+  { tab: "home", icon: "🏠", label: "Hoje" },
+  { tab: "roles", icon: "📅", label: "Rolês" },
+  { tab: "mood", icon: "🙂", label: "Humor" },
+  { tab: "notes", icon: "✉️", label: "Recados" },
+  { tab: "shop", icon: "🎁", label: "Prêmios" },
+  { tab: "group", icon: "⚙️", label: "Turma" },
+];
+
 async function enterFriendsMode(group) {
   if (State.unsubscribe) { State.unsubscribe(); State.unsubscribe = null; } // saindo do casal (se estava nele): para de ouvir as mudanças dele
   State.friendGroup = group;
+  State.friendsTab = "home";
   $("#screen-onboarding").style.display = "none";
   $("#screen-app").style.display = "none";
   $("#screen-friends").style.display = "flex";
-  const members = await friends.listGroupMembers(group.id).catch(() => []);
   $("#screen-friends").innerHTML = `
     <header class="topbar" style="background:var(--friends-accent-soft);">
       <div>
@@ -933,20 +944,10 @@ async function enterFriendsMode(group) {
         <button class="theme-toggle" id="friends-switch-btn" title="Trocar de conta">🔀</button>
       </div>
     </header>
-    <main style="flex:1; padding:20px 16px; overflow:auto;">
-      <div class="card" style="border-color:var(--friends-accent-soft);">
-        <p class="field-label" style="color:var(--friends-accent-strong);">Código da turma</p>
-        <p style="font-family:'Baloo 2'; font-size:22px; letter-spacing:0.04em;">${escapeHTML(group.code || "")}</p>
-        <p class="hint-text">Compartilhe esse código pra mais gente entrar na turma.</p>
-      </div>
-      <div class="card" style="margin-top:14px;">
-        <p class="field-label">Quem está na turma</p>
-        <div class="stack">
-          ${members.map((m) => `<div class="entry-item"><div class="entry-body"><div class="entry-title">${escapeHTML(m.display_name)}</div></div></div>`).join("") || '<p class="hint-text">Só você, por enquanto.</p>'}
-        </div>
-      </div>
-      <p class="hint-text" style="text-align:center; margin-top:24px;">O Modo Amigos ainda está sendo construído — logo mais tem rolê, humor, recados e prêmios por aqui também 🧭</p>
-    </main>
+    <main id="friends-view" style="flex:1; padding:20px 16px; overflow:auto;"></main>
+    <nav class="bottom-nav">
+      ${FRIENDS_TABS.map((t) => `<button class="nav-btn" data-friends-tab="${t.tab}"><span class="nav-icon">${t.icon}</span><span class="nav-label">${t.label}</span></button>`).join("")}
+    </nav>
   `;
   $("#friends-switch-btn")?.addEventListener("click", async () => {
     $("#screen-friends").style.display = "none";
@@ -954,6 +955,250 @@ async function enterFriendsMode(group) {
     State.friendGroups = await friends.listMyFriendGroups().catch(() => []);
     renderAccountSwitcher(State.profile, State.friendGroups);
   });
+  document.querySelectorAll("[data-friends-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => setFriendsTab(btn.dataset.friendsTab));
+  });
+  setFriendsTab("home");
+}
+
+function setFriendsTab(tab) {
+  State.friendsTab = tab;
+  document.querySelectorAll("[data-friends-tab]").forEach((b) => {
+    b.style.color = b.dataset.friendsTab === tab ? "var(--friends-accent-strong)" : "";
+  });
+  renderFriendsActiveTab();
+}
+
+function renderFriendsActiveTab() {
+  const map = {
+    home: renderFriendsHome,
+    roles: () => renderFriendsPlaceholder("📅", "Rolês", "Em breve: marcar o próximo encontro da turma e ver quem confirmou presença."),
+    mood: renderFriendsMood,
+    notes: () => renderFriendsPlaceholder("✉️", "Recados", "Em breve: mandar recado pra turma toda."),
+    shop: renderFriendsShop,
+    group: renderFriendsGroup,
+  };
+  Promise.resolve((map[State.friendsTab] || renderFriendsHome)()).catch((e) => alert("Deu ruim: " + (e.message || e)));
+}
+
+function renderFriendsPlaceholder(icon, title, text) {
+  $("#friends-view").innerHTML = `
+    <div class="card" style="text-align:center; padding:32px 20px;">
+      <div style="font-size:34px;">${icon}</div>
+      <div class="card-title" style="margin-top:8px;">${escapeHTML(title)}</div>
+      <p class="card-sub" style="margin-bottom:0;">${escapeHTML(text)}</p>
+    </div>
+  `;
+}
+
+// moods do casal que não fazem sentido pra uma turma de amigos (tom romântico) ficam de fora aqui
+const FRIENDS_MOODS = MOODS.filter((m) => !["apaixonada", "safadinha", "carinhosa"].includes(m.id));
+
+async function renderFriendsHome() {
+  const view = $("#friends-view");
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const today = todayISO();
+  const [members, todaysMoods, balance] = await Promise.all([
+    friends.listGroupMembers(State.friendGroup.id),
+    friends.getMoodsForDay(State.friendGroup.id, today).catch(() => []),
+    friends.getGroupCoinBalance(State.friendGroup.id).catch(() => 0),
+  ]);
+  const moodByUser = Object.fromEntries(todaysMoods.map((m) => [m.user_id, m.mood]));
+  const myMood = moodByUser[State.userId];
+
+  view.innerHTML = `
+    <div class="card" style="text-align:center; padding:28px 20px;">
+      <div style="font-size:30px;">🧭</div>
+      <div class="card-title" style="margin-top:6px;">Próximo rolê</div>
+      <p class="card-sub" style="margin-bottom:0;">Em breve: marquem o próximo encontro da turma aqui.</p>
+    </div>
+
+    <div class="card" style="margin-top:14px; cursor:pointer;" id="friends-home-mood-card">
+      <div class="card-title" style="font-size:15px;">Como a turma tá hoje</div>
+      <div class="row" style="gap:8px; margin-top:10px; flex-wrap:wrap;">
+        ${members.map((m) => {
+          const mood = moodByUser[m.user_id];
+          const info = mood ? MOOD_BY_ID[mood] : null;
+          return `
+            <div style="flex:1; min-width:64px; text-align:center; background:var(--surface-alt); border-radius:14px; padding:10px 6px;">
+              <div style="font-size:24px;">${info ? info.emoji : "🤔"}</div>
+              <div style="font-size:11px; font-weight:800; margin-top:2px;">${m.user_id === State.userId ? "Você" : escapeHTML(m.display_name)}</div>
+            </div>`;
+        }).join("")}
+      </div>
+      <p class="hint-text" style="margin-top:10px; margin-bottom:0;">${myMood ? "Toque pra ver ou mudar seu humor de hoje." : "Toque pra contar como você tá hoje."}</p>
+    </div>
+
+    <div class="card" style="margin-top:14px; position:relative; padding-top:26px;">
+      <span style="position:absolute; top:-14px; left:16px; background:var(--friends-accent-strong); color:var(--on-friends-accent); font-size:11.5px; font-weight:800; padding:6px 12px; border-radius:999px;">Desafio da semana</span>
+      <p class="card-sub" style="margin-bottom:0;">Em breve: um desafio novo toda semana pra turma participar junto.</p>
+    </div>
+
+    <div class="row" style="gap:12px; margin-top:14px;">
+      <div class="card" style="flex:1; text-align:center; padding:16px 10px;">
+        <div style="font-family:'Baloo 2'; font-weight:800; font-size:22px; color:var(--friends-accent-strong);">${balance}</div>
+        <div class="hint-text" style="margin:0;">moedas da turma</div>
+      </div>
+      <div class="card" style="flex:1; text-align:center; padding:16px 10px;">
+        <div style="font-family:'Baloo 2'; font-weight:800; font-size:22px; color:var(--friends-accent-strong);">${members.length}</div>
+        <div class="hint-text" style="margin:0;">na turma</div>
+      </div>
+    </div>
+  `;
+  $("#friends-home-mood-card")?.addEventListener("click", () => setFriendsTab("mood"));
+}
+
+async function renderFriendsMood() {
+  const view = $("#friends-view");
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const today = todayISO();
+  const [members, todaysMoods] = await Promise.all([
+    friends.listGroupMembers(State.friendGroup.id),
+    friends.getMoodsForDay(State.friendGroup.id, today).catch(() => []),
+  ]);
+  const moodByUser = Object.fromEntries(todaysMoods.map((m) => [m.user_id, m.mood]));
+  const myMood = moodByUser[State.userId];
+
+  view.innerHTML = `
+    <div class="section-title">Humor de hoje</div>
+    <div class="card">
+      <div class="stack">
+        ${members.map((m) => {
+          const mood = moodByUser[m.user_id];
+          const info = mood ? MOOD_BY_ID[mood] : null;
+          return `
+            <div class="entry-item">
+              <div class="entry-icon">${info ? info.emoji : "🤔"}</div>
+              <div class="entry-body">
+                <div class="entry-title">${m.user_id === State.userId ? "Você" : escapeHTML(m.display_name)}</div>
+                <div class="entry-meta">${info ? escapeHTML(gen(info.label, "homem")) : "ainda não registrou"}</div>
+              </div>
+            </div>`;
+        }).join("")}
+      </div>
+    </div>
+    <button class="btn btn-block" style="margin-top:14px; background:var(--friends-accent); color:var(--on-friends-accent);" id="friends-set-mood-btn">${myMood ? "Mudar meu humor de hoje" : "Contar como você tá hoje"}</button>
+  `;
+  $("#friends-set-mood-btn").addEventListener("click", () => openFriendsMoodPicker(myMood));
+}
+
+function openFriendsMoodPicker(current) {
+  openModal(`
+    <h3 class="modal-title">🙂 Como você tá hoje?</h3>
+    <div class="mood-grid">
+      ${FRIENDS_MOODS.map((m) => `<button class="mood-btn" ${m.id === current ? `style="border-color:var(--friends-accent); background:var(--friends-accent-soft);"` : ""} data-mood="${m.id}"><span class="emoji">${m.emoji}</span><span class="label">${escapeHTML(gen(m.label, "homem"))}</span></button>`).join("")}
+    </div>
+  `);
+  $("#modal-sheet").querySelectorAll("[data-mood]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      try {
+        await friends.setMyMood(State.friendGroup.id, todayISO(), State.userId, btn.dataset.mood);
+        closeModal();
+        await renderFriendsMood();
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+async function renderFriendsShop() {
+  const view = $("#friends-view");
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const [balance, redemptions] = await Promise.all([
+    friends.getGroupCoinBalance(State.friendGroup.id).catch(() => 0),
+    friends.listGroupRedemptions(State.friendGroup.id).catch(() => []),
+  ]);
+  const pending = redemptions.filter((r) => r.status === "pendente");
+
+  view.innerHTML = `
+    <div class="card" style="display:flex; align-items:center; gap:10px;">
+      <span class="icon-badge" style="background:var(--friends-accent-soft); color:var(--friends-accent-strong);">💰</span>
+      <div>
+        <div style="font-family:'Baloo 2'; font-weight:800; font-size:18px; color:var(--friends-accent-strong);">${balance} moedas</div>
+        <div class="hint-text" style="margin:0;">no cofre da turma</div>
+      </div>
+    </div>
+
+    <div class="section-title">Trocar moedas por</div>
+    ${FRIEND_PERKS.map((p) => `
+      <div class="card" style="margin-bottom:12px;">
+        <div class="row" style="align-items:flex-start; gap:10px;">
+          <span style="font-size:26px;">${p.emoji}</span>
+          <div style="flex:1;">
+            <div style="font-weight:800; font-size:14.5px;">${escapeHTML(p.title)}</div>
+            <div class="hint-text" style="margin:0;">${escapeHTML(p.sub)}</div>
+          </div>
+        </div>
+        <button class="btn btn-block" style="margin-top:10px; background:var(--friends-accent-soft); color:var(--friends-accent-strong);" data-redeem="${p.id}">Resgatar (💰 ${p.cost})</button>
+      </div>
+    `).join("")}
+
+    ${pending.length ? `
+      <div class="section-title">Pendentes</div>
+      <div class="card">
+        <div class="stack">
+          ${pending.map((r) => `
+            <div class="entry-item">
+              <div class="entry-icon">${FRIEND_PERK_BY_ID[r.perk_id]?.emoji || "🎁"}</div>
+              <div class="entry-body">
+                <div class="entry-title">${escapeHTML(r.title)}</div>
+                <div class="entry-meta">${r.user_id === State.userId ? "Resgatado por você" : "Resgatado por alguém da turma"}</div>
+              </div>
+              <button class="btn btn-ghost btn-sm" data-fulfill="${r.id}">Marcar cumprido</button>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    ` : ""}
+  `;
+  view.querySelectorAll("[data-redeem]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const perk = FRIEND_PERK_BY_ID[btn.dataset.redeem];
+      if (!confirm(`Resgatar "${perk.title}" por ${perk.cost} moedas do cofre da turma?`)) return;
+      btn.disabled = true;
+      try {
+        await friends.redeemGroupPerk(State.friendGroup.id, State.userId, perk);
+        await renderFriendsShop();
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        btn.disabled = false;
+      }
+    });
+  });
+  view.querySelectorAll("[data-fulfill]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      try {
+        await friends.markGroupRedemptionFulfilled(btn.dataset.fulfill);
+        await renderFriendsShop();
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+async function renderFriendsGroup() {
+  const view = $("#friends-view");
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const members = await friends.listGroupMembers(State.friendGroup.id).catch(() => []);
+  view.innerHTML = `
+    <div class="card" style="border-color:var(--friends-accent-soft);">
+      <p class="field-label" style="color:var(--friends-accent-strong);">Código da turma</p>
+      <p style="font-family:'Baloo 2'; font-size:22px; letter-spacing:0.04em;">${escapeHTML(State.friendGroup.code || "")}</p>
+      <p class="hint-text">Compartilhe esse código pra mais gente entrar na turma.</p>
+    </div>
+    <div class="card" style="margin-top:14px;">
+      <p class="field-label">Quem está na turma</p>
+      <div class="stack">
+        ${members.map((m) => `<div class="entry-item"><div class="entry-body"><div class="entry-title">${m.user_id === State.userId ? "Você" : escapeHTML(m.display_name)}</div></div></div>`).join("") || '<p class="hint-text">Só você, por enquanto.</p>'}
+      </div>
+    </div>
+  `;
 }
 
 // ================= HOME =================
