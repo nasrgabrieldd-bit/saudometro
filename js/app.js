@@ -5,7 +5,7 @@ import { initErrorReporting, isAccessDenied } from "./errors.js";
 import { installGuideHTML, isInstalled, canPromptInstall, promptInstall, shouldShowInstallHint, dismissInstallHint } from "./install.js";
 import { supabase, isConfigured } from "./supabaseClient.js";
 import * as friends from "./friends.js";
-import { FRIEND_PERKS, FRIEND_PERK_BY_ID } from "./friendsPerks.js";
+import { FRIEND_PERKS, FRIEND_PERK_BY_ID, FRIEND_PERK_CATEGORIES } from "./friendsPerks.js";
 import * as db from "./db.js";
 import { MOODS, MOOD_BY_ID, TALK_OPTIONS, TALK_BY_ID } from "./moods.js";
 import { weekIndexSince, questionForWeek } from "./questions.js";
@@ -945,6 +945,7 @@ async function enterFriendsMode(group) {
         <h1>${escapeHTML(group.name || "Minha turma")}</h1>
       </div>
       <div class="topbar-actions">
+        <span class="streak-badge" id="friends-streak-badge" title="Ofensiva da turma" hidden></span>
         <button class="theme-toggle" id="friends-switch-btn" title="Trocar de conta">🔀</button>
       </div>
     </header>
@@ -963,6 +964,7 @@ async function enterFriendsMode(group) {
     btn.addEventListener("click", () => setFriendsTab(btn.dataset.friendsTab));
   });
   setFriendsTab("home");
+  updateFriendsStreakBadge();
 }
 
 function setFriendsTab(tab) {
@@ -971,6 +973,60 @@ function setFriendsTab(tab) {
     b.style.color = b.dataset.friendsTab === tab ? "var(--friends-accent-strong)" : "";
   });
   renderFriendsActiveTab();
+}
+
+// sequência de dias em que a turma teve atividade — conta com "congelador" grátis: até 1 dia
+// de folga a cada 7 dias válidos não quebra a sequência (perda suave, sem cobrar moeda pra
+// proteger, diferente do casal — ver estudo sobre gamificação ética).
+function computeFriendsStreak(validDaysSet) {
+  let streak = 0;
+  let sinceFreePass = 99;
+  let cursor = startOfDay(new Date());
+  for (let i = 0; i < 400; i++) {
+    const iso = toISODate(cursor);
+    const isToday = isSameDate(cursor, new Date());
+    if (validDaysSet.has(iso)) {
+      streak++;
+      sinceFreePass++;
+    } else if (isToday) {
+      // hoje sem atividade ainda não quebra nada, só não soma ainda
+    } else if (sinceFreePass >= 7) {
+      sinceFreePass = 0; // congelador grátis desse "período" de 7 dias
+    } else {
+      break;
+    }
+    cursor = addDays(cursor, -1);
+  }
+  return streak;
+}
+
+async function updateFriendsStreakBadge() {
+  const todayIso = todayISO();
+  await friends.recordGroupActivityToday(State.friendGroup.id, todayIso).catch(() => {});
+  const sinceISO = toISODate(addDays(new Date(), -60));
+  const days = await friends.listStreakDays(State.friendGroup.id, sinceISO).catch(() => []);
+  const streak = computeFriendsStreak(new Set(days));
+  const badge = document.getElementById("friends-streak-badge");
+  if (badge) {
+    if (streak > 1) {
+      badge.hidden = false;
+      badge.innerHTML = `${icon("flame", { size: 14 })}${streak}`;
+    } else {
+      badge.hidden = true;
+    }
+  }
+  await maybeAwardFriendsStreakMilestone(streak);
+}
+
+const FRIENDS_STREAK_MILESTONES = { 15: 20, 30: 40 };
+
+async function maybeAwardFriendsStreakMilestone(streak) {
+  const amount = FRIENDS_STREAK_MILESTONES[streak];
+  if (!amount) return;
+  const reason = `sequência da turma: ${streak} dias`;
+  const recent = await friends.listCoinHistory(State.friendGroup.id, 200).catch(() => []);
+  if (recent.some((r) => r.reason === reason)) return; // já premiado esse marco
+  await friends.addCoinBonus(State.friendGroup.id, State.userId, amount, reason).catch(() => {});
 }
 
 function renderFriendsActiveTab() {
@@ -1522,14 +1578,31 @@ function openNewEventModal(dateISO, byId) {
   });
 }
 
+function perkCardHTML(p) {
+  return `
+    <div class="card" style="margin-bottom:12px;">
+      <div class="row" style="align-items:flex-start; gap:10px;">
+        <span style="font-size:26px;">${p.emoji}</span>
+        <div style="flex:1;">
+          <div style="font-weight:800; font-size:14.5px;">${escapeHTML(p.title)}</div>
+          <div class="hint-text" style="margin:0;">${escapeHTML(p.sub || p.description || "")}</div>
+        </div>
+        ${p.created_by === State.userId ? `<button class="btn btn-ghost btn-sm" style="padding:4px 8px;" data-delete-perk="${p.id}">Apagar</button>` : ""}
+      </div>
+      <button class="btn btn-block" style="margin-top:10px; background:var(--friends-accent-soft); color:var(--friends-accent-strong);" data-redeem="${p.id}">Resgatar (💰 ${p.cost})</button>
+    </div>`;
+}
+
 async function renderFriendsShop() {
   const view = $("#friends-view");
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
-  const [balance, redemptions] = await Promise.all([
+  const [balance, redemptions, customPerks] = await Promise.all([
     friends.getGroupCoinBalance(State.friendGroup.id).catch(() => 0),
     friends.listGroupRedemptions(State.friendGroup.id).catch(() => []),
+    friends.listCustomPerks(State.friendGroup.id).catch(() => []),
   ]);
   const pending = redemptions.filter((r) => r.status === "pendente");
+  const allPerks = { ...FRIEND_PERK_BY_ID, ...Object.fromEntries(customPerks.map((p) => [p.id, p])) };
 
   view.innerHTML = `
     <div class="card" style="display:flex; align-items:center; gap:10px;">
@@ -1540,19 +1613,14 @@ async function renderFriendsShop() {
       </div>
     </div>
 
-    <div class="section-title">Trocar moedas por</div>
-    ${FRIEND_PERKS.map((p) => `
-      <div class="card" style="margin-bottom:12px;">
-        <div class="row" style="align-items:flex-start; gap:10px;">
-          <span style="font-size:26px;">${p.emoji}</span>
-          <div style="flex:1;">
-            <div style="font-weight:800; font-size:14.5px;">${escapeHTML(p.title)}</div>
-            <div class="hint-text" style="margin:0;">${escapeHTML(p.sub)}</div>
-          </div>
-        </div>
-        <button class="btn btn-block" style="margin-top:10px; background:var(--friends-accent-soft); color:var(--friends-accent-strong);" data-redeem="${p.id}">Resgatar (💰 ${p.cost})</button>
-      </div>
+    ${Object.entries(FRIEND_PERK_CATEGORIES).map(([catId, cat]) => `
+      <div class="section-title">${cat.emoji} ${cat.label}</div>
+      ${FRIEND_PERKS.filter((p) => p.category === catId).map(perkCardHTML).join("")}
     `).join("")}
+
+    <div class="section-title">🙋 Criados pela turma</div>
+    ${customPerks.map(perkCardHTML).join("")}
+    <button class="btn btn-block" style="margin-bottom:12px; background:var(--friends-accent); color:var(--on-friends-accent);" id="friends-new-perk-btn">+ Criar prêmio pra turma</button>
 
     ${pending.length ? `
       <div class="section-title">Pendentes</div>
@@ -1560,7 +1628,7 @@ async function renderFriendsShop() {
         <div class="stack">
           ${pending.map((r) => `
             <div class="entry-item">
-              <div class="entry-icon">${FRIEND_PERK_BY_ID[r.perk_id]?.emoji || "🎁"}</div>
+              <div class="entry-icon">${allPerks[r.perk_id]?.emoji || "🎁"}</div>
               <div class="entry-body">
                 <div class="entry-title">${escapeHTML(r.title)}</div>
                 <div class="entry-meta">${r.user_id === State.userId ? "Resgatado por você" : "Resgatado por alguém da turma"}</div>
@@ -1572,13 +1640,27 @@ async function renderFriendsShop() {
       </div>
     ` : ""}
   `;
+  $("#friends-new-perk-btn").addEventListener("click", openNewCustomPerkModal);
   view.querySelectorAll("[data-redeem]").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      const perk = FRIEND_PERK_BY_ID[btn.dataset.redeem];
+      const perk = allPerks[btn.dataset.redeem];
       if (!confirm(`Resgatar "${perk.title}" por ${perk.cost} moedas do cofre da turma?`)) return;
       btn.disabled = true;
       try {
         await friends.redeemGroupPerk(State.friendGroup.id, State.userId, perk);
+        await renderFriendsShop();
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        btn.disabled = false;
+      }
+    });
+  });
+  view.querySelectorAll("[data-delete-perk]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Apagar esse prêmio da turma?")) return;
+      btn.disabled = true;
+      try {
+        await friends.deleteCustomPerk(btn.dataset.deletePerk);
         await renderFriendsShop();
       } catch (e) {
         alert("Não deu: " + (e.message || e));
@@ -1597,6 +1679,42 @@ async function renderFriendsShop() {
         btn.disabled = false;
       }
     });
+  });
+}
+
+function openNewCustomPerkModal() {
+  openModal(`
+    <h3 class="modal-title">🎁 Criar prêmio pra turma</h3>
+    <div class="stack">
+      <label class="field-label">Emoji</label>
+      <input type="text" id="fp-emoji" maxlength="4" value="🎁" style="text-align:center; width:60px; font-size:22px;" />
+      <label class="field-label">Título</label>
+      <input type="text" id="fp-title" maxlength="50" placeholder="ex: Escolhe a música do carro" />
+      <label class="field-label">Descrição (opcional)</label>
+      <input type="text" id="fp-desc" maxlength="80" placeholder="uma linha explicando" />
+      <label class="field-label">Custo em moedas</label>
+      <input type="number" id="fp-cost" min="1" max="500" value="10" />
+      <button class="btn btn-block" style="margin-top:6px; background:var(--friends-accent); color:var(--on-friends-accent);" id="fp-confirm">Criar</button>
+      <p class="error-text" id="fp-error"></p>
+    </div>
+  `);
+  $("#fp-confirm").addEventListener("click", async () => {
+    const emoji = $("#fp-emoji").value.trim() || "🎁";
+    const title = $("#fp-title").value.trim();
+    const desc = $("#fp-desc").value.trim();
+    const cost = parseInt($("#fp-cost").value, 10);
+    const err = (m) => { $("#fp-error").textContent = m; };
+    if (!title) return err("Escreve um título.");
+    if (!cost || cost < 1) return err("O custo precisa ser pelo menos 1 moeda.");
+    setBusy("#fp-confirm", true);
+    try {
+      await friends.createCustomPerk(State.friendGroup.id, State.userId, emoji, title, desc, cost);
+      closeModal();
+      await renderFriendsShop();
+    } catch (e) {
+      err("Não deu: " + (e.message || e));
+      setBusy("#fp-confirm", false);
+    }
   });
 }
 
