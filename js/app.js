@@ -2039,7 +2039,7 @@ async function renderNotesHistory() {
             ${noteReactions ? (n.role === State.role ? reactionGotHTML(n.id, noteReactions, "a esse recadinho") : reactionBarHTML("note", n.id, noteReactions)) : ""}
           </div>
         </div>
-      `).join("")}</div>` : `<div class="empty-state"><span class="emoji">💌</span>Nenhum recadinho ainda. Manda o primeiro!</div>`}
+      `).join("")}</div>` : `<div class="empty-state">${icon("mail", { size: 34, className: "empty-icon" })}Nenhum recadinho ainda. Manda o primeiro!</div>`}
     </div>
   `;
   wireNotesBack();
@@ -2329,7 +2329,7 @@ async function renderShop() {
           ${r.status === "pendente"
             ? `<div class="entry-actions"><button class="btn btn-success btn-sm" data-act="fulfill" data-id="${r.id}">Marcar como cumprido${reward ? ` (💰+${reward} pra quem fez)` : ""} ✅</button></div>`
             : `
-              <div class="entry-meta">cumprido ✅</div>
+              <div style="margin-top:4px;"><span class="pill pill-success">Cumprido ✅</span></div>
               <div class="entry-actions"><button class="btn btn-ghost btn-sm" data-act="undo-fulfill" data-id="${r.id}">↩️ Desfazer</button></div>
             `}
         </div>
@@ -2932,13 +2932,13 @@ async function findNextSpecialDate() {
 function specialCardHTML(n) {
   if (!n) {
     return `
-      <div class="card" id="special-card" style="cursor:pointer;">
+      <div class="card" id="special-card" style="cursor:pointer; background:var(--warm-soft);">
         <div class="card-title" style="font-size:15px;">💝 Próxima data especial</div>
         <div class="card-sub" style="margin-bottom:0;">Nenhuma ainda. Toque pra criar uma no calendário.</div>
       </div>`;
   }
   return `
-    <div class="card" id="special-card" style="cursor:pointer;">
+    <div class="card" id="special-card" style="cursor:pointer; background:var(--warm-soft);">
       <div class="card-title" style="font-size:15px;">💝 Próxima data especial</div>
       <div class="entry-item" style="border:none; padding:6px 0 0;">
         <div class="entry-icon">💝</div>
