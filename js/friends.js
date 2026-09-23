@@ -109,10 +109,22 @@ export async function listUpcomingEvents(friendGroupId, fromDateISO, limit = 20)
   return data || [];
 }
 
-export async function createEvent(friendGroupId, userId, title, startDateISO, startTime) {
+export async function listEventsForMonth(friendGroupId, monthStartISO, monthEndISO) {
   const { data, error } = await supabase
     .from("friend_events")
-    .insert({ friend_group_id: friendGroupId, title, start_date: startDateISO, start_time: startTime || null, created_by: userId })
+    .select("*, friend_event_rsvps(user_id, status)")
+    .eq("friend_group_id", friendGroupId)
+    .gte("start_date", monthStartISO)
+    .lt("start_date", monthEndISO)
+    .order("start_date", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createEvent(friendGroupId, userId, title, startDateISO, startTime, category) {
+  const { data, error } = await supabase
+    .from("friend_events")
+    .insert({ friend_group_id: friendGroupId, title, start_date: startDateISO, start_time: startTime || null, category: category || "amigos", created_by: userId })
     .select()
     .single();
   if (error) throw error;

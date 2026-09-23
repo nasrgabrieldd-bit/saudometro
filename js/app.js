@@ -44,6 +44,9 @@ const State = {
   friendGroups: [],
   friendGroup: null,
   friendsTab: "home",
+  friendsCalendarMonth: startOfMonth(new Date()),
+  friendsCalendarEvents: [],
+  friendsSelectedDay: null,
 };
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -1151,22 +1154,34 @@ function rsvpButtonHTML(eventId, status, label, mine) {
   return `<button class="btn btn-sm" style="flex:1; ${active ? "background:var(--friends-accent); color:var(--on-friends-accent);" : "background:var(--friends-accent-soft); color:var(--friends-accent-strong);"}" data-rsvp="${status}" data-event-id="${eventId}">${label}</button>`;
 }
 
-function roleCardHTML(ev, byId) {
+const FRIEND_EVENT_CATEGORIES = {
+  amigos: { emoji: "🧭", label: "Rolê" },
+  trabalho: { emoji: "💼", label: "Trabalho" },
+  outro: { emoji: "📌", label: "Outro" },
+};
+
+function friendsEntriesOnDay(dateISO) {
+  return (State.friendsCalendarEvents || []).filter((e) => e.start_date === dateISO);
+}
+
+function friendEventDetailItemHTML(ev, byId) {
+  const cat = FRIEND_EVENT_CATEGORIES[ev.category] || FRIEND_EVENT_CATEGORIES.outro;
   const rsvps = ev.friend_event_rsvps || [];
   const mine = rsvps.find((r) => r.user_id === State.userId)?.status;
   const going = rsvps.filter((r) => r.status === "sim");
   const goingNames = going.map((r) => (r.user_id === State.userId ? "Você" : byId[r.user_id] || "alguém")).join(", ");
   return `
-    <div class="card" style="margin-bottom:12px;">
+    <div class="entry-item" style="flex-direction:column; align-items:stretch;">
       <div class="row" style="align-items:flex-start;">
-        <div style="flex:1;">
-          <div class="card-title" style="font-size:15px; margin-bottom:2px;">${escapeHTML(ev.title)}</div>
-          <div class="hint-text" style="margin:0;">${escapeHTML(eventDateLine(ev))}</div>
+        <div class="entry-icon">${cat.emoji}</div>
+        <div class="entry-body">
+          <div class="entry-title">${escapeHTML(ev.title)}</div>
+          <div class="entry-meta">${cat.label}${ev.start_time ? ` · ${ev.start_time.slice(0, 5)}` : ""}</div>
         </div>
         ${ev.created_by === State.userId ? `<button class="btn btn-ghost btn-sm" style="padding:4px 8px;" data-delete-event="${ev.id}">Cancelar</button>` : ""}
       </div>
-      <p class="hint-text" style="margin-top:8px; margin-bottom:0;">${going.length ? `${going.length} confirmado${going.length === 1 ? "" : "s"}: ${escapeHTML(goingNames)}` : "Ninguém confirmou ainda."}</p>
-      <div class="row" style="gap:8px; margin-top:10px;">
+      <p class="hint-text" style="margin:6px 0 0;">${going.length ? `${going.length} confirmado${going.length === 1 ? "" : "s"}: ${escapeHTML(goingNames)}` : "Ninguém confirmou ainda."}</p>
+      <div class="row" style="gap:8px; margin-top:8px;">
         ${rsvpButtonHTML(ev.id, "sim", "Vou", mine)}
         ${rsvpButtonHTML(ev.id, "talvez", "Talvez", mine)}
         ${rsvpButtonHTML(ev.id, "nao", "Não vou", mine)}
@@ -1174,43 +1189,71 @@ function roleCardHTML(ev, byId) {
     </div>`;
 }
 
-async function renderFriendsRoles() {
-  const view = $("#friends-view");
-  view.innerHTML = `<div class="center-note">Carregando...</div>`;
-  const [members, events] = await Promise.all([
-    friends.listGroupMembers(State.friendGroup.id),
-    friends.listUpcomingEvents(State.friendGroup.id, todayISO()),
-  ]);
-  const byId = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
+function buildFriendsDayGrid(byId) {
+  const grid = $("#friends-day-grid");
+  const month = State.friendsCalendarMonth;
+  const total = daysInMonth(month);
+  const firstDow = mondayIndex(startOfMonth(month));
+  const leading = (firstDow + 1) % 7;
+  let html = "";
+  for (let i = 0; i < leading; i++) html += `<div class="day-cell empty"></div>`;
+  for (let day = 1; day <= total; day++) {
+    const date = new Date(month.getFullYear(), month.getMonth(), day);
+    const iso = toISODate(date);
+    const entries = friendsEntriesOnDay(iso);
+    const isToday = isSameDate(date, new Date());
+    const isSelected = iso === State.friendsSelectedDay;
+    const dots = entries.slice(0, 3).map((e) => (FRIEND_EVENT_CATEGORIES[e.category] || FRIEND_EVENT_CATEGORIES.outro).emoji).join("");
+    const style = [isToday ? "outline:2px solid var(--friends-accent); outline-offset:-2px;" : "", isSelected ? "background:var(--friends-accent-soft);" : ""].join(" ");
+    html += `<button class="day-cell" style="${style}" data-date="${iso}"><span class="num">${day}</span><span class="dots">${dots}</span></button>`;
+  }
+  grid.innerHTML = html;
+  grid.querySelectorAll(".day-cell:not(.empty)").forEach((cell) => {
+    cell.addEventListener("click", () => showFriendsDayDetail(cell.dataset.date, byId));
+  });
+}
 
-  view.innerHTML = `
-    <button class="btn btn-block" style="margin-bottom:14px; background:var(--friends-accent); color:var(--on-friends-accent);" id="friends-new-event-btn">+ Marcar um rolê</button>
-    ${events.length ? events.map((ev) => roleCardHTML(ev, byId)).join("") : `
-      <div class="card" style="text-align:center; padding:28px 20px;">
-        <div style="font-size:30px;">📅</div>
-        <p class="card-sub" style="margin-bottom:0;">Nenhum rolê marcado ainda.</p>
-      </div>`}
+function showFriendsDayDetail(iso, byId) {
+  State.friendsSelectedDay = iso;
+  document.querySelectorAll("#friends-day-grid .day-cell").forEach((c) => {
+    c.style.background = c.dataset.date === iso ? "var(--friends-accent-soft)" : "";
+  });
+  const entries = friendsEntriesOnDay(iso);
+  const entriesHTML = entries.length ? entries.map((e) => friendEventDetailItemHTML(e, byId)).join("") : `
+    <div class="empty-state"><span class="emoji">🗓️</span>Nada marcado nesse dia ainda.</div>
   `;
-  $("#friends-new-event-btn").addEventListener("click", openNewEventModal);
-  view.querySelectorAll("[data-rsvp]").forEach((btn) => {
+  $("#friends-day-detail").innerHTML = `
+    <div class="card">
+      <div class="card-title">${humanDateLong(parseISODate(iso))}</div>
+      <div class="stack" id="friends-entries-list">${entriesHTML}</div>
+      <button class="btn btn-block" style="margin-top:14px; background:var(--friends-accent); color:var(--on-friends-accent);" id="friends-add-event-day-btn">+ Marcar um rolê</button>
+    </div>
+  `;
+  $("#friends-add-event-day-btn").addEventListener("click", () => openNewEventModal(iso, byId));
+  wireFriendsEventDetailActions(byId);
+}
+
+function wireFriendsEventDetailActions(byId) {
+  const container = $("#friends-day-detail");
+  container.querySelectorAll("[data-rsvp]").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      view.querySelectorAll("[data-rsvp]").forEach((b) => { b.disabled = true; });
+      container.querySelectorAll("[data-rsvp], [data-delete-event]").forEach((b) => { b.disabled = true; });
       try {
         await friends.setMyRsvp(btn.dataset.eventId, State.userId, btn.dataset.rsvp);
-        await renderFriendsRoles();
+        await reloadFriendsCalendar(byId);
       } catch (e) {
         alert("Não deu: " + (e.message || e));
-        await renderFriendsRoles();
+        await reloadFriendsCalendar(byId);
       }
     });
   });
-  view.querySelectorAll("[data-delete-event]").forEach((btn) => {
+  container.querySelectorAll("[data-delete-event]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       if (!confirm("Cancelar esse rolê?")) return;
       btn.disabled = true;
       try {
         await friends.deleteEvent(btn.dataset.deleteEvent);
-        await renderFriendsRoles();
+        await reloadFriendsCalendar(byId);
       } catch (e) {
         alert("Não deu: " + (e.message || e));
         btn.disabled = false;
@@ -1219,32 +1262,100 @@ async function renderFriendsRoles() {
   });
 }
 
-function openNewEventModal() {
+async function reloadFriendsCalendar(byId) {
+  const month = State.friendsCalendarMonth;
+  const monthStart = toISODate(startOfMonth(month));
+  const monthEnd = toISODate(startOfMonth(addMonths(month, 1)));
+  State.friendsCalendarEvents = await friends.listEventsForMonth(State.friendGroup.id, monthStart, monthEnd);
+  buildFriendsDayGrid(byId);
+  if (State.friendsSelectedDay) showFriendsDayDetail(State.friendsSelectedDay, byId);
+}
+
+async function renderFriendsRoles() {
+  const view = $("#friends-view");
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const month = State.friendsCalendarMonth;
+  const monthStart = toISODate(startOfMonth(month));
+  const monthEnd = toISODate(startOfMonth(addMonths(month, 1)));
+  const [members, events] = await Promise.all([
+    friends.listGroupMembers(State.friendGroup.id),
+    friends.listEventsForMonth(State.friendGroup.id, monthStart, monthEnd),
+  ]);
+  State.friendsCalendarEvents = events;
+  const byId = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
+
+  view.innerHTML = `
+    <div class="month-nav">
+      <button id="friends-prev-month">${icon("chevron-left", { size: 18 })}</button>
+      <h2>${monthLabel(monthKey(month))}</h2>
+      <button id="friends-next-month">${icon("chevron-right", { size: 18 })}</button>
+    </div>
+    <div class="card">
+      <div class="weekday-row"><span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span></div>
+      <div class="day-grid" id="friends-day-grid"></div>
+      <div class="legend">
+        <span>🧭 rolê</span><span>💼 trabalho</span><span>📌 outro</span>
+      </div>
+    </div>
+    <div id="friends-day-detail"></div>
+  `;
+  buildFriendsDayGrid(byId);
+  if (State.friendsSelectedDay) showFriendsDayDetail(State.friendsSelectedDay, byId);
+  $("#friends-prev-month").addEventListener("click", () => {
+    State.friendsCalendarMonth = addMonths(State.friendsCalendarMonth, -1);
+    State.friendsSelectedDay = null;
+    renderFriendsRoles();
+  });
+  $("#friends-next-month").addEventListener("click", () => {
+    State.friendsCalendarMonth = addMonths(State.friendsCalendarMonth, 1);
+    State.friendsSelectedDay = null;
+    renderFriendsRoles();
+  });
+}
+
+function openNewEventModal(dateISO, byId) {
+  const date = dateISO || todayISO();
   openModal(`
     <h3 class="modal-title">📅 Marcar um rolê</h3>
     <div class="stack">
       <label class="field-label">O que vai rolar?</label>
       <input type="text" id="fe-title" maxlength="60" placeholder="ex: churrasco na casa do Duda" />
+      <label class="field-label">Categoria</label>
+      <div class="row" style="gap:8px;" id="fe-category-row">
+        ${Object.entries(FRIEND_EVENT_CATEGORIES).map(([id, c], i) => `<button type="button" class="btn ${i === 0 ? "" : "btn-ghost"} btn-sm" style="flex:1; ${i === 0 ? "background:var(--friends-accent-soft); color:var(--friends-accent-strong);" : ""}" data-category="${id}">${c.emoji} ${c.label}</button>`).join("")}
+      </div>
       <label class="field-label">Quando?</label>
-      <input type="date" id="fe-date" min="${todayISO()}" value="${todayISO()}" />
+      <input type="date" id="fe-date" min="${todayISO()}" value="${date}" />
       <label class="field-label">Hora (opcional)</label>
       <input type="time" id="fe-time" />
       <button class="btn btn-block" style="margin-top:6px; background:var(--friends-accent); color:var(--on-friends-accent);" id="fe-confirm">Marcar</button>
       <p class="error-text" id="fe-error"></p>
     </div>
   `);
+  let category = "amigos";
+  $("#fe-category-row").querySelectorAll("[data-category]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      category = btn.dataset.category;
+      $("#fe-category-row").querySelectorAll("[data-category]").forEach((b) => {
+        b.className = `btn ${b.dataset.category === category ? "" : "btn-ghost"} btn-sm`;
+        b.style.cssText = `flex:1; ${b.dataset.category === category ? "background:var(--friends-accent-soft); color:var(--friends-accent-strong);" : ""}`;
+      });
+    });
+  });
   $("#fe-confirm").addEventListener("click", async () => {
     const title = $("#fe-title").value.trim();
-    const date = $("#fe-date").value;
+    const fdate = $("#fe-date").value;
     const time = $("#fe-time").value;
     const err = (m) => { $("#fe-error").textContent = m; };
     if (!title) return err("Escreve o que vai rolar.");
-    if (!date) return err("Escolhe a data.");
+    if (!fdate) return err("Escolhe a data.");
     setBusy("#fe-confirm", true);
     try {
-      const created = await friends.createEvent(State.friendGroup.id, State.userId, title, date, time || null);
+      const created = await friends.createEvent(State.friendGroup.id, State.userId, title, fdate, time || null, category);
       await friends.setMyRsvp(created.id, State.userId, "sim").catch(() => {});
       closeModal();
+      State.friendsSelectedDay = fdate;
+      if (monthKey(State.friendsCalendarMonth) !== fdate.slice(0, 7)) State.friendsCalendarMonth = startOfMonth(parseISODate(fdate));
       await renderFriendsRoles();
     } catch (e) {
       err("Não deu: " + (e.message || e));
