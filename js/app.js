@@ -973,7 +973,7 @@ function setFriendsTab(tab) {
 function renderFriendsActiveTab() {
   const map = {
     home: renderFriendsHome,
-    roles: () => renderFriendsPlaceholder("📅", "Rolês", "Em breve: marcar o próximo encontro da turma e ver quem confirmou presença."),
+    roles: renderFriendsRoles,
     mood: renderFriendsMood,
     notes: () => renderFriendsPlaceholder("✉️", "Recados", "Em breve: mandar recado pra turma toda."),
     shop: renderFriendsShop,
@@ -995,24 +995,64 @@ function renderFriendsPlaceholder(icon, title, text) {
 // moods do casal que não fazem sentido pra uma turma de amigos (tom romântico) ficam de fora aqui
 const FRIENDS_MOODS = MOODS.filter((m) => !["apaixonada", "safadinha", "carinhosa"].includes(m.id));
 
+function daysUntil(dateISO) {
+  return Math.round((parseISODate(dateISO) - startOfDay(new Date())) / 86400000);
+}
+
+function eventDateLine(ev) {
+  return humanDateLong(parseISODate(ev.start_date)) + (ev.start_time ? `, ${ev.start_time.slice(0, 5)}` : "");
+}
+
+function rsvpAvatarsHTML(rsvps, byId) {
+  const confirmed = (rsvps || []).filter((r) => r.status === "sim");
+  const shown = confirmed.slice(0, 3);
+  const extra = confirmed.length - shown.length;
+  const chip = (label, i) => `<span style="width:26px; height:26px; border-radius:50%; background:rgba(255,255,255,.9); color:var(--friends-accent-strong); font-family:'Baloo 2'; font-weight:700; font-size:11px; display:flex; align-items:center; justify-content:center; border:2px solid rgba(255,255,255,.5); ${i > 0 ? "margin-left:-10px;" : ""}">${escapeHTML(label)}</span>`;
+  if (!confirmed.length) return `<p style="font-size:12.5px; opacity:.85; margin:0;">Ninguém confirmou ainda.</p>`;
+  return `<div style="display:flex; gap:0;">
+    ${shown.map((r, i) => chip((byId[r.user_id] || "?")[0].toUpperCase(), i)).join("")}
+    ${extra > 0 ? chip(`+${extra}`, 1) : ""}
+  </div>`;
+}
+
+function nextRoleHeroHTML(event, byId) {
+  const days = daysUntil(event.start_date);
+  const dayLabel = days <= 0 ? "hoje" : days === 1 ? "amanhã" : `${days} dias`;
+  return `
+    <div class="card" style="background:linear-gradient(135deg, var(--friends-accent-strong), var(--friends-accent)); color:var(--on-friends-accent); cursor:pointer;" id="friends-home-role-card">
+      <div style="font-size:12.5px; font-weight:800; letter-spacing:.04em; text-transform:uppercase;">Próximo rolê</div>
+      <div style="font-family:'Baloo 2'; font-weight:800; font-size:${days <= 1 ? "26px" : "34px"}; margin:2px 0;">${days <= 1 ? dayLabel : `${days} <span style="font-family:'Nunito'; font-weight:700; font-size:15px;">dias</span>`}</div>
+      <div style="font-size:14px; font-weight:700; margin-bottom:2px;">${escapeHTML(event.title)}</div>
+      <div style="font-size:12.5px; opacity:.9; margin-bottom:10px;">${escapeHTML(eventDateLine(event))}</div>
+      ${rsvpAvatarsHTML(event.friend_event_rsvps, byId)}
+    </div>`;
+}
+
+function emptyRoleHeroHTML() {
+  return `
+    <div class="card" style="text-align:center; padding:28px 20px; cursor:pointer;" id="friends-home-role-card">
+      <div style="font-size:30px;">🧭</div>
+      <div class="card-title" style="margin-top:6px;">Nenhum rolê marcado</div>
+      <p class="card-sub" style="margin-bottom:0;">Toque pra marcar o próximo encontro da turma.</p>
+    </div>`;
+}
+
 async function renderFriendsHome() {
   const view = $("#friends-view");
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const today = todayISO();
-  const [members, todaysMoods, balance] = await Promise.all([
+  const [members, todaysMoods, balance, nextEvents] = await Promise.all([
     friends.listGroupMembers(State.friendGroup.id),
     friends.getMoodsForDay(State.friendGroup.id, today).catch(() => []),
     friends.getGroupCoinBalance(State.friendGroup.id).catch(() => 0),
+    friends.listUpcomingEvents(State.friendGroup.id, today, 1).catch(() => []),
   ]);
   const moodByUser = Object.fromEntries(todaysMoods.map((m) => [m.user_id, m.mood]));
   const myMood = moodByUser[State.userId];
+  const byId = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
 
   view.innerHTML = `
-    <div class="card" style="text-align:center; padding:28px 20px;">
-      <div style="font-size:30px;">🧭</div>
-      <div class="card-title" style="margin-top:6px;">Próximo rolê</div>
-      <p class="card-sub" style="margin-bottom:0;">Em breve: marquem o próximo encontro da turma aqui.</p>
-    </div>
+    ${nextEvents[0] ? nextRoleHeroHTML(nextEvents[0], byId) : emptyRoleHeroHTML()}
 
     <div class="card" style="margin-top:14px; cursor:pointer;" id="friends-home-mood-card">
       <div class="card-title" style="font-size:15px;">Como a turma tá hoje</div>
@@ -1021,7 +1061,7 @@ async function renderFriendsHome() {
           const mood = moodByUser[m.user_id];
           const info = mood ? MOOD_BY_ID[mood] : null;
           return `
-            <div style="flex:1; min-width:64px; text-align:center; background:var(--surface-alt); border-radius:14px; padding:10px 6px;">
+            <div style="flex:1; min-width:64px; text-align:center; background:var(--friends-accent-soft); border-radius:14px; padding:10px 6px;">
               <div style="font-size:24px;">${info ? info.emoji : "🤔"}</div>
               <div style="font-size:11px; font-weight:800; margin-top:2px;">${m.user_id === State.userId ? "Você" : escapeHTML(m.display_name)}</div>
             </div>`;
@@ -1047,6 +1087,7 @@ async function renderFriendsHome() {
     </div>
   `;
   $("#friends-home-mood-card")?.addEventListener("click", () => setFriendsTab("mood"));
+  $("#friends-home-role-card")?.addEventListener("click", () => setFriendsTab("roles"));
 }
 
 async function renderFriendsMood() {
@@ -1102,6 +1143,113 @@ function openFriendsMoodPicker(current) {
         btn.disabled = false;
       }
     });
+  });
+}
+
+function rsvpButtonHTML(eventId, status, label, mine) {
+  const active = mine === status;
+  return `<button class="btn btn-sm" style="flex:1; ${active ? "background:var(--friends-accent); color:var(--on-friends-accent);" : "background:var(--friends-accent-soft); color:var(--friends-accent-strong);"}" data-rsvp="${status}" data-event-id="${eventId}">${label}</button>`;
+}
+
+function roleCardHTML(ev, byId) {
+  const rsvps = ev.friend_event_rsvps || [];
+  const mine = rsvps.find((r) => r.user_id === State.userId)?.status;
+  const going = rsvps.filter((r) => r.status === "sim");
+  const goingNames = going.map((r) => (r.user_id === State.userId ? "Você" : byId[r.user_id] || "alguém")).join(", ");
+  return `
+    <div class="card" style="margin-bottom:12px;">
+      <div class="row" style="align-items:flex-start;">
+        <div style="flex:1;">
+          <div class="card-title" style="font-size:15px; margin-bottom:2px;">${escapeHTML(ev.title)}</div>
+          <div class="hint-text" style="margin:0;">${escapeHTML(eventDateLine(ev))}</div>
+        </div>
+        ${ev.created_by === State.userId ? `<button class="btn btn-ghost btn-sm" style="padding:4px 8px;" data-delete-event="${ev.id}">Cancelar</button>` : ""}
+      </div>
+      <p class="hint-text" style="margin-top:8px; margin-bottom:0;">${going.length ? `${going.length} confirmado${going.length === 1 ? "" : "s"}: ${escapeHTML(goingNames)}` : "Ninguém confirmou ainda."}</p>
+      <div class="row" style="gap:8px; margin-top:10px;">
+        ${rsvpButtonHTML(ev.id, "sim", "Vou", mine)}
+        ${rsvpButtonHTML(ev.id, "talvez", "Talvez", mine)}
+        ${rsvpButtonHTML(ev.id, "nao", "Não vou", mine)}
+      </div>
+    </div>`;
+}
+
+async function renderFriendsRoles() {
+  const view = $("#friends-view");
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const [members, events] = await Promise.all([
+    friends.listGroupMembers(State.friendGroup.id),
+    friends.listUpcomingEvents(State.friendGroup.id, todayISO()),
+  ]);
+  const byId = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
+
+  view.innerHTML = `
+    <button class="btn btn-block" style="margin-bottom:14px; background:var(--friends-accent); color:var(--on-friends-accent);" id="friends-new-event-btn">+ Marcar um rolê</button>
+    ${events.length ? events.map((ev) => roleCardHTML(ev, byId)).join("") : `
+      <div class="card" style="text-align:center; padding:28px 20px;">
+        <div style="font-size:30px;">📅</div>
+        <p class="card-sub" style="margin-bottom:0;">Nenhum rolê marcado ainda.</p>
+      </div>`}
+  `;
+  $("#friends-new-event-btn").addEventListener("click", openNewEventModal);
+  view.querySelectorAll("[data-rsvp]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      view.querySelectorAll("[data-rsvp]").forEach((b) => { b.disabled = true; });
+      try {
+        await friends.setMyRsvp(btn.dataset.eventId, State.userId, btn.dataset.rsvp);
+        await renderFriendsRoles();
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        await renderFriendsRoles();
+      }
+    });
+  });
+  view.querySelectorAll("[data-delete-event]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Cancelar esse rolê?")) return;
+      btn.disabled = true;
+      try {
+        await friends.deleteEvent(btn.dataset.deleteEvent);
+        await renderFriendsRoles();
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+function openNewEventModal() {
+  openModal(`
+    <h3 class="modal-title">📅 Marcar um rolê</h3>
+    <div class="stack">
+      <label class="field-label">O que vai rolar?</label>
+      <input type="text" id="fe-title" maxlength="60" placeholder="ex: churrasco na casa do Duda" />
+      <label class="field-label">Quando?</label>
+      <input type="date" id="fe-date" min="${todayISO()}" value="${todayISO()}" />
+      <label class="field-label">Hora (opcional)</label>
+      <input type="time" id="fe-time" />
+      <button class="btn btn-block" style="margin-top:6px; background:var(--friends-accent); color:var(--on-friends-accent);" id="fe-confirm">Marcar</button>
+      <p class="error-text" id="fe-error"></p>
+    </div>
+  `);
+  $("#fe-confirm").addEventListener("click", async () => {
+    const title = $("#fe-title").value.trim();
+    const date = $("#fe-date").value;
+    const time = $("#fe-time").value;
+    const err = (m) => { $("#fe-error").textContent = m; };
+    if (!title) return err("Escreve o que vai rolar.");
+    if (!date) return err("Escolhe a data.");
+    setBusy("#fe-confirm", true);
+    try {
+      const created = await friends.createEvent(State.friendGroup.id, State.userId, title, date, time || null);
+      await friends.setMyRsvp(created.id, State.userId, "sim").catch(() => {});
+      closeModal();
+      await renderFriendsRoles();
+    } catch (e) {
+      err("Não deu: " + (e.message || e));
+      setBusy("#fe-confirm", false);
+    }
   });
 }
 
