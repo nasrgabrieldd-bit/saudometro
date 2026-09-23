@@ -64,6 +64,22 @@ export async function getGroupCoinBalance(friendGroupId) {
   return data?.balance || 0;
 }
 
+export async function listCoinHistory(friendGroupId, limit = 30) {
+  const { data, error } = await supabase
+    .from("friend_coin_ledger")
+    .select("*")
+    .eq("friend_group_id", friendGroupId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function addCoinBonus(friendGroupId, userId, delta, reason) {
+  const { error } = await supabase.from("friend_coin_ledger").insert({ friend_group_id: friendGroupId, user_id: userId, delta, reason });
+  if (error) throw error;
+}
+
 export async function listGroupRedemptions(friendGroupId, limit = 30) {
   const { data, error } = await supabase
     .from("friend_redemptions")
@@ -180,5 +196,41 @@ export async function setMyFindReaction(findId, userId, reaction) {
 
 export async function clearMyFindReaction(findId, userId) {
   const { error } = await supabase.from("friend_find_reactions").delete().eq("find_id", findId).eq("user_id", userId);
+  if (error) throw error;
+}
+
+// ---------- ofensiva do dia (sequência de uso da turma) ----------
+
+export async function recordGroupActivityToday(friendGroupId, dayISO) {
+  const { error } = await supabase.from("friend_streak_days").upsert({ friend_group_id: friendGroupId, day: dayISO }, { onConflict: "friend_group_id,day", ignoreDuplicates: true });
+  if (error) throw error;
+}
+
+export async function listStreakDays(friendGroupId, sinceISO) {
+  const { data, error } = await supabase.from("friend_streak_days").select("day").eq("friend_group_id", friendGroupId).gte("day", sinceISO);
+  if (error) throw error;
+  return (data || []).map((r) => r.day);
+}
+
+// ---------- prêmios criados pela própria turma ----------
+
+export async function listCustomPerks(friendGroupId) {
+  const { data, error } = await supabase.from("friend_custom_perks").select("*").eq("friend_group_id", friendGroupId).order("created_at", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createCustomPerk(friendGroupId, userId, emoji, title, description, cost) {
+  const { data, error } = await supabase
+    .from("friend_custom_perks")
+    .insert({ friend_group_id: friendGroupId, emoji: emoji || "🎁", title, description: description || "", cost, created_by: userId })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteCustomPerk(id) {
+  const { error } = await supabase.from("friend_custom_perks").delete().eq("id", id);
   if (error) throw error;
 }
