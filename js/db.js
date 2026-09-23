@@ -428,6 +428,90 @@ export async function removeReaction(kind, targetId, role) {
   if (error) throw error;
 }
 
+// ---------- Lembrei de você (foto + observação) ----------
+
+export async function countMyMemoriesToday(coupleId, role) {
+  const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  const { count, error } = await supabase
+    .from("memory_photos")
+    .select("id", { count: "exact", head: true })
+    .eq("couple_id", coupleId)
+    .eq("role", role)
+    .gt("created_at", since);
+  if (error) throw error;
+  return count || 0;
+}
+
+export async function listMemories(coupleId, limit = 30) {
+  const { data, error } = await supabase
+    .from("memory_photos")
+    .select("*")
+    .eq("couple_id", coupleId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+// devolve um link temporário (1h) pra mostrar a foto — o espaço de arquivo é privado, só do casal
+export async function memoryPhotoUrl(path) {
+  const { data, error } = await supabase.storage.from("memories").createSignedUrl(path, 3600);
+  if (error) throw error;
+  return data.signedUrl;
+}
+
+export async function createMemory(coupleId, role, photoBlob, caption) {
+  const path = `${coupleId}/${crypto.randomUUID()}.jpg`;
+  const up = await supabase.storage.from("memories").upload(path, photoBlob, { contentType: "image/jpeg" });
+  if (up.error) throw up.error;
+  const { data, error } = await supabase
+    .from("memory_photos")
+    .insert({ couple_id: coupleId, role, photo_path: path, caption })
+    .select()
+    .single();
+  if (error) {
+    // deu erro depois de já ter subido o arquivo (ex.: limite diário): tira o arquivo órfão
+    await supabase.storage.from("memories").remove([path]).catch(() => {});
+    throw error;
+  }
+  return data;
+}
+
+// reação e/ou comentário do par a uma lembrança
+export async function reactToMemory(coupleId, id, role, { emoji, reply } = {}) {
+  if (emoji) {
+    const { error } = await supabase
+      .from("reactions")
+      .upsert({ couple_id: coupleId, kind: "memory", target_id: id, role, emoji, created_at: new Date().toISOString() }, { onConflict: "kind,target_id,role" });
+    if (error) throw error;
+  }
+  if (reply && reply.trim()) {
+    const { error } = await supabase
+      .from("memory_photos")
+      .update({ reply_text: reply.trim().slice(0, 300), reply_role: role, replied_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) throw error;
+  }
+}
+
+export async function markMemoryPointsAwarded(id) {
+  // só marca se ainda não tinha sido marcado (evita dar moeda 2x se a pessoa reagir e comentar)
+  const { data, error } = await supabase
+    .from("memory_photos")
+    .update({ points_awarded: true })
+    .eq("id", id)
+    .eq("points_awarded", false)
+    .select("id");
+  if (error) throw error;
+  return (data || []).length > 0; // true = essa chamada que "ganhou a corrida" e deve dar moeda
+}
+
+export async function deleteMemory(id, photoPath) {
+  await supabase.storage.from("memories").remove([photoPath]).catch(() => {});
+  const { error } = await supabase.from("memory_photos").delete().eq("id", id);
+  if (error) throw error;
+}
+
 // ---------- cápsula do tempo ----------
 
 export async function createTimeCapsule(coupleId, fromRole, message, openOnISO) {
@@ -628,6 +712,7 @@ export function subscribeCoupleChanges(coupleId, onChange, onSettings) {
     .on("postgres_changes", { event: "*", schema: "public", table: "couple_stats", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "sweet_notes", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "reactions", filter: `couple_id=eq.${coupleId}` }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "memory_photos", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "time_capsules", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "daily_challenge_answers", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "secret_wishes", filter: `couple_id=eq.${coupleId}` }, onChange)
