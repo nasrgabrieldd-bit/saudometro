@@ -918,13 +918,14 @@ function friendsModalJoinStep() {
 
 // tela mínima do Modo Amigos (fundação) — as abas de verdade (rolês, humor, recados,
 // prêmios) chegam nas próximas etapas; por enquanto mostra o código e quem já entrou.
+// mesmos ícones do casal (Lucide), só muda a cor — nada de emoji na navegação
 const FRIENDS_TABS = [
-  { tab: "home", icon: "🏠", label: "Hoje" },
-  { tab: "roles", icon: "📅", label: "Rolês" },
-  { tab: "mood", icon: "🙂", label: "Humor" },
-  { tab: "notes", icon: "✉️", label: "Recados" },
-  { tab: "shop", icon: "🎁", label: "Prêmios" },
-  { tab: "group", icon: "⚙️", label: "Turma" },
+  { tab: "home", icon: "home", label: "Hoje" },
+  { tab: "roles", icon: "calendar", label: "Rolês" },
+  { tab: "mood", icon: "heart", label: "Humor" },
+  { tab: "notes", icon: "mail", label: "Recados" },
+  { tab: "shop", icon: "shopping-bag", label: "Prêmios" },
+  { tab: "group", icon: "settings", label: "Turma" },
 ];
 
 async function enterFriendsMode(group) {
@@ -946,7 +947,7 @@ async function enterFriendsMode(group) {
     </header>
     <main id="friends-view" style="flex:1; padding:20px 16px; overflow:auto;"></main>
     <nav class="bottom-nav">
-      ${FRIENDS_TABS.map((t) => `<button class="nav-btn" data-friends-tab="${t.tab}"><span class="nav-icon">${t.icon}</span><span class="nav-label">${t.label}</span></button>`).join("")}
+      ${FRIENDS_TABS.map((t) => `<button class="nav-btn" data-friends-tab="${t.tab}"><span class="nav-icon">${icon(t.icon, { size: 22 })}</span><span class="nav-label">${t.label}</span></button>`).join("")}
     </nav>
   `;
   $("#friends-switch-btn")?.addEventListener("click", async () => {
