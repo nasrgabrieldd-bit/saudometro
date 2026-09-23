@@ -433,6 +433,9 @@ function renderOnboarding() {
     <div class="stack" id="onboarding-choices">
       <button class="btn btn-primary btn-block" id="btn-create">Criar nosso casal</button>
       <button class="btn btn-secondary btn-block" id="btn-join">Já tenho um código</button>
+      <p class="hint-text" style="text-align:center; margin:10px 0 0;">ou</p>
+      <button class="btn btn-ghost btn-block" id="btn-google">Continuar com o Google</button>
+      <p class="hint-text" style="text-align:center; font-size:11.5px; margin:2px 8px 0;">Ajuda a recuperar o acesso se trocar de celular. Se seu par já criou o casal, use "Já tenho um código" mesmo assim.</p>
     </div>
     <div id="onboarding-flow"></div>
     <p class="hint-text" style="text-align:center; font-size:11.5px; margin:16px 8px 0;"><a href="privacidade.html" target="_blank" rel="noopener" style="color:inherit;">Política de privacidade</a></p>
@@ -440,6 +443,15 @@ function renderOnboarding() {
   `;
   $("#btn-create").addEventListener("click", startCreateFlow);
   $("#btn-join").addEventListener("click", startJoinFlow);
+  $("#btn-google").addEventListener("click", async () => {
+    setBusy("#btn-google", true);
+    try {
+      await db.signInWithGoogle(); // a página navega pro Google; não sobra código pra rodar depois
+    } catch (e) {
+      alert("Não deu pra abrir o login do Google: " + (e.message || e));
+      setBusy("#btn-google", false);
+    }
+  });
   // easter egg: tocar no coração mostra a frase de como o app nasceu
   $("#logo-egg").addEventListener("click", () => {
     const t = $("#egg-text");
@@ -2691,12 +2703,13 @@ function openPerkCostModal(perk) {
 async function renderProfile() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const moodSince = toISODate(addDays(new Date(), -60));
-  const [coins, history, couple, loginStreakInfo, moodHistory] = await Promise.all([
+  const [coins, history, couple, loginStreakInfo, moodHistory, googleLinked] = await Promise.all([
     db.getCoinBalances(State.coupleId),
     db.listCoinHistory(State.coupleId, 12),
     supabase.from("couples").select("code").eq("id", State.coupleId).single(),
     computeLoginStreak(),
     db.getMoodHistory(State.coupleId, moodSince),
+    db.getGoogleLinkStatus(),
   ]);
   const loginStreak = loginStreakInfo.streak;
   const moodStreak = countMoodStreakFromHistory(moodHistory, State.role);
@@ -2737,6 +2750,14 @@ ${feat("streaks") ? `    <div class="section-title">Sequências 🔥</div>
       <div class="card-title" style="font-size:15px;">Código do casal</div>
       <div class="card-sub">Use em outro celular pra entrar como ${ROLE_LABEL[otherRole()]} (ou reinstalar).</div>
       <div class="onboarding-code" style="font-size:24px; padding:12px;">${escapeHTML(couple.data?.code || "") || "----"}</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="font-size:15px;">Recuperar acesso pelo Google</div>
+      ${googleLinked
+        ? `<p class="card-sub" style="margin-bottom:0;">✅ Sua conta Google já está ligada neste perfil. Se trocar de celular, use "Continuar com o Google" pra entrar direto.</p>`
+        : `<div class="card-sub">Ligue sua conta Google a este perfil, como um seguro: se você trocar de celular ou perder o código do casal, ainda consegue entrar.</div>
+           <button class="btn btn-secondary btn-block" id="btn-link-google">Ligar minha conta Google</button>`}
     </div>
 
     <div class="section-title">Privacidade 🔒</div>
@@ -2817,6 +2838,17 @@ ${coinsOn() ? `    <div class="section-title">Moedas 💰</div>
   $("#btn-edit-names")?.addEventListener("click", openNamesEditor);
   $("#btn-personalize")?.addEventListener("click", openPersonalizeModal);
   $("#btn-export-data")?.addEventListener("click", openMyDataModal);
+  $("#btn-link-google")?.addEventListener("click", async () => {
+    setBusy("#btn-link-google", true);
+    try {
+      const { error } = await db.linkGoogleIdentity();
+      if (error) throw error;
+      // a página navega pro Google e volta sozinha; nada mais a fazer aqui
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#btn-link-google", false);
+    }
+  });
   $("#btn-install-guide")?.addEventListener("click", openInstallGuide);
   $("#btn-install-guide-2")?.addEventListener("click", openInstallGuide);
 
