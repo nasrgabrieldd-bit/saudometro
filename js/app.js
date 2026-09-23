@@ -721,10 +721,9 @@ function checklistCardHTML(done) {
 async function renderHome() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const mk = monthKey(new Date());
-  const [plan, encounters, coins, stats, recentMoods] = await Promise.all([
+  const [plan, encounters, stats, recentMoods] = await Promise.all([
     db.ensureMonthPlan(State.coupleId, mk, goalTarget()),
     db.listEncountersForMonth(State.coupleId, mk),
-    db.getCoinBalances(State.coupleId),
     db.getCoupleStats(State.coupleId),
     db.getMoodHistory(State.coupleId, toISODate(addDays(new Date(), -2))),
   ]);
@@ -823,14 +822,6 @@ async function renderHome() {
       </div>
       <p class="hint-text" style="margin-top:8px;">Toca aqui pra escolher outro fim de semana</p>
     </div>` : "";
-  html.miss = feat("miss") ? `    <div class="card">
-      <div class="card-title" style="font-size:15px;">Mandar sinal de saudade</div>
-      <div class="card-sub">${coinsOn() && coinRule("miss") > 0 ? `Gasta ${coinWord(coinRule("miss"))} 💰 e manda` : "Manda"} um pedido de visita pra ${ROLE_LABEL[otherRole()]} aprovar.</div>
-      <div class="row" style="align-items:center;">
-        ${coinsOn() ? `<span class="pill pill-coin">💰 você tem ${coins[State.role] || 0}</span>` : ""}
-        <button class="btn btn-warm" id="btn-saudade" ${(coinsOn() && (coins[State.role] || 0) < coinRule("miss")) ? "disabled" : ""}>🥺 Mandar sinal</button>
-      </div>
-    </div>` : "";
   html.mood = todayMoodCardHTML(recentMoods, todayStr);
   html.together = togetherCardHTML();
   html.special = specialCardHTML(nextSpecial);
@@ -877,7 +868,6 @@ ${widgetIds.map((id) => html[id] || "").join("")}
   $("#weekend-card")?.addEventListener("click", () => openWeekendModal(nextWeekendFriday));
   $("#mood-reminder-banner")?.addEventListener("click", () => setActiveTab("mood"));
   $("#install-banner")?.addEventListener("click", openInstallGuide);
-  $("#btn-saudade")?.addEventListener("click", openSaudadeModal);
   $("#kiss-card")?.addEventListener("click", () => openKissModal(stats?.last_kiss_at));
 
   clearKissTimer();
@@ -1956,13 +1946,14 @@ async function renderNotesHub() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const todayStr = todayISO();
 
-  const [notes, noteReactions, todayAnswers, capsules, redemptions, invites] = await Promise.all([
+  const [notes, noteReactions, todayAnswers, capsules, redemptions, invites, coins] = await Promise.all([
     db.listRecentSweetNotes(State.coupleId, 5),
     db.listReactions(State.coupleId, "note").catch(() => null), // null = recurso ainda não ativado no banco
     db.getChallengeAnswersForDay(State.coupleId, todayStr),
     db.listTimeCapsules(State.coupleId),
     db.listWishRedemptions(State.coupleId),
     db.listAllInvites(State.coupleId),
+    feat("miss") ? db.getCoinBalances(State.coupleId) : Promise.resolve({}),
   ]);
 
   const myLastNote = notes.find((n) => n.role === State.role);
@@ -1983,6 +1974,15 @@ async function renderNotesHub() {
       <button class="btn btn-ghost btn-block" style="margin-top:8px;" id="btn-notes-history">Ver histórico completo →</button>
     </div>
     </div>
+
+${feat("miss") ? `    <div class="card">
+      <div class="card-title" style="font-size:15px;">Mandar sinal de saudade</div>
+      <div class="card-sub">${coinsOn() && coinRule("miss") > 0 ? `Gasta ${coinWord(coinRule("miss"))} 💰 e manda` : "Manda"} um pedido de visita pra ${ROLE_LABEL[otherRole()]} aprovar.</div>
+      <div class="row" style="align-items:center;">
+        ${coinsOn() ? `<span class="pill pill-coin">💰 você tem ${coins[State.role] || 0}</span>` : ""}
+        <button class="btn btn-warm" id="btn-saudade" ${(coinsOn() && (coins[State.role] || 0) < coinRule("miss")) ? "disabled" : ""}>🥺 Mandar sinal</button>
+      </div>
+    </div>` : ""}
 
     <div class="section-title">Atalhos</div>
     <div class="shortcut-grid">
@@ -2012,6 +2012,7 @@ ${feat("wishes") ? `      <button class="shortcut-card" data-view="wishes">
   `;
 
   $("#btn-send-note")?.addEventListener("click", () => openSweetNoteModal(iSentToday));
+  $("#btn-saudade")?.addEventListener("click", openSaudadeModal);
   wireReactions();
   $("#btn-notes-history")?.addEventListener("click", () => { State.notesView = "history"; renderNotes(); });
   document.querySelectorAll(".shortcut-card").forEach((btn) => {
@@ -2825,7 +2826,6 @@ const HOME_META = {
   goal: { t: "Meta de encontros do mês", d: "Card com a meta, o progresso e a moeda por encontro" },
   next: { t: "Próximo encontro", d: "Card com o próximo encontro combinado" },
   recharge: { t: "Fim de semana de recarregar", d: "Card, botões no calendário e recusar convite sem custo" },
-  miss: { t: "Sinal de saudade", d: "Pedir visita, encontro de saudade e mensagens de saudade" },
   mood: { t: "Humor de hoje", d: "Como cada um está hoje", nw: true },
   together: { t: "Dias juntos", d: "Contador desde a data que vocês escolherem", nw: true },
   special: { t: "Próxima data especial", d: "Aniversário de namoro e outras datas que vocês criaram", nw: true },
@@ -2833,6 +2833,7 @@ const HOME_META = {
 };
 
 const FEATURE_LIST = [
+  { k: "miss", g: "Recados e brincadeiras", t: "Sinal de saudade", d: "Pedir visita, encontro de saudade e mensagens de saudade, na aba Recados" },
   { k: "weekly", g: "Recados e brincadeiras", t: "Pergunta da semana", d: "Uma pergunta nova por semana, na aba Humor" },
   { k: "daily", g: "Recados e brincadeiras", t: "Desafio do dia", d: "Uma pergunta por dia, no hub de Recados" },
   { k: "capsule", g: "Recados e brincadeiras", t: "Cápsula do tempo", d: "Mensagem que só abre numa data futura" },

@@ -26,8 +26,9 @@ test("casal sem configuração mantém a identidade antiga", () => {
 
 test("casal antigo: tudo ligado, ordem e regras de moedas padrão", () => {
   reset();
-  for (const id of ["kiss", "goal", "next", "recharge", "miss"]) assert.equal(people.homeWidgetOn(id), true, id);
-  for (const id of ["mood", "together", "special"]) assert.equal(people.homeWidgetOn(id), false, id);
+  for (const id of ["kiss", "goal", "next", "recharge"]) assert.equal(people.homeWidgetOn(id), true, id);
+  for (const id of ["mood", "together", "special", "checklist"]) assert.equal(people.homeWidgetOn(id), false, id);
+  assert.equal(people.feat("miss"), true); // sinal de saudade (aba Recados) vem ligado por padrão
   assert.deepEqual(people.homeOrder(), people.HOME_WIDGETS);
   assert.equal(people.goalTarget(), 2);
   assert.equal(people.luckyOn(), true);
@@ -65,12 +66,12 @@ test("emojis padrão são diferentes em qualquer combinação de gêneros", () =
 
 test("recursos desligados, ordem da home e regras personalizadas", () => {
   people.setPeopleSettings({
-    features: { recharge: false, together: true, home_order: ["miss", "miss", "zzz", "kiss"], coin_rules: { mood: 0, note: 99, lucky: false }, perks_off: ["cafe_na_cama"] },
+    features: { recharge: false, together: true, home_order: ["next", "next", "zzz", "kiss"], coin_rules: { mood: 0, note: 99, lucky: false }, perks_off: ["cafe_na_cama"] },
   });
   assert.equal(people.feat("recharge"), false);
   assert.equal(people.homeWidgetOn("recharge"), false);
   assert.equal(people.homeWidgetOn("together"), true);
-  assert.deepEqual(people.homeOrder().slice(0, 2), ["miss", "kiss"]);
+  assert.deepEqual(people.homeOrder().slice(0, 2), ["next", "kiss"]);
   assert.equal(new Set(people.homeOrder()).size, people.HOME_WIDGETS.length);
   assert.equal(people.coinRule("mood"), 0);
   assert.equal(people.coinRule("note"), people.COIN_DEFAULTS.note); // 99 fora do limite
