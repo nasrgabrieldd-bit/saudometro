@@ -926,7 +926,7 @@ const FRIENDS_TABS = [
   { tab: "home", icon: "home", label: "Hoje" },
   { tab: "roles", icon: "calendar", label: "Rolês" },
   { tab: "mood", icon: "heart", label: "Humor" },
-  { tab: "notes", icon: "mail", label: "Recados" },
+  { tab: "notes", icon: "mail", label: "Experiências" },
   { tab: "shop", icon: "shopping-bag", label: "Prêmios" },
   { tab: "group", icon: "settings", label: "Turma" },
 ];
@@ -978,7 +978,7 @@ function renderFriendsActiveTab() {
     home: renderFriendsHome,
     roles: renderFriendsRoles,
     mood: renderFriendsMood,
-    notes: () => renderFriendsPlaceholder("✉️", "Recados", "Em breve: mandar recado pra turma toda."),
+    notes: renderFriendsFinds,
     shop: renderFriendsShop,
     group: renderFriendsGroup,
   };
@@ -1111,6 +1111,7 @@ async function renderFriendsMood() {
         ${members.map((m) => {
           const mood = moodByUser[m.user_id];
           const info = mood ? MOOD_BY_ID[mood] : null;
+          const needsCare = mood && m.user_id !== State.userId && NEEDS_CARE_MOODS.has(mood);
           return `
             <div class="entry-item">
               <div class="entry-icon">${info ? info.emoji : "🤔"}</div>
@@ -1118,6 +1119,7 @@ async function renderFriendsMood() {
                 <div class="entry-title">${m.user_id === State.userId ? "Você" : escapeHTML(m.display_name)}</div>
                 <div class="entry-meta">${info ? escapeHTML(gen(info.label, "homem")) : "ainda não registrou"}</div>
               </div>
+              ${needsCare ? `<button class="btn btn-ghost btn-sm" data-nudge="${m.user_id}" data-nudge-name="${escapeHTML(m.display_name)}">👋 Mandar um alô</button>` : ""}
             </div>`;
         }).join("")}
       </div>
@@ -1125,6 +1127,18 @@ async function renderFriendsMood() {
     <button class="btn btn-block" style="margin-top:14px; background:var(--friends-accent); color:var(--on-friends-accent);" id="friends-set-mood-btn">${myMood ? "Mudar meu humor de hoje" : "Contar como você tá hoje"}</button>
   `;
   $("#friends-set-mood-btn").addEventListener("click", () => openFriendsMoodPicker(myMood));
+  view.querySelectorAll("[data-nudge]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      try {
+        await friends.createFind(State.friendGroup.id, State.userId, "recado", `👋 pra ${btn.dataset.nudgeName}`, "", "Alguém da turma tá pensando em você hoje.");
+        btn.textContent = "Enviado 💙";
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        btn.disabled = false;
+      }
+    });
+  });
 }
 
 function openFriendsMoodPicker(current) {
@@ -1149,6 +1163,145 @@ function openFriendsMoodPicker(current) {
   });
 }
 
+// ================= EXPERIÊNCIAS (achados: filme/série/jogo/playlist/recado) =================
+// no espírito do Letterboxd/Goodreads: prateleira de gosto compartilhado, não um chat.
+// Reação leve (quero ver / já vi / recomendo) fica antes do comentário, que é sempre opcional.
+
+const FRIEND_FIND_KINDS = {
+  filme: { emoji: "🎬", label: "Filme" },
+  serie: { emoji: "📺", label: "Série" },
+  jogo: { emoji: "🎮", label: "Jogo" },
+  playlist: { emoji: "🎵", label: "Playlist" },
+  recado: { emoji: "💬", label: "Recado" },
+};
+
+const FRIEND_FIND_REACTIONS = {
+  quero: { emoji: "👀", label: "Quero ver" },
+  ja_vi: { emoji: "✅", label: "Já vi" },
+  recomendo: { emoji: "🔥", label: "Recomendo" },
+};
+
+function findCardHTML(f, byId) {
+  const kind = FRIEND_FIND_KINDS[f.kind] || FRIEND_FIND_KINDS.recado;
+  const reactions = f.friend_find_reactions || [];
+  const mine = reactions.find((r) => r.user_id === State.userId)?.reaction;
+  const counts = {};
+  reactions.forEach((r) => { counts[r.reaction] = (counts[r.reaction] || 0) + 1; });
+  return `
+    <div class="card" style="margin-bottom:12px;">
+      <div class="row" style="align-items:flex-start;">
+        <span style="font-size:24px;">${kind.emoji}</span>
+        <div style="flex:1;">
+          <div class="card-title" style="font-size:15px; margin-bottom:2px;">${escapeHTML(f.title)}</div>
+          <div class="hint-text" style="margin:0;">${kind.label} · ${f.user_id === State.userId ? "Você" : escapeHTML(byId[f.user_id] || "alguém")}</div>
+          ${f.link ? `<a href="${escapeHTML(f.link)}" target="_blank" rel="noopener" style="font-size:13px; word-break:break-all;">${escapeHTML(f.link)}</a>` : ""}
+          ${f.note ? `<p class="card-sub" style="margin:6px 0 0;">${escapeHTML(f.note)}</p>` : ""}
+        </div>
+        ${f.user_id === State.userId ? `<button class="btn btn-ghost btn-sm" style="padding:4px 8px;" data-delete-find="${f.id}">Apagar</button>` : ""}
+      </div>
+      <div class="row" style="gap:8px; margin-top:10px;">
+        ${Object.entries(FRIEND_FIND_REACTIONS).map(([id, r]) => {
+          const active = mine === id;
+          const n = counts[id] || 0;
+          return `<button class="btn btn-sm" style="flex:1; ${active ? "background:var(--friends-accent); color:var(--on-friends-accent);" : "background:var(--friends-accent-soft); color:var(--friends-accent-strong);"}" data-react="${id}" data-find-id="${f.id}" data-was-active="${active ? "1" : "0"}">${r.emoji} ${r.label}${n ? ` · ${n}` : ""}</button>`;
+        }).join("")}
+      </div>
+    </div>`;
+}
+
+async function renderFriendsFinds() {
+  const view = $("#friends-view");
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const [members, finds] = await Promise.all([
+    friends.listGroupMembers(State.friendGroup.id),
+    friends.listFinds(State.friendGroup.id),
+  ]);
+  const byId = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
+
+  view.innerHTML = `
+    <button class="btn btn-block" style="margin-bottom:14px; background:var(--friends-accent); color:var(--on-friends-accent);" id="friends-new-find-btn">+ Compartilhar um achado</button>
+    ${finds.length ? finds.map((f) => findCardHTML(f, byId)).join("") : `
+      <div class="card" style="text-align:center; padding:28px 20px;">
+        <div style="font-size:30px;">🎬</div>
+        <p class="card-sub" style="margin-bottom:0;">Nada compartilhado ainda. Que tal indicar um filme, uma playlist ou um jogo pra turma?</p>
+      </div>`}
+  `;
+  $("#friends-new-find-btn").addEventListener("click", openNewFindModal);
+  view.querySelectorAll("[data-react]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      view.querySelectorAll("[data-react]").forEach((b) => { b.disabled = true; });
+      try {
+        // tocar de novo na reação já ativa remove ela; senão troca pra essa
+        if (btn.dataset.wasActive === "1") await friends.clearMyFindReaction(btn.dataset.findId, State.userId);
+        else await friends.setMyFindReaction(btn.dataset.findId, State.userId, btn.dataset.react);
+        await renderFriendsFinds();
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        await renderFriendsFinds();
+      }
+    });
+  });
+  view.querySelectorAll("[data-delete-find]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Apagar esse achado?")) return;
+      btn.disabled = true;
+      try {
+        await friends.deleteFind(btn.dataset.deleteFind);
+        await renderFriendsFinds();
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+function openNewFindModal() {
+  openModal(`
+    <h3 class="modal-title">🎬 Compartilhar um achado</h3>
+    <div class="stack">
+      <label class="field-label">O que é?</label>
+      <div class="row" style="gap:6px; flex-wrap:wrap;" id="ff-kind-row">
+        ${Object.entries(FRIEND_FIND_KINDS).map(([id, k], i) => `<button type="button" class="btn ${i === 0 ? "" : "btn-ghost"} btn-sm" style="flex:1; min-width:70px; ${i === 0 ? "background:var(--friends-accent-soft); color:var(--friends-accent-strong);" : ""}" data-kind="${id}">${k.emoji} ${k.label}</button>`).join("")}
+      </div>
+      <label class="field-label">Título</label>
+      <input type="text" id="ff-title" maxlength="80" placeholder="ex: Sinta a Música, playlist de sexta..." />
+      <label class="field-label">Link (opcional)</label>
+      <input type="text" id="ff-link" maxlength="300" placeholder="cola o link do Spotify, IMDb..." />
+      <label class="field-label">Comentário (opcional)</label>
+      <textarea id="ff-note" maxlength="200" rows="2" placeholder="por que a turma tem que ver/ouvir isso"></textarea>
+      <button class="btn btn-block" style="margin-top:6px; background:var(--friends-accent); color:var(--on-friends-accent);" id="ff-confirm">Compartilhar</button>
+      <p class="error-text" id="ff-error"></p>
+    </div>
+  `);
+  let kind = "filme";
+  $("#ff-kind-row").querySelectorAll("[data-kind]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      kind = btn.dataset.kind;
+      $("#ff-kind-row").querySelectorAll("[data-kind]").forEach((b) => {
+        b.className = `btn ${b.dataset.kind === kind ? "" : "btn-ghost"} btn-sm`;
+        b.style.cssText = `flex:1; min-width:70px; ${b.dataset.kind === kind ? "background:var(--friends-accent-soft); color:var(--friends-accent-strong);" : ""}`;
+      });
+    });
+  });
+  $("#ff-confirm").addEventListener("click", async () => {
+    const title = $("#ff-title").value.trim();
+    const link = $("#ff-link").value.trim();
+    const note = $("#ff-note").value.trim();
+    const err = (m) => { $("#ff-error").textContent = m; };
+    if (!title) return err("Escreve um título.");
+    setBusy("#ff-confirm", true);
+    try {
+      await friends.createFind(State.friendGroup.id, State.userId, kind, title, link, note);
+      closeModal();
+      await renderFriendsFinds();
+    } catch (e) {
+      err("Não deu: " + (e.message || e));
+      setBusy("#ff-confirm", false);
+    }
+  });
+}
+
 function rsvpButtonHTML(eventId, status, label, mine) {
   const active = mine === status;
   return `<button class="btn btn-sm" style="flex:1; ${active ? "background:var(--friends-accent); color:var(--on-friends-accent);" : "background:var(--friends-accent-soft); color:var(--friends-accent-strong);"}" data-rsvp="${status}" data-event-id="${eventId}">${label}</button>`;
@@ -1168,7 +1321,8 @@ function friendEventDetailItemHTML(ev, byId) {
   const cat = FRIEND_EVENT_CATEGORIES[ev.category] || FRIEND_EVENT_CATEGORIES.outro;
   const rsvps = ev.friend_event_rsvps || [];
   const mine = rsvps.find((r) => r.user_id === State.userId)?.status;
-  const going = rsvps.filter((r) => r.status === "sim");
+  // quem confirmou primeiro aparece primeiro — reforça o "efeito bola de neve" de ver gente confirmando
+  const going = rsvps.filter((r) => r.status === "sim").sort((a, b) => (a.updated_at || "").localeCompare(b.updated_at || ""));
   const goingNames = going.map((r) => (r.user_id === State.userId ? "Você" : byId[r.user_id] || "alguém")).join(", ");
   return `
     <div class="entry-item" style="flex-direction:column; align-items:stretch;">
@@ -1177,6 +1331,7 @@ function friendEventDetailItemHTML(ev, byId) {
         <div class="entry-body">
           <div class="entry-title">${escapeHTML(ev.title)}</div>
           <div class="entry-meta">${cat.label}${ev.start_time ? ` · ${ev.start_time.slice(0, 5)}` : ""}</div>
+          ${ev.details ? `<div class="hint-text" style="margin-top:4px;">${escapeHTML(ev.details)}</div>` : ""}
         </div>
         ${ev.created_by === State.userId ? `<button class="btn btn-ghost btn-sm" style="padding:4px 8px;" data-delete-event="${ev.id}">Cancelar</button>` : ""}
       </div>
@@ -1328,6 +1483,8 @@ function openNewEventModal(dateISO, byId) {
       <input type="date" id="fe-date" min="${todayISO()}" value="${date}" />
       <label class="field-label">Hora (opcional)</label>
       <input type="time" id="fe-time" />
+      <label class="field-label">Detalhes (opcional)</label>
+      <textarea id="fe-details" maxlength="200" rows="2" placeholder="endereço, o que levar..."></textarea>
       <button class="btn btn-block" style="margin-top:6px; background:var(--friends-accent); color:var(--on-friends-accent);" id="fe-confirm">Marcar</button>
       <p class="error-text" id="fe-error"></p>
     </div>
@@ -1346,12 +1503,13 @@ function openNewEventModal(dateISO, byId) {
     const title = $("#fe-title").value.trim();
     const fdate = $("#fe-date").value;
     const time = $("#fe-time").value;
+    const details = $("#fe-details").value.trim();
     const err = (m) => { $("#fe-error").textContent = m; };
     if (!title) return err("Escreve o que vai rolar.");
     if (!fdate) return err("Escolhe a data.");
     setBusy("#fe-confirm", true);
     try {
-      const created = await friends.createEvent(State.friendGroup.id, State.userId, title, fdate, time || null, category);
+      const created = await friends.createEvent(State.friendGroup.id, State.userId, title, fdate, time || null, category, details);
       await friends.setMyRsvp(created.id, State.userId, "sim").catch(() => {});
       closeModal();
       State.friendsSelectedDay = fdate;
