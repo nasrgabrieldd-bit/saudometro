@@ -835,6 +835,7 @@ label.field-label:first-child { margin-top: 0; }
   font-size: 13.5px;
 }
 .empty-state .emoji { font-size: 34px; display: block; margin-bottom: 8px; }
+.empty-state .empty-icon { display: block; margin: 0 auto 8px; }
 
 .center-note {
   text-align: center;
