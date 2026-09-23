@@ -9,23 +9,38 @@ function isNetworkError(e) {
   return !navigator.onLine || e?.name === "AuthRetryableFetchError" || e?.status === 0 || e?.status >= 500;
 }
 
-export async function ensureAnonSession() {
+// confere se já tem uma sessão salva e válida (renovando se preciso), sem criar nenhuma conta nova.
+// Devolve null se não tiver sessão ou se ela não valer mais (nesse caso precisa entrar de novo).
+async function validatedSession() {
   const { data } = await supabase.auth.getSession();
-  if (data.session) {
-    // getSession só lê o que tá guardado localmente, sem checar se ainda vale;
-    // getUser confirma de verdade com o servidor
-    const check = await supabase.auth.getUser();
-    if (!check.error) return data.session;
-    if (isNetworkError(check.error)) throw check.error;
-    try {
-      const refreshed = await supabase.auth.refreshSession();
-      if (!refreshed.error && refreshed.data.session) return refreshed.data.session;
-      if (refreshed.error && isNetworkError(refreshed.error)) throw refreshed.error;
-    } catch (e) {
-      if (isNetworkError(e)) throw e;
-      // refresh token também inválido/vencido: cai pra criar um login novo abaixo
-    }
+  if (!data.session) return null;
+  // getSession só lê o que tá guardado localmente, sem checar se ainda vale;
+  // getUser confirma de verdade com o servidor
+  const check = await supabase.auth.getUser();
+  if (!check.error) return data.session;
+  if (isNetworkError(check.error)) throw check.error;
+  try {
+    const refreshed = await supabase.auth.refreshSession();
+    if (!refreshed.error && refreshed.data.session) return refreshed.data.session;
+    if (refreshed.error && isNetworkError(refreshed.error)) throw refreshed.error;
+  } catch (e) {
+    if (isNetworkError(e)) throw e;
+    // refresh token também inválido/vencido: sessão salva não vale mais
   }
+  return null;
+}
+
+// sessão de quem já estava logado antes (casal do jeito antigo, anônimo ou por Google).
+// Nunca cria conta nova — pra isso agora é sempre por Google (ver signInWithGoogle).
+export async function getExistingSession() {
+  return validatedSession();
+}
+
+// só usado hoje pelo fluxo antigo, mantido pra não perder cobertura de quem ainda está
+// numa sessão anônima de antes do Google virar obrigatório.
+export async function ensureAnonSession() {
+  const existing = await validatedSession();
+  if (existing) return existing;
   // conta nova: confirma que é uma pessoa (a verificação só vale quando ligada no Supabase)
   const captchaToken = await getCaptchaToken();
   const { data: signed, error } = await supabase.auth.signInAnonymously(captchaToken ? { options: { captchaToken } } : undefined);

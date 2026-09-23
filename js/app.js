@@ -117,12 +117,11 @@ function watchForAppUpdates() {
 }
 
 function showBootError(e) {
-  const captcha = /captcha/i.test(String(e?.message || e));
   $("#screen-onboarding").style.display = "flex";
   $("#screen-onboarding").innerHTML = `
     <div class="logo">💗</div>
     <h1>Saudômetro</h1>
-    <p class="tagline">${captcha ? "Não deu pra confirmar que você é uma pessoa. Desligue bloqueadores de anúncio pra este site e tente de novo." : "Não deu pra conectar agora. Confere a internet e tenta de novo."}</p>
+    <p class="tagline">Não deu pra conectar agora. Confere a internet e tenta de novo.</p>
     <button class="btn btn-primary btn-block" id="btn-retry">Tentar de novo</button>
   `;
   $("#btn-retry").addEventListener("click", () => location.reload());
@@ -137,15 +136,22 @@ async function boot() {
   }
   let session;
   try {
-    session = await db.ensureAnonSession();
+    session = await db.getExistingSession();
   } catch (e) {
     showBootError(e);
+    return;
+  }
+  // ninguém logado ainda: de agora em diante o Google vem antes de qualquer escolha.
+  // Quem já estava numa sessão de antes (casal do jeito anônimo antigo) não passa por aqui —
+  // a sessão salva já resolve e cai direto no app, sem precisar fazer nada.
+  if (!session) {
+    renderGoogleGate();
     return;
   }
   State.userId = session.user.id;
   const [profile, myFriendGroups] = await Promise.all([
     db.getMyProfile(State.userId),
-    session.user.is_anonymous ? Promise.resolve([]) : friends.listMyFriendGroups().catch(() => []),
+    friends.listMyFriendGroups().catch(() => []),
   ]);
   State.friendGroups = myFriendGroups;
 
@@ -159,8 +165,38 @@ async function boot() {
   } else if (myFriendGroups.length === 1) {
     await enterFriendsMode(myFriendGroups[0]);
   } else {
-    renderOnboarding();
+    renderOnboardingChoices();
   }
+}
+
+// porta de entrada obrigatória pra quem ainda não tem sessão nenhuma: o Google vem antes
+// de qualquer escolha (criar casal, código ou turma de amigos).
+function renderGoogleGate() {
+  $("#screen-onboarding").style.display = "flex";
+  $("#screen-onboarding").innerHTML = `
+    <div class="logo" id="logo-egg" style="cursor:default;">💗</div>
+    <h1>Saudômetro</h1>
+    <p class="tagline">o encontrômetro do casal (e, se quiser, da turma de amigos também). Entra com sua conta Google pra começar.</p>
+    <div class="stack">
+      <button class="btn btn-primary btn-block" id="btn-google-gate">Continuar com o Google</button>
+      <p class="error-text" id="onboarding-error"></p>
+    </div>
+    <p class="hint-text" style="text-align:center; font-size:11.5px; margin:16px 8px 0;"><a href="privacidade.html" target="_blank" rel="noopener" style="color:inherit;">Política de privacidade</a></p>
+    <p class="hint-text" id="egg-text" style="text-align:center; font-size:11.5px; font-style:italic; margin:14px 8px 0; display:none;">Um app feito com amor: o Gabriel quis entender melhor a Tata, e criou um jeito de matar a saudade e falar de sentimentos. Que ele ajude você e quem você ama também.</p>
+  `;
+  $("#btn-google-gate").addEventListener("click", async () => {
+    setBusy("#btn-google-gate", true);
+    try {
+      await db.signInWithGoogle(); // navega pro Google; a volta cai direto aqui de novo, já logado
+    } catch (e) {
+      $("#onboarding-error").textContent = "Não deu pra abrir o login do Google: " + (e.message || e);
+      setBusy("#btn-google-gate", false);
+    }
+  });
+  $("#logo-egg").addEventListener("click", () => {
+    const t = $("#egg-text");
+    t.style.display = t.style.display === "none" ? "block" : "none";
+  });
 }
 
 // quando a pessoa tem mais de 1 conta (casal e/ou várias turmas de amigos): escolhe qual usar agora.
@@ -459,13 +495,14 @@ function returnToOnboarding() {
   clearKissTimer();
   closeModal();
   $("#screen-app").style.display = "none";
-  renderOnboarding();
+  renderOnboardingChoices();
   $("#screen-onboarding").insertAdjacentHTML("afterbegin", `<p class="card-sub" style="text-align:center; margin:0 0 12px;">Não encontramos mais o casal desta conta (ele pode ter sido apagado). Dá pra criar um novo ou entrar com um código.</p>`);
 }
 
 // ================= ONBOARDING =================
 
-function renderOnboarding() {
+// depois do Google (ou pra quem já estava numa sessão de antes): escolher casal ou turma de amigos
+function renderOnboardingChoices() {
   $("#screen-onboarding").style.display = "flex";
   $("#screen-onboarding").innerHTML = `
     <div class="logo" id="logo-egg" style="cursor:default;">💗</div>
@@ -474,9 +511,6 @@ function renderOnboarding() {
     <div class="stack" id="onboarding-choices">
       <button class="btn btn-primary btn-block" id="btn-create">Criar nosso casal</button>
       <button class="btn btn-secondary btn-block" id="btn-join">Já tenho um código</button>
-      <p class="hint-text" style="text-align:center; margin:10px 0 0;">ou</p>
-      <button class="btn btn-ghost btn-block" id="btn-google">Continuar com o Google</button>
-      <p class="hint-text" style="text-align:center; font-size:11.5px; margin:2px 8px 0;">Ajuda a recuperar o acesso se trocar de celular. Se seu par já criou o casal, use "Já tenho um código" mesmo assim.</p>
       <button class="btn btn-block" id="btn-friends-mode" style="margin-top:14px; background:var(--friends-accent-soft); color:var(--friends-accent-strong); font-size:13.5px; padding:10px;">🧭 Usar com amigos</button>
     </div>
     <div id="onboarding-flow"></div>
@@ -485,16 +519,7 @@ function renderOnboarding() {
   `;
   $("#btn-create").addEventListener("click", startCreateFlow);
   $("#btn-join").addEventListener("click", startJoinFlow);
-  $("#btn-friends-mode").addEventListener("click", startFriendsFlow);
-  $("#btn-google").addEventListener("click", async () => {
-    setBusy("#btn-google", true);
-    try {
-      await db.signInWithGoogle(); // a página navega pro Google; não sobra código pra rodar depois
-    } catch (e) {
-      alert("Não deu pra abrir o login do Google: " + (e.message || e));
-      setBusy("#btn-google", false);
-    }
-  });
+  $("#btn-friends-mode").addEventListener("click", friendsChoiceStep);
   // easter egg: tocar no coração mostra a frase de como o app nasceu
   $("#logo-egg").addEventListener("click", () => {
     const t = $("#egg-text");
@@ -730,36 +755,7 @@ function setBusy(sel, busy) {
 
 // ================= MODO AMIGOS: entrada =================
 
-// Modo Amigos exige login de verdade (Google), nunca anônimo. Se a pessoa ainda não
-// fez login, pede primeiro — depois volta pra cá com a sessão já trocada.
-async function startFriendsFlow() {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session || session.user.is_anonymous) {
-    $("#onboarding-choices").style.display = "none";
-    $("#onboarding-flow").innerHTML = `
-      <div class="stack">
-        <p class="field-label" style="color:var(--friends-accent-strong);">Pra usar com amigos, entra com o Google primeiro</p>
-        <p class="hint-text">Diferente do casal, a turma de amigos precisa de um login de verdade — assim dá pra você participar de mais de uma turma com a mesma conta.</p>
-        <button class="btn btn-block" id="friends-google-btn" style="background:var(--friends-accent); color:var(--on-friends-accent);">Continuar com o Google</button>
-        <button class="btn btn-ghost btn-block" id="friends-back-btn">Voltar</button>
-        <p class="error-text" id="onboarding-error"></p>
-      </div>
-    `;
-    $("#friends-google-btn").addEventListener("click", async () => {
-      setBusy("#friends-google-btn", true);
-      try {
-        await db.signInWithGoogle(); // navega pro Google; a volta cai direto no boot()
-      } catch (e) {
-        $("#onboarding-error").textContent = "Não deu pra abrir o login do Google: " + (e.message || e);
-        setBusy("#friends-google-btn", false);
-      }
-    });
-    $("#friends-back-btn").addEventListener("click", renderOnboarding);
-    return;
-  }
-  friendsChoiceStep();
-}
-
+// só é chamado depois do Google gate (renderGoogleGate), então já tem sessão de verdade aqui
 function friendsChoiceStep() {
   $("#onboarding-choices").style.display = "none";
   $("#onboarding-flow").innerHTML = `
@@ -772,7 +768,7 @@ function friendsChoiceStep() {
   `;
   $("#friends-create-btn").addEventListener("click", friendsCreateStep);
   $("#friends-join-btn").addEventListener("click", friendsJoinStep);
-  $("#friends-back-btn").addEventListener("click", renderOnboarding);
+  $("#friends-back-btn").addEventListener("click", renderOnboardingChoices);
 }
 
 function friendsCreateStep() {
@@ -839,9 +835,88 @@ function friendsJoinStep() {
   });
 }
 
+// versão em modal do criar/entrar em turma, pra quem já está dentro do app (casal) e
+// quer entrar no Modo Amigos pelo Perfil, sem passar pela tela de onboarding.
+function openFriendsGroupModal() {
+  openModal(`
+    <h3 class="modal-title">🧭 Modo Amigos</h3>
+    <div class="stack">
+      <button class="btn btn-block" id="fm-create" style="background:var(--friends-accent); color:var(--on-friends-accent);">Criar uma turma</button>
+      <button class="btn btn-secondary btn-block" id="fm-join">Já tenho um código de turma</button>
+    </div>
+  `);
+  $("#fm-create").addEventListener("click", friendsModalCreateStep);
+  $("#fm-join").addEventListener("click", friendsModalJoinStep);
+}
+
+function friendsModalCreateStep() {
+  openModal(`
+    <h3 class="modal-title">🧭 Criar turma</h3>
+    <div class="stack">
+      <label class="field-label">Nome da turma</label>
+      <input type="text" id="fm-group-name" maxlength="30" placeholder="ex: a turma do futebol" />
+      <label class="field-label">Seu nome</label>
+      <input type="text" id="fm-my-name" maxlength="24" placeholder="seu nome" value="${escapeHTML(myDisplayName() || "")}" />
+      <button class="btn btn-block" id="fm-confirm-create" style="background:var(--friends-accent); color:var(--on-friends-accent);">Criar turma</button>
+      <p class="error-text" id="fm-error"></p>
+    </div>
+  `);
+  $("#fm-confirm-create").addEventListener("click", async () => {
+    const groupName = $("#fm-group-name").value.trim();
+    const myName = cleanName($("#fm-my-name").value);
+    const err = (m) => { $("#fm-error").textContent = m; };
+    if (!myName) return err("Escreva seu nome.");
+    setBusy("#fm-confirm-create", true);
+    try {
+      const created = await friends.createFriendGroup(groupName, myName);
+      closeModal();
+      await enterFriendsMode({ id: created.id, name: groupName || "Minha turma", code: created.code });
+    } catch (e) {
+      err(e.message === "nome_invalido" ? "Escreva seu nome." : "Não deu pra criar a turma: " + (e.message || e));
+      setBusy("#fm-confirm-create", false);
+    }
+  });
+}
+
+function friendsModalJoinStep() {
+  openModal(`
+    <h3 class="modal-title">🧭 Entrar numa turma</h3>
+    <div class="stack">
+      <label class="field-label">Código da turma</label>
+      <input type="text" id="fm-join-code" placeholder="ex: AB12CD34" style="text-transform:uppercase; text-align:center; letter-spacing:0.04em; font-family:'Baloo 2'; font-size:20px;" maxlength="40" />
+      <label class="field-label">Seu nome</label>
+      <input type="text" id="fm-my-name" maxlength="24" placeholder="seu nome" value="${escapeHTML(myDisplayName() || "")}" />
+      <button class="btn btn-block" id="fm-confirm-join" style="background:var(--friends-accent); color:var(--on-friends-accent);">Entrar na turma</button>
+      <p class="error-text" id="fm-error"></p>
+    </div>
+  `);
+  $("#fm-confirm-join").addEventListener("click", async () => {
+    const code = $("#fm-join-code").value.trim().toUpperCase();
+    const myName = cleanName($("#fm-my-name").value);
+    const err = (m) => { $("#fm-error").textContent = m; };
+    if (code.length < 3) return err("Digite o código completo.");
+    if (!myName) return err("Escreva seu nome.");
+    setBusy("#fm-confirm-join", true);
+    try {
+      const joined = await friends.joinFriendGroup(code, myName);
+      closeModal();
+      await enterFriendsMode(joined);
+    } catch (e) {
+      err(
+        e.message === "codigo_invalido" ? "Não achei essa turma. Confere o código." :
+        e.message === "grupo_cheio" ? "Essa turma já está cheia." :
+        e.message === "nome_invalido" ? "Escreva seu nome." :
+        "Não deu pra entrar: " + (e.message || e)
+      );
+      setBusy("#fm-confirm-join", false);
+    }
+  });
+}
+
 // tela mínima do Modo Amigos (fundação) — as abas de verdade (rolês, humor, recados,
 // prêmios) chegam nas próximas etapas; por enquanto mostra o código e quem já entrou.
 async function enterFriendsMode(group) {
+  if (State.unsubscribe) { State.unsubscribe(); State.unsubscribe = null; } // saindo do casal (se estava nele): para de ouvir as mudanças dele
   State.friendGroup = group;
   $("#screen-onboarding").style.display = "none";
   $("#screen-app").style.display = "none";
@@ -2898,13 +2973,14 @@ function openPerkCostModal(perk) {
 async function renderProfile() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const moodSince = toISODate(addDays(new Date(), -60));
-  const [coins, history, couple, loginStreakInfo, moodHistory, googleLinked] = await Promise.all([
+  const [coins, history, couple, loginStreakInfo, moodHistory, googleLinked, myFriendGroups] = await Promise.all([
     db.getCoinBalances(State.coupleId),
     db.listCoinHistory(State.coupleId, 12),
     supabase.from("couples").select("code").eq("id", State.coupleId).single(),
     computeLoginStreak(),
     db.getMoodHistory(State.coupleId, moodSince),
     db.getGoogleLinkStatus(),
+    friends.listMyFriendGroups().catch(() => []),
   ]);
   const loginStreak = loginStreakInfo.streak;
   const moodStreak = countMoodStreakFromHistory(moodHistory, State.role);
@@ -2953,6 +3029,24 @@ ${feat("streaks") ? `    <div class="section-title">Sequências 🔥</div>
         ? `<p class="card-sub" style="margin-bottom:0;">✅ Sua conta Google já está ligada neste perfil. Se trocar de celular, use "Continuar com o Google" pra entrar direto.</p>`
         : `<div class="card-sub">Ligue sua conta Google a este perfil, como um seguro: se você trocar de celular ou perder o código do casal, ainda consegue entrar.</div>
            <button class="btn btn-secondary btn-block" id="btn-link-google">Ligar minha conta Google</button>`}
+    </div>
+
+    <div class="section-title">Modo Amigos 🧭</div>
+    <div class="card" style="border-color:var(--friends-accent-soft);">
+      ${!googleLinked ? `
+        <p class="card-sub" style="margin-bottom:0;">Pra usar com amigos, primeiro liga sua conta Google aqui em cima — depois volta nessa tela.</p>
+      ` : `
+        ${myFriendGroups.length ? `
+          <p class="card-sub">Você faz parte de ${myFriendGroups.length === 1 ? "1 turma" : myFriendGroups.length + " turmas"}. Trocar de conta não pede login de novo.</p>
+          <div class="stack">
+            ${myFriendGroups.map((g) => `<button class="btn btn-block" data-switch-friends="${g.id}" style="background:var(--friends-accent-soft); color:var(--friends-accent-strong);">🧭 ${escapeHTML(g.name)}</button>`).join("")}
+          </div>
+          <button class="btn btn-ghost btn-block" style="margin-top:8px;" id="btn-new-friend-group">Criar ou entrar em outra turma</button>
+        ` : `
+          <p class="card-sub">Um "modo" separado do casal, pra turma de amigos: código próprio, prêmios próprios, moedas separadas.</p>
+          <button class="btn btn-block" id="btn-new-friend-group" style="background:var(--friends-accent); color:var(--on-friends-accent);">🧭 Criar ou entrar numa turma</button>
+        `}
+      `}
     </div>
 
     <div class="section-title">Privacidade 🔒</div>
@@ -3044,6 +3138,11 @@ ${coinsOn() ? `    <div class="section-title">Moedas 💰</div>
       setBusy("#btn-link-google", false);
     }
   });
+  view.querySelectorAll("[data-switch-friends]").forEach((btn) => btn.addEventListener("click", async () => {
+    const g = myFriendGroups.find((x) => x.id === btn.dataset.switchFriends);
+    if (g) await enterFriendsMode(g);
+  }));
+  $("#btn-new-friend-group")?.addEventListener("click", openFriendsGroupModal);
   $("#btn-install-guide")?.addEventListener("click", openInstallGuide);
   $("#btn-install-guide-2")?.addEventListener("click", openInstallGuide);
 
