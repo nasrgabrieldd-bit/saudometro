@@ -36,5 +36,7 @@ export async function createFriendGroup(name, displayName) {
 export async function joinFriendGroup(code, displayName) {
   const { data, error } = await supabase.rpc("join_friend_group", { p_code: code, p_display_name: displayName });
   if (error) throw error;
+  // código errado vem como resposta (não como exceção) pra a tentativa poder ficar registrada
+  if (data?.error) throw new Error(data.error);
   return data;
 }
