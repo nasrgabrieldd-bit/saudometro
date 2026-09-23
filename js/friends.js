@@ -93,3 +93,40 @@ export async function markGroupRedemptionFulfilled(id) {
   const { error } = await supabase.from("friend_redemptions").update({ status: "cumprido", fulfilled_at: new Date().toISOString() }).eq("id", id);
   if (error) throw error;
 }
+
+// ---------- rolês (agenda de encontros da turma) ----------
+
+export async function listUpcomingEvents(friendGroupId, fromDateISO, limit = 20) {
+  const { data, error } = await supabase
+    .from("friend_events")
+    .select("*, friend_event_rsvps(user_id, status)")
+    .eq("friend_group_id", friendGroupId)
+    .gte("start_date", fromDateISO)
+    .order("start_date", { ascending: true })
+    .order("start_time", { ascending: true, nullsFirst: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createEvent(friendGroupId, userId, title, startDateISO, startTime) {
+  const { data, error } = await supabase
+    .from("friend_events")
+    .insert({ friend_group_id: friendGroupId, title, start_date: startDateISO, start_time: startTime || null, created_by: userId })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteEvent(id) {
+  const { error } = await supabase.from("friend_events").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function setMyRsvp(eventId, userId, status) {
+  const { error } = await supabase
+    .from("friend_event_rsvps")
+    .upsert({ event_id: eventId, user_id: userId, status, updated_at: new Date().toISOString() }, { onConflict: "event_id,user_id" });
+  if (error) throw error;
+}
