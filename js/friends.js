@@ -121,10 +121,10 @@ export async function listEventsForMonth(friendGroupId, monthStartISO, monthEndI
   return data || [];
 }
 
-export async function createEvent(friendGroupId, userId, title, startDateISO, startTime, category) {
+export async function createEvent(friendGroupId, userId, title, startDateISO, startTime, category, details) {
   const { data, error } = await supabase
     .from("friend_events")
-    .insert({ friend_group_id: friendGroupId, title, start_date: startDateISO, start_time: startTime || null, category: category || "amigos", created_by: userId })
+    .insert({ friend_group_id: friendGroupId, title, start_date: startDateISO, start_time: startTime || null, category: category || "amigos", details: details || "", created_by: userId })
     .select()
     .single();
   if (error) throw error;
@@ -140,5 +140,45 @@ export async function setMyRsvp(eventId, userId, status) {
   const { error } = await supabase
     .from("friend_event_rsvps")
     .upsert({ event_id: eventId, user_id: userId, status, updated_at: new Date().toISOString() }, { onConflict: "event_id,user_id" });
+  if (error) throw error;
+}
+
+// ---------- experiências (achados: filme/série/jogo/playlist/recado) ----------
+
+export async function listFinds(friendGroupId, limit = 50) {
+  const { data, error } = await supabase
+    .from("friend_finds")
+    .select("*, friend_find_reactions(user_id, reaction)")
+    .eq("friend_group_id", friendGroupId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createFind(friendGroupId, userId, kind, title, link, note) {
+  const { data, error } = await supabase
+    .from("friend_finds")
+    .insert({ friend_group_id: friendGroupId, user_id: userId, kind, title, link: link || "", note: note || "" })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteFind(id) {
+  const { error } = await supabase.from("friend_finds").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function setMyFindReaction(findId, userId, reaction) {
+  const { error } = await supabase
+    .from("friend_find_reactions")
+    .upsert({ find_id: findId, user_id: userId, reaction }, { onConflict: "find_id,user_id" });
+  if (error) throw error;
+}
+
+export async function clearMyFindReaction(findId, userId) {
+  const { error } = await supabase.from("friend_find_reactions").delete().eq("find_id", findId).eq("user_id", userId);
   if (error) throw error;
 }
