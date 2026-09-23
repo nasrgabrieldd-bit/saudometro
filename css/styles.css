@@ -50,6 +50,13 @@
   --accent-hero-light: #ca3961;
   --grad-hero: linear-gradient(135deg, var(--accent-strong), var(--accent-hero-light));
   --shadow-hero: 0 10px 28px rgba(189, 43, 85, 0.22);
+
+  /* Modo Amigos: cor própria (azul), separada de propósito da paleta do casal —
+     é outro "modo" do app, não um reskin do casal. Contraste conferido (≥4,5:1). */
+  --friends-accent: #3d66c9;
+  --friends-accent-strong: #2f52a0;
+  --friends-accent-soft: #dce6fc;
+  --on-friends-accent: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -103,6 +110,11 @@
 
     --grad-hero: linear-gradient(135deg, var(--accent-strong), var(--accent));
     --shadow-hero: 0 10px 28px rgba(0, 0, 0, 0.4);
+
+    --friends-accent: #8fb3f5;
+    --friends-accent-strong: #8fb3f5;
+    --friends-accent-soft: #22315a;
+    --on-friends-accent: #2b1226;
   }
 }
 
@@ -140,6 +152,11 @@
 
   --grad-hero: linear-gradient(135deg, var(--accent-strong), var(--accent));
   --shadow-hero: 0 10px 28px rgba(0, 0, 0, 0.4);
+
+  --friends-accent: #8fb3f5;
+  --friends-accent-strong: #8fb3f5;
+  --friends-accent-soft: #22315a;
+  --on-friends-accent: #2b1226;
 }
 
 * { box-sizing: border-box; }
