@@ -1516,7 +1516,7 @@ function openNewFeedPostModal() {
   openModal(`
     <h3 class="modal-title">📷 Postar uma foto</h3>
     <div class="stack">
-      <input type="file" id="fp-file" accept="image/*" capture="environment" style="display:none;" />
+      <input type="file" id="fp-file" accept="image/*" style="display:none;" />
       <div id="fp-picker" style="border:2px dashed var(--friends-accent-soft); border-radius:14px; padding:28px 10px; text-align:center; cursor:pointer;">
         <div style="font-size:30px;">📷</div>
         <div class="hint-text" style="margin-top:4px;">Toque pra tirar ou escolher uma foto</div>
@@ -1667,7 +1667,7 @@ function openNewFindModal() {
       <label class="field-label">Comentário (opcional)</label>
       <textarea id="ff-note" maxlength="200" rows="2" placeholder="por que a turma tem que ver/ouvir isso"></textarea>
       <label class="field-label">Foto (opcional)</label>
-      <input type="file" id="ff-file" accept="image/*" capture="environment" style="display:none;" />
+      <input type="file" id="ff-file" accept="image/*" style="display:none;" />
       <div id="ff-picker" style="border:2px dashed var(--friends-accent-soft); border-radius:14px; padding:20px 10px; text-align:center; cursor:pointer;">
         <div style="font-size:24px;">📷</div>
         <div class="hint-text" style="margin-top:2px;">Toque pra tirar ou escolher uma foto</div>
@@ -3518,7 +3518,7 @@ async function openEditProfileModal(mode) {
 
   openModal(`
     <h3 class="modal-title">👤 Editar perfil</h3>
-    <input type="file" id="ep-file" accept="image/*" capture="environment" style="display:none;" />
+    <input type="file" id="ep-file" accept="image/*" style="display:none;" />
     <div style="text-align:center; margin:8px 0 4px; cursor:pointer;" id="ep-avatar-wrap">
       ${avatarHTML(currentName, currentAvatar, "width:84px; height:84px; font-size:32px; margin:0 auto;")}
     </div>
@@ -3954,7 +3954,7 @@ async function renderMemoriesView() {
     <div class="card">
       <div class="card-sub">Uma foto de algo que te lembrou ${ROLE_LABEL[otherRole()]} hoje, com uma observação. Ex.: "esse Danone me lembrou de você..."</div>
       ${atLimit ? `<p class="hint-text" style="margin-top:8px;">Você já mandou 5 hoje, o limite volta amanhã.</p>` : `
-        <input type="file" id="memory-file" accept="image/*" capture="environment" style="display:none;" />
+        <input type="file" id="memory-file" accept="image/*" style="display:none;" />
         <div id="memory-picker" style="border:2px dashed var(--surface-alt); border-radius:14px; padding:24px 10px; text-align:center; cursor:pointer; margin-top:10px;">
           <div style="font-size:28px;">📷</div>
           <div class="hint-text" style="margin-top:4px;">Toque pra tirar ou escolher uma foto</div>
