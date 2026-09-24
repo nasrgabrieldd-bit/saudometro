@@ -48,6 +48,7 @@ const State = {
   friendsCalendarMonth: startOfMonth(new Date()),
   friendsCalendarEvents: [],
   friendsSelectedDay: null,
+  friendsFindsView: "feed",
 };
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -1000,8 +1001,9 @@ function isDarkMode() {
 function applyGroupColors(colorKey) {
   const palette = GROUP_PALETTES[colorKey] || GROUP_PALETTES.azul;
   const v = isDarkMode() ? palette.dark : palette.light;
-  const el = $("#screen-friends");
-  if (!el) return;
+  // no documentElement (não só em #screen-friends), senão o modal (que fica fora da árvore
+  // de #screen-friends no HTML) não pega a cor da turma e cai na cor padrão
+  const el = document.documentElement;
   el.style.setProperty("--friends-accent", v.accent);
   el.style.setProperty("--friends-accent-strong", v.strong);
   el.style.setProperty("--friends-accent-soft", v.soft);
@@ -1136,11 +1138,36 @@ function renderFriendsActiveTab() {
     home: renderFriendsHome,
     roles: renderFriendsRoles,
     mood: renderFriendsMood,
-    notes: renderFriendsFinds,
+    notes: renderFriendsExperiencias,
     shop: renderFriendsShop,
     group: renderFriendsGroup,
   };
   Promise.resolve((map[State.friendsTab] || renderFriendsHome)()).catch((e) => alert("Deu ruim: " + (e.message || e)));
+}
+
+// Experiências tem duas visões: o feed de fotos (estilo Instagram, padrão) e os achados
+// (filme/série/jogo/playlist já existentes) — um toggle no topo alterna entre as duas.
+function renderFriendsExperiencias() {
+  const view = $("#friends-view");
+  view.innerHTML = `
+    <div class="row" style="gap:8px; margin-bottom:14px;" id="fx-toggle-row">
+      <button class="btn btn-sm" style="flex:1;" data-fx-view="feed">📷 Feed</button>
+      <button class="btn btn-sm" style="flex:1;" data-fx-view="achados">🎬 Achados</button>
+    </div>
+    <div id="fx-content"></div>
+  `;
+  const setToggle = (v) => {
+    State.friendsFindsView = v;
+    $("#fx-toggle-row").querySelectorAll("[data-fx-view]").forEach((b) => {
+      const active = b.dataset.fxView === v;
+      b.style.background = active ? "var(--friends-accent)" : "var(--friends-accent-soft)";
+      b.style.color = active ? "var(--on-friends-accent)" : "var(--friends-accent-strong)";
+    });
+    if (v === "feed") renderFriendsFeed().catch((e) => alert("Deu ruim: " + (e.message || e)));
+    else renderFriendsFinds().catch((e) => alert("Deu ruim: " + (e.message || e)));
+  };
+  $("#fx-toggle-row").querySelectorAll("[data-fx-view]").forEach((b) => b.addEventListener("click", () => setToggle(b.dataset.fxView)));
+  setToggle(State.friendsFindsView || "feed");
 }
 
 function renderFriendsPlaceholder(icon, title, text) {
@@ -1370,7 +1397,7 @@ function findCardHTML(f, byId) {
 }
 
 function commentRowHTML(c, byId) {
-  return `<div style="background:var(--surface-alt); border-radius:10px; padding:8px 10px;">
+  return `<div style="background:var(--friends-accent-soft); color:var(--friends-accent-strong); border-radius:10px; padding:8px 10px;">
     <div style="font-size:12px; font-weight:800;">${c.user_id === State.userId ? "Você" : escapeHTML(byId[c.user_id] || "alguém")}</div>
     <div style="font-size:13.5px;">${escapeHTML(c.text)}</div>
   </div>`;
@@ -1407,7 +1434,7 @@ async function toggleFindComments(findId, byId) {
 }
 
 async function renderFriendsFinds() {
-  const view = $("#friends-view");
+  const view = $("#fx-content");
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const [members, finds] = await Promise.all([
     friends.listGroupMembers(State.friendGroup.id),
@@ -1453,6 +1480,177 @@ async function renderFriendsFinds() {
   });
   view.querySelectorAll("[data-toggle-comments]").forEach((btn) => {
     btn.addEventListener("click", () => toggleFindComments(btn.dataset.toggleComments, byId));
+  });
+}
+
+// ================= FEED DE FOTOS (Experiências) =================
+// tipo Instagram, mas privado da turma: um grupo nunca vê o feed de outro. Post pode ser
+// "fofoca" (destaque colorido + hashtag) e pode ser temporário (some da vista de todo mundo
+// depois de alguns minutos) ou permanente.
+
+function feedThumbHTML(p) {
+  return `<div class="feed-thumb" data-post-id="${p.id}" style="aspect-ratio:1; border-radius:10px; background:var(--surface-alt) center/cover; cursor:pointer; position:relative; ${p.is_fofoca ? "outline:3px solid var(--friends-accent); outline-offset:-3px;" : ""}">
+    ${p.is_fofoca ? `<span style="position:absolute; top:4px; left:4px; background:var(--friends-accent); color:var(--on-friends-accent); font-size:9px; font-weight:800; padding:2px 6px; border-radius:999px;">🔥 fofoca</span>` : ""}
+  </div>`;
+}
+
+async function renderFriendsFeed() {
+  const view = $("#fx-content");
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const [members, posts] = await Promise.all([
+    friends.listGroupMembers(State.friendGroup.id),
+    friends.listFeedPosts(State.friendGroup.id),
+  ]);
+  const byId = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
+
+  view.innerHTML = `
+    <button class="btn btn-block" style="margin-bottom:14px; background:var(--friends-accent); color:var(--on-friends-accent);" id="friends-new-post-btn">+ Postar uma foto</button>
+    ${posts.length ? `<div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px;">
+      ${posts.map((p) => feedThumbHTML(p)).join("")}
+    </div>` : `
+      <div class="card" style="text-align:center; padding:28px 20px;">
+        <div style="font-size:30px;">📷</div>
+        <p class="card-sub" style="margin-bottom:0;">Nada postado ainda. Manda a primeira foto do dia pra turma.</p>
+      </div>`}
+  `;
+  $("#friends-new-post-btn").addEventListener("click", openNewFeedPostModal);
+  view.querySelectorAll(".feed-thumb").forEach((el) => {
+    const post = posts.find((p) => p.id === el.dataset.postId);
+    friends.feedPhotoUrl(post.photo_path).then((url) => { el.style.backgroundImage = `url(${url})`; }).catch(() => {});
+    el.addEventListener("click", () => openFeedPostDetail(post, byId));
+  });
+}
+
+function openNewFeedPostModal() {
+  openModal(`
+    <h3 class="modal-title">📷 Postar uma foto</h3>
+    <div class="stack">
+      <input type="file" id="fp-file" accept="image/*" style="width:100%;" />
+      <div id="fp-preview" style="display:none; margin:10px 0;"><img id="fp-preview-img" style="width:100%; border-radius:12px; max-height:220px; object-fit:cover;" alt="" /></div>
+      <label class="field-label">Legenda (opcional)</label>
+      <input type="text" id="fp-caption" maxlength="120" placeholder="o que tá rolando" />
+      <div class="row" style="align-items:center; gap:8px; margin-top:8px;">
+        <input type="checkbox" id="fp-fofoca" style="width:auto;" />
+        <label for="fp-fofoca" style="margin:0; font-size:13.5px; font-weight:700;">🔥 É uma fofoca?</label>
+      </div>
+      <input type="text" id="fp-hashtag" maxlength="30" placeholder="hashtag da fofoca" style="display:none; margin-top:8px;" />
+      <label class="field-label" style="margin-top:10px;">Quanto tempo fica no ar?</label>
+      <div class="row" style="gap:8px;" id="fp-duration-row">
+        <button type="button" class="btn btn-sm" style="flex:1; background:var(--friends-accent-soft); color:var(--friends-accent-strong);" data-duration="permanent">Pra sempre</button>
+        <button type="button" class="btn btn-sm" style="flex:1;" data-duration="temp">Só 2 minutos</button>
+      </div>
+      <button class="btn btn-block" style="margin-top:14px; background:var(--friends-accent); color:var(--on-friends-accent);" id="fp-confirm">Postar</button>
+      <p class="error-text" id="fp-error"></p>
+    </div>
+  `);
+  let selectedBlob = null;
+  let duration = "permanent";
+  $("#fp-file").addEventListener("change", async (ev) => {
+    const file = ev.target.files?.[0];
+    if (!file) return;
+    try {
+      selectedBlob = await compressImage(file, 1080);
+      $("#fp-preview-img").src = URL.createObjectURL(selectedBlob);
+      $("#fp-preview").style.display = "";
+    } catch (e) {
+      $("#fp-error").textContent = "Não deu pra usar essa foto: " + (e.message || e);
+    }
+  });
+  $("#fp-fofoca").addEventListener("change", (ev) => {
+    $("#fp-hashtag").style.display = ev.target.checked ? "" : "none";
+  });
+  $("#fp-duration-row").querySelectorAll("[data-duration]").forEach((b) => {
+    b.addEventListener("click", () => {
+      duration = b.dataset.duration;
+      $("#fp-duration-row").querySelectorAll("[data-duration]").forEach((x) => {
+        const active = x.dataset.duration === duration;
+        x.style.background = active ? "var(--friends-accent-soft)" : "";
+        x.style.color = active ? "var(--friends-accent-strong)" : "";
+      });
+    });
+  });
+  $("#fp-confirm").addEventListener("click", async () => {
+    const err = (m) => { $("#fp-error").textContent = m; };
+    if (!selectedBlob) return err("Escolhe uma foto primeiro.");
+    const isFofoca = $("#fp-fofoca").checked;
+    const hashtag = $("#fp-hashtag").value.trim();
+    if (isFofoca && !hashtag) return err("Coloca uma hashtag pra fofoca.");
+    setBusy("#fp-confirm", true);
+    try {
+      const expiresAt = duration === "temp" ? new Date(Date.now() + 2 * 60 * 1000).toISOString() : null;
+      await friends.createFeedPost(State.friendGroup.id, State.userId, selectedBlob, $("#fp-caption").value.trim(), isFofoca, isFofoca ? hashtag : null, expiresAt);
+      closeModal();
+      await renderFriendsFeed();
+    } catch (e) {
+      err("Não deu: " + (e.message || e));
+      setBusy("#fp-confirm", false);
+    }
+  });
+}
+
+async function openFeedPostDetail(post, byId) {
+  const authorName = post.user_id === State.userId ? "Você" : (byId[post.user_id] || "alguém");
+  const likes = post.friend_feed_likes || [];
+  const iLiked = likes.some((l) => l.user_id === State.userId);
+  openModal(`
+    <h3 class="modal-title" style="margin-bottom:6px;">${post.is_fofoca ? `🔥 ${escapeHTML(post.hashtag || "fofoca")}` : "📷 Foto"}</h3>
+    <div style="border-radius:14px; overflow:hidden; background:var(--surface-alt); aspect-ratio:1; margin-bottom:10px;">
+      <img id="fpd-img" style="width:100%; height:100%; object-fit:cover;" alt="" />
+    </div>
+    <p style="font-size:13px; font-weight:800; margin:0 0 2px;">${escapeHTML(authorName)}</p>
+    ${post.caption ? `<p class="card-sub" style="margin:0 0 10px;">${escapeHTML(post.caption)}</p>` : ""}
+    <div class="row" style="gap:8px;">
+      <button class="btn btn-sm" style="flex:1; ${iLiked ? "background:var(--friends-accent); color:var(--on-friends-accent);" : "background:var(--friends-accent-soft); color:var(--friends-accent-strong);"}" id="fpd-like">${iLiked ? `💗 Curtido${likes.length ? ` · ${likes.length}` : ""}` : `🤍 Curtir${likes.length ? ` · ${likes.length}` : ""}`}</button>
+      ${post.user_id === State.userId ? `<button class="btn btn-ghost btn-sm" id="fpd-delete">Apagar</button>` : ""}
+    </div>
+    <div id="fpd-comments" style="margin-top:14px;"></div>
+  `);
+  friends.feedPhotoUrl(post.photo_path).then((url) => { $("#fpd-img").src = url; }).catch(() => {});
+  $("#fpd-like").addEventListener("click", async () => {
+    $("#fpd-like").disabled = true;
+    try {
+      if (iLiked) await friends.unlikeFeedPost(post.id, State.userId);
+      else await friends.likeFeedPost(post.id, State.userId);
+      closeModal();
+      await renderFriendsFeed();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+    }
+  });
+  $("#fpd-delete")?.addEventListener("click", async () => {
+    if (!confirm("Apagar essa foto?")) return;
+    try {
+      await friends.deleteFeedPost(post.id, post.photo_path);
+      closeModal();
+      await renderFriendsFeed();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+    }
+  });
+  const comments = await friends.listFeedComments(post.id).catch(() => []);
+  $("#fpd-comments").innerHTML = `
+    <p class="field-label">Comentários</p>
+    <div class="stack" style="gap:6px;">${comments.map((c) => commentRowHTML(c, byId)).join("") || '<p class="hint-text" style="margin:0;">Seja o primeiro a comentar.</p>'}</div>
+    <div class="row" style="gap:8px; margin-top:8px;">
+      <input type="text" id="fpd-comment-input" maxlength="300" placeholder="Escreva um comentário" style="flex:1;" />
+      <button class="btn btn-sm" style="background:var(--friends-accent); color:var(--on-friends-accent);" id="fpd-comment-send">Enviar</button>
+    </div>
+  `;
+  $("#fpd-comment-send").addEventListener("click", async () => {
+    const input = $("#fpd-comment-input");
+    const text = input.value.trim();
+    if (!text) return;
+    setBusy("#fpd-comment-send", true);
+    try {
+      await friends.addFeedComment(post.id, State.userId, text);
+      const fresh = await friends.listFeedComments(post.id);
+      $("#fpd-comments .stack").innerHTML = fresh.map((c) => commentRowHTML(c, byId)).join("");
+      input.value = "";
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+    } finally {
+      setBusy("#fpd-comment-send", false);
+    }
   });
 }
 
@@ -1672,6 +1870,44 @@ async function renderFriendsRoles() {
     State.friendsSelectedDay = null;
     renderFriendsRoles();
   });
+  maybeShowInvitePopup(events);
+}
+
+const INVITE_SEEN_KEY = "friendsInvitesSeen";
+
+function getSeenInviteIds() {
+  try { return new Set(JSON.parse(localStorage.getItem(INVITE_SEEN_KEY) || "[]")); } catch (e) { return new Set(); }
+}
+
+function markInvitesSeen(ids) {
+  try {
+    const seen = getSeenInviteIds();
+    ids.forEach((id) => seen.add(id));
+    localStorage.setItem(INVITE_SEEN_KEY, JSON.stringify([...seen]));
+  } catch (e) { /* sem storage: só volta a aparecer */ }
+}
+
+// pop-up assim que entra na aba Rolês, se tiver algum rolê marcado especialmente pra você
+// que ainda não viu — em vez de só um selo escondido dentro do dia
+function maybeShowInvitePopup(events) {
+  const seen = getSeenInviteIds();
+  const todayIso = todayISO();
+  const mine = (events || []).filter((e) =>
+    Array.isArray(e.invited_user_ids) && e.invited_user_ids.includes(State.userId) &&
+    e.start_date >= todayIso && !seen.has(e.id)
+  );
+  if (!mine.length) return;
+  openModal(`
+    <h3 class="modal-title">🔖 Você foi chamado(a)!</h3>
+    <div class="stack">
+      ${mine.map((e) => `<div class="card" style="padding:12px;"><div style="font-weight:800;">${escapeHTML(e.title)}</div><div class="hint-text" style="margin:0;">${escapeHTML(eventDateLine(e))}</div></div>`).join("")}
+    </div>
+    <button class="btn btn-block" style="margin-top:14px; background:var(--friends-accent); color:var(--on-friends-accent);" id="invite-popup-ok">Combinado</button>
+  `);
+  $("#invite-popup-ok").addEventListener("click", () => {
+    markInvitesSeen(mine.map((e) => e.id));
+    closeModal();
+  });
 }
 
 function openNewEventModal(dateISO, byId) {
@@ -1692,7 +1928,7 @@ function openNewEventModal(dateISO, byId) {
       <label class="field-label">Detalhes (opcional)</label>
       <textarea id="fe-details" maxlength="200" rows="2" placeholder="endereço, o que levar..."></textarea>
       <label class="field-label">Quem você quer chamar?</label>
-      <p class="hint-text" style="margin:-2px 0 6px;">O rolê fica visível pra turma toda de qualquer jeito — isso só destaca pra quem foi chamado.</p>
+      <p class="hint-text" style="margin:-2px 0 6px;">O rolê fica visível pra turma toda de qualquer jeito, isso só destaca pra quem foi chamado.</p>
       <div class="row" style="gap:6px; flex-wrap:wrap;" id="fe-invite-row">
         ${Object.entries(byId || {}).map(([uid, name]) => `<button type="button" class="btn btn-sm" style="background:var(--friends-accent-soft); color:var(--friends-accent-strong);" data-invite="${uid}">${escapeHTML(uid === State.userId ? "Você" : name)}</button>`).join("")}
       </div>
@@ -1947,7 +2183,7 @@ async function renderFriendsGroup() {
     </div>
     <div class="card" style="margin-top:14px;">
       <p class="field-label">Zona de risco</p>
-      <p class="hint-text">Excluir a turma apaga tudo — rolês, humor, achados, prêmios e o cofre — pra sempre, pra todo mundo.</p>
+      <p class="hint-text">Excluir a turma apaga tudo (rolês, humor, achados, prêmios e o cofre) pra sempre, pra todo mundo.</p>
       <button class="btn btn-ghost btn-block" style="color:var(--danger-text);" id="friends-delete-group-btn">Excluir turma</button>
     </div>
   `;
@@ -1999,7 +2235,7 @@ async function renderFriendsGroup() {
       view.querySelectorAll("[data-kick-vote]").forEach((b) => { b.disabled = true; });
       try {
         const result = await friends.castKickBallot(btn.dataset.kickVote, btn.dataset.vote === "true");
-        if (result.removed) alert("A votação passou — a pessoa foi removida da turma.");
+        if (result.removed) alert("A votação passou, a pessoa foi removida da turma.");
         await renderFriendsGroup();
       } catch (e) {
         alert("Não deu: " + (e.message || e));
@@ -2165,7 +2401,7 @@ async function renderHome() {
           <div class="flip-unit"><span class="flip-value" data-unit="m">00</span><span class="flip-label">min</span></div>
           <div class="flip-unit"><span class="flip-value" data-unit="s">00</span><span class="flip-label">seg</span></div>
         </div>
-      ` : `<div class="card-sub" style="margin:10px 0;">—</div>`}
+      ` : `<div class="card-sub" style="margin:10px 0;">-</div>`}
       <p class="hint-text">Toca aqui pra ${stats?.last_kiss_at ? "atualizar" : "registrar"} a hora do último beijo</p>
     </div>` : "";
   html.goal = feat("goal") ? `    <div class="card">
@@ -3601,7 +3837,7 @@ async function renderCapsuleView() {
   view.innerHTML = `
     ${subViewHeader("🕰️ Cápsula do tempo")}
     <div class="card">
-      <div class="card-sub">Escreva algo agora — só pode ser aberta na data que você escolher.</div>
+      <div class="card-sub">Escreva algo agora, só pode ser aberta na data que você escolher.</div>
       <textarea id="capsule-text" rows="3" placeholder="daqui uns anos, quero que você lembre que..."></textarea>
       <label class="field-label">Abrir em</label>
       <input type="date" id="capsule-date" min="${toISODate(addDays(new Date(), 1))}" value="${toISODate(addDays(new Date(), 30))}" />
@@ -3677,7 +3913,7 @@ async function renderMemoriesView() {
     ${subViewHeader("📷 Lembrei de você")}
     <div class="card">
       <div class="card-sub">Uma foto de algo que te lembrou ${ROLE_LABEL[otherRole()]} hoje, com uma observação. Ex.: "esse Danone me lembrou de você..."</div>
-      ${atLimit ? `<p class="hint-text" style="margin-top:8px;">Você já mandou 5 hoje — o limite volta amanhã.</p>` : `
+      ${atLimit ? `<p class="hint-text" style="margin-top:8px;">Você já mandou 5 hoje, o limite volta amanhã.</p>` : `
         <input type="file" id="memory-file" accept="image/*" capture="environment" style="margin:10px 0; width:100%;" />
         <div id="memory-preview" style="display:none; margin-bottom:10px; text-align:center;"><img id="memory-preview-img" style="max-width:100%; max-height:200px; border-radius:12px;" /></div>
         <textarea id="memory-caption" rows="2" maxlength="300" placeholder="esse Danone me lembrou de você..."></textarea>
@@ -3731,7 +3967,7 @@ async function renderMemoriesView() {
       await renderNotes();
     } catch (e) {
       $("#memory-err").hidden = false;
-      $("#memory-err").textContent = e.message === "limite_diario" ? "Você já mandou 5 hoje — o limite volta amanhã." : "Não deu: " + (e.message || e);
+      $("#memory-err").textContent = e.message === "limite_diario" ? "Você já mandou 5 hoje, o limite volta amanhã." : "Não deu: " + (e.message || e);
       setBusy("#btn-send-memory", false);
     }
   });
@@ -3778,7 +4014,7 @@ async function renderWishesView() {
   view.innerHTML = `
     ${subViewHeader("🎁 Desejos secretos")}
     <div class="card">
-      <div class="card-sub">Até 3 desejos guardados só seus — ${ROLE_LABEL[otherRole()]} não vê o que você escreveu aqui.</div>
+      <div class="card-sub">Até 3 desejos guardados só seus, ${ROLE_LABEL[otherRole()]} não vê o que você escreveu aqui.</div>
       ${[1, 2, 3].map((slot) => {
         const w = myWishes.find((x) => x.slot === slot);
         return `<input type="text" class="wish-input" data-slot="${slot}" maxlength="120" style="margin-top:8px;" value="${escapeHTML(w?.text || "")}" placeholder="desejo ${slot}, ex: um dia de spa" />`;
@@ -3787,7 +4023,7 @@ async function renderWishesView() {
     </div>
     <div class="card">
       <div class="card-title" style="font-size:15px;">Resgatar um desejo de ${ROLE_LABEL[otherRole()]}</div>
-      <div class="card-sub">Sorteia um às cegas — você só descobre qual foi amanhã.</div>
+      <div class="card-sub">Sorteia um às cegas, você só descobre qual foi amanhã.</div>
       <div class="row" style="align-items:center;">
         ${coinsOn() ? `<span class="pill pill-coin">💰 você tem ${myCoins}</span>` : ""}
         <button class="btn btn-plum" id="btn-redeem-wish" ${coinsOn() && myCoins < coinRule("wish") ? "disabled" : ""}>🎁 Resgatar às cegas${costTag("wish")}</button>
@@ -4117,7 +4353,7 @@ function openPerkCostModal(perk) {
   openModal(`
     <h3 class="modal-title">✏️ Valor deste item</h3>
     <p class="card-sub">${perk.emoji} ${escapeHTML(gen(perk.title, genderOf(State.role)))}</p>
-    <p class="hint-text">Isso só muda pro seu casal — outros casais continuam vendo o valor padrão (${base.cost}).</p>
+    <p class="hint-text">Isso só muda pro seu casal, outros casais continuam vendo o valor padrão (${base.cost}).</p>
     <label class="field-label">Custo em moedas</label>
     <input type="number" id="perk-cost-value" min="1" max="200" value="${perk.cost}" />
     <button class="btn btn-primary btn-block" style="margin-top:16px;" id="save-perk-cost">Salvar</button>
@@ -4219,7 +4455,7 @@ ${feat("streaks") ? `    <div class="section-title">Sequências 🔥</div>
     <div class="section-title">Modo Amigos 👥</div>
     <div class="card" style="border-color:var(--friends-accent-soft);">
       ${!googleLinked ? `
-        <p class="card-sub" style="margin-bottom:0;">Pra usar com amigos, primeiro liga sua conta Google aqui em cima — depois volta nessa tela.</p>
+        <p class="card-sub" style="margin-bottom:0;">Pra usar com amigos, primeiro liga sua conta Google aqui em cima, depois volta nessa tela.</p>
       ` : `
         ${myFriendGroups.length ? `
           <p class="card-sub">Você faz parte de ${myFriendGroups.length === 1 ? "1 turma" : myFriendGroups.length + " turmas"}. Trocar de conta não pede login de novo.</p>
@@ -4283,9 +4519,9 @@ ${coinsOn() ? `    <div class="section-title">Moedas 💰</div>
       </div>
       <div class="stack" style="margin-top:12px; font-size:13px; color:var(--text-muted);">
         ${coinRulesHTML()}
-        <div>🎁 Todo resgate na lojinha fica <strong style="color:var(--text);">pendente</strong> até alguém marcar como cumprido — só aí quem cumpriu ganha a moeda de recompensa. Se o outro te resgatou algo, um aviso aparece quando você abrir o app.</div>
-        <div>🕰️ A cápsula do tempo é de graça — não gasta nem dá moeda, é só pra guardar um recado pro futuro.</div>
-        ${luckyOn() ? `<div>🍀 De vez em quando (1 em cada 10), uma recompensa vem em dobro — é o "dia da sorte".</div>` : ""}
+        <div>🎁 Todo resgate na lojinha fica <strong style="color:var(--text);">pendente</strong> até alguém marcar como cumprido, só aí quem cumpriu ganha a moeda de recompensa. Se o outro te resgatou algo, um aviso aparece quando você abrir o app.</div>
+        <div>🕰️ A cápsula do tempo é de graça, não gasta nem dá moeda, é só pra guardar um recado pro futuro.</div>
+        ${luckyOn() ? `<div>🍀 De vez em quando (1 em cada 10), uma recompensa vem em dobro, é o "dia da sorte".</div>` : ""}
         <div>Todo mundo começa com 25 moedas. Recusar nunca fica bloqueado por falta de moeda. É só um joguinho por cima, ninguém é obrigado a nada.</div>
       </div>
     </div>
@@ -4342,7 +4578,7 @@ ${coinsOn() ? `    <div class="section-title">Moedas 💰</div>
   $("#btn-enable-push")?.addEventListener("click", () => {
     openModal(`
       <h3 class="modal-title">🔔 Ativar notificações</h3>
-      <p class="card-sub">O seu celular vai pedir uma permissão agora — é só aceitar (geralmente aparece "Permitir"). Depois disso, você recebe aviso quando ${ROLE_LABEL[otherRole()]} atualizar o humor, mandar um convite ou responder a pergunta da semana.</p>
+      <p class="card-sub">O seu celular vai pedir uma permissão agora, é só aceitar (geralmente aparece "Permitir"). Depois disso, você recebe aviso quando ${ROLE_LABEL[otherRole()]} atualizar o humor, mandar um convite ou responder a pergunta da semana.</p>
       <button class="btn btn-primary btn-block" style="margin-top:16px;" id="btn-confirm-push">Continuar</button>
     `);
     $("#btn-confirm-push").addEventListener("click", async () => {
@@ -5118,7 +5354,7 @@ async function showAdminStats(key) {
     let errs = [];
     try { errs = await db.adminErrors(key); } catch (e) { errs = null; } // migração de erros ainda não rodou
     try { sessionStorage.setItem("adminKey", key); } catch (e) { /* sem storage */ }
-    const fmt = (iso) => (iso ? humanDateShort(parseISODate(String(iso).slice(0, 10))) : "—");
+    const fmt = (iso) => (iso ? humanDateShort(parseISODate(String(iso).slice(0, 10))) : "-");
     const stat = (n, label) => `<div class="card" style="text-align:center; margin:0;"><div style="font-family:'Baloo 2',sans-serif; font-size:28px; font-weight:800; color:var(--accent-strong);">${n}</div><div class="hint-text" style="margin:0;">${label}</div></div>`;
     openModal(`
       <h3 class="modal-title">🔐 Modo dono</h3>
@@ -5153,7 +5389,7 @@ async function showAdminStats(key) {
             </div>
           </div>`).join("") : `<div class="empty-state">Nenhum erro nos últimos 7 dias 🎉</div>`}
       </div>
-      <p class="hint-text" style="margin-top:12px;">Só números e datas — nenhum código de casal ou conteúdo privado aparece aqui.</p>
+      <p class="hint-text" style="margin-top:12px;">Só números e datas, nenhum código de casal ou conteúdo privado aparece aqui.</p>
       <button class="btn btn-ghost btn-block" style="margin-top:10px;" id="admin-logout">Sair do modo dono</button>
     `);
     $("#admin-logout").addEventListener("click", () => {
