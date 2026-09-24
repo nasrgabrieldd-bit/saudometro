@@ -198,17 +198,27 @@ export async function listFinds(friendGroupId, limit = 50) {
   return data || [];
 }
 
-export async function createFind(friendGroupId, userId, kind, title, link, note) {
+export async function createFind(friendGroupId, userId, kind, title, link, note, photoBlob) {
+  let photoPath = null;
+  if (photoBlob) {
+    photoPath = `${friendGroupId}/${crypto.randomUUID()}.jpg`;
+    const up = await supabase.storage.from("friend-feed").upload(photoPath, photoBlob, { contentType: "image/jpeg" });
+    if (up.error) throw up.error;
+  }
   const { data, error } = await supabase
     .from("friend_finds")
-    .insert({ friend_group_id: friendGroupId, user_id: userId, kind, title, link: link || "", note: note || "" })
+    .insert({ friend_group_id: friendGroupId, user_id: userId, kind, title, link: link || "", note: note || "", photo_path: photoPath })
     .select()
     .single();
-  if (error) throw error;
+  if (error) {
+    if (photoPath) await supabase.storage.from("friend-feed").remove([photoPath]).catch(() => {});
+    throw error;
+  }
   return data;
 }
 
-export async function deleteFind(id) {
+export async function deleteFind(id, photoPath) {
+  if (photoPath) await supabase.storage.from("friend-feed").remove([photoPath]).catch(() => {});
   const { error } = await supabase.from("friend_finds").delete().eq("id", id);
   if (error) throw error;
 }
@@ -272,6 +282,11 @@ export async function regenerateFriendGroupCode(friendGroupId) {
   const { data, error } = await supabase.rpc("regenerate_friend_group_code", { p_friend_group_id: friendGroupId });
   if (error) throw error;
   return data;
+}
+
+export async function leaveFriendGroup(friendGroupId) {
+  const { error } = await supabase.rpc("leave_friend_group", { p_friend_group_id: friendGroupId });
+  if (error) throw error;
 }
 
 export async function listActiveKickVotes(friendGroupId) {
