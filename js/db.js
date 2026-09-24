@@ -500,7 +500,10 @@ export async function listMemories(coupleId, limit = 30) {
 export async function uploadMyAvatar(userId, blob) {
   const path = `${userId}/avatar.jpg`;
   const up = await supabase.storage.from("avatars").upload(path, blob, { contentType: "image/jpeg", upsert: true });
-  if (up.error) throw new Error(`${up.error.message} [status ${up.error.status}/${up.error.statusCode}] (path: ${path})`);
+  if (up.error) {
+    const who = await supabase.rpc("whoami").catch(() => null);
+    throw new Error(`${up.error.message} [status ${up.error.status}/${up.error.statusCode}] (path: ${path}, auth.uid(): ${who?.data ?? "?"})`);
+  }
   const { data } = supabase.storage.from("avatars").getPublicUrl(path);
   const url = `${data.publicUrl}?v=${Date.now()}`; // muda a query pra forçar recarregar (o navegador cacheia por nome de arquivo)
   await Promise.all([
