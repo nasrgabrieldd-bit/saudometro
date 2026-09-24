@@ -255,3 +255,57 @@ export async function deleteCustomPerk(id) {
   const { error } = await supabase.from("friend_custom_perks").delete().eq("id", id);
   if (error) throw error;
 }
+
+// ---------- gestão da turma (excluir, trocar código, remover por votação) ----------
+
+export async function deleteFriendGroup(friendGroupId) {
+  const { error } = await supabase.from("friend_groups").delete().eq("id", friendGroupId);
+  if (error) throw error;
+}
+
+export async function regenerateFriendGroupCode(friendGroupId) {
+  const { data, error } = await supabase.rpc("regenerate_friend_group_code", { p_friend_group_id: friendGroupId });
+  if (error) throw error;
+  return data;
+}
+
+export async function listActiveKickVotes(friendGroupId) {
+  const { data, error } = await supabase
+    .from("friend_kick_votes")
+    .select("*, friend_kick_ballots(user_id, vote)")
+    .eq("friend_group_id", friendGroupId)
+    .eq("resolved", false);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function proposeKickVote(friendGroupId, targetUserId) {
+  const { data, error } = await supabase.rpc("propose_kick_vote", { p_friend_group_id: friendGroupId, p_target_user_id: targetUserId });
+  if (error) throw error;
+  return data;
+}
+
+export async function castKickBallot(kickVoteId, vote) {
+  const { data, error } = await supabase.rpc("cast_kick_ballot", { p_kick_vote_id: kickVoteId, p_vote: vote });
+  if (error) throw error;
+  return data;
+}
+
+// ---------- comentários num achado ----------
+
+export async function listFindComments(findId) {
+  const { data, error } = await supabase.from("friend_find_comments").select("*").eq("find_id", findId).order("created_at", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function addFindComment(findId, userId, text) {
+  const { data, error } = await supabase.from("friend_find_comments").insert({ find_id: findId, user_id: userId, text }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteFindComment(id) {
+  const { error } = await supabase.from("friend_find_comments").delete().eq("id", id);
+  if (error) throw error;
+}
