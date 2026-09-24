@@ -295,9 +295,12 @@ async function enterApp(profile) {
   updateStreakBadge();
   updateNotesNavBadge();
   if (feat("shop")) checkPendingDebts();
-  maybeShowTour();
-  maybeShowGoogleLinkNudge();
-  maybeShowChangelog("casal");
+  // em sequência (não em paralelo): cada um espera o anterior ser dispensado, senão um aviso
+  // mais lento (ex.: o de ligar a conta Google, que depende de uma chamada assíncrona) pode
+  // sobrescrever o modal de um aviso anterior antes da pessoa conseguir ver ou reagir a ele
+  await maybeShowTour();
+  await maybeShowGoogleLinkNudge();
+  await maybeShowChangelog("casal");
 }
 
 // avisa assim que abre o app se o par te resgatou algo na lojinha que você ainda não cumpriu
@@ -5164,31 +5167,37 @@ function openPersonalizeModal() {
 }
 
 // aviso único pra quem chega num casal novo: tudo começa ligado e dá pra personalizar
+// devolve uma Promise que só resolve quando o aviso é dispensado (ou na hora, se não tiver
+// nada pra mostrar) — assim quem chama pode encadear com await e não corre o risco de um
+// aviso seguinte (ex.: o de ligar a conta Google, ou o changelog) sobrescrever esse no modal
 function maybeShowTour() {
-  const s = State.settings;
-  if (!s?.names?.[State.role]) return; // casal antigo não recebe o aviso
-  if (s.features?.tour?.[State.role]) return;
-  openModal(`
-    <h3 class="modal-title">🎛️ O app é de vocês</h3>
-    <p class="card-sub">Tudo começa ligado. Você pode configurar a tela inicial do jeito que quiser e desligar o que não faz sentido pra vocês, como o cronômetro do beijo, a meta de encontros ou o fim de semana de recarregar.</p>
-    <p class="hint-text">Fica em Perfil, em "Personalizar nosso app". Qualquer um dos dois pode mudar, e o outro é avisado.</p>
-    <button class="btn btn-primary btn-block" style="margin-top:14px;" id="tour-now">Personalizar agora</button>
-    <button class="btn btn-ghost btn-block" style="margin-top:6px;" id="tour-later">Depois</button>
-  `);
-  const markSeen = async () => {
-    try {
-      State.settings = await db.updateCoupleFeatures(State.coupleId, (f) => ({ ...f, tour: { ...(f.tour || {}), [State.role]: true } }));
-      setPeopleSettings(State.settings);
-    } catch (e) { /* aviso é só um bônus */ }
-  };
-  $("#tour-now").addEventListener("click", async () => { await markSeen(); closeModal(); openPersonalizeModal(); });
-  $("#tour-later").addEventListener("click", async () => { await markSeen(); closeModal(); });
+  return new Promise((resolve) => {
+    const s = State.settings;
+    if (!s?.names?.[State.role] || s.features?.tour?.[State.role]) return resolve(); // casal antigo não recebe o aviso
+    openModal(`
+      <h3 class="modal-title">🎛️ O app é de vocês</h3>
+      <p class="card-sub">Tudo começa ligado. Você pode configurar a tela inicial do jeito que quiser e desligar o que não faz sentido pra vocês, como o cronômetro do beijo, a meta de encontros ou o fim de semana de recarregar.</p>
+      <p class="hint-text">Fica em Perfil, em "Personalizar nosso app". Qualquer um dos dois pode mudar, e o outro é avisado.</p>
+      <button class="btn btn-primary btn-block" style="margin-top:14px;" id="tour-now">Personalizar agora</button>
+      <button class="btn btn-ghost btn-block" style="margin-top:6px;" id="tour-later">Depois</button>
+    `);
+    const markSeen = async () => {
+      try {
+        State.settings = await db.updateCoupleFeatures(State.coupleId, (f) => ({ ...f, tour: { ...(f.tour || {}), [State.role]: true } }));
+        setPeopleSettings(State.settings);
+      } catch (e) { /* aviso é só um bônus */ }
+    };
+    $("#tour-now").addEventListener("click", async () => { await markSeen(); closeModal(); openPersonalizeModal(); resolve(); });
+    $("#tour-later").addEventListener("click", async () => { await markSeen(); closeModal(); resolve(); });
+  });
 }
 
 const GOOGLE_NUDGE_DISMISSED_KEY = "googleLinkNudgeDismissed";
 
 // convida quem ainda está no jeito antigo (sessão anônima, sem Google ligado) a ligar a conta —
-// uma vez só (guardado no localStorage), pra não repetir toda vez que abrir o app
+// uma vez só (guardado no localStorage), pra não repetir toda vez que abrir o app. Resolve a
+// Promise quando dispensado (ou na hora, se não tiver nada pra mostrar), assim quem chama
+// pode encadear com await sem correr o risco de um aviso seguinte sobrescrever esse no modal
 async function maybeShowGoogleLinkNudge() {
   try {
     if (localStorage.getItem(GOOGLE_NUDGE_DISMISSED_KEY) === "1") return;
@@ -5197,26 +5206,30 @@ async function maybeShowGoogleLinkNudge() {
   try { anon = await db.isAnonymousUser(); } catch (e) { return; }
   if (!anon) return;
 
-  openModal(`
-    <h3 class="modal-title">🔐 Ligar sua conta Google</h3>
-    <p class="card-sub">Recomendamos ligar sua conta Google ao seu perfil: ajuda a recuperar o acesso se você trocar de celular ou perder o código do casal, e é por essa mesma conta que dá pra usar o Modo Amigos.</p>
-    <button class="btn btn-primary btn-block" style="margin-top:14px;" id="btn-google-nudge-link">Ligar minha conta Google</button>
-    <button class="btn btn-ghost btn-block" style="margin-top:6px;" id="btn-google-nudge-dismiss">Agora não</button>
-  `);
-  $("#btn-google-nudge-link")?.addEventListener("click", async () => {
-    setBusy("#btn-google-nudge-link", true);
-    try {
-      const { error } = await db.linkGoogleIdentity();
-      if (error) throw error;
-      // a página navega pro Google e volta sozinha; nada mais a fazer aqui
-    } catch (e) {
-      alert("Não deu: " + (e.message || e));
-      setBusy("#btn-google-nudge-link", false);
-    }
-  });
-  $("#btn-google-nudge-dismiss")?.addEventListener("click", () => {
-    try { localStorage.setItem(GOOGLE_NUDGE_DISMISSED_KEY, "1"); } catch (e) { /* sem storage: só volta a aparecer */ }
-    closeModal();
+  return new Promise((resolve) => {
+    openModal(`
+      <h3 class="modal-title">🔐 Ligar sua conta Google</h3>
+      <p class="card-sub">Recomendamos ligar sua conta Google ao seu perfil: ajuda a recuperar o acesso se você trocar de celular ou perder o código do casal, e é por essa mesma conta que dá pra usar o Modo Amigos.</p>
+      <button class="btn btn-primary btn-block" style="margin-top:14px;" id="btn-google-nudge-link">Ligar minha conta Google</button>
+      <button class="btn btn-ghost btn-block" style="margin-top:6px;" id="btn-google-nudge-dismiss">Agora não</button>
+    `);
+    $("#btn-google-nudge-link")?.addEventListener("click", async () => {
+      setBusy("#btn-google-nudge-link", true);
+      try {
+        const { error } = await db.linkGoogleIdentity();
+        if (error) throw error;
+        // a página navega pro Google e volta sozinha; nada mais a fazer aqui
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        setBusy("#btn-google-nudge-link", false);
+        resolve();
+      }
+    });
+    $("#btn-google-nudge-dismiss")?.addEventListener("click", () => {
+      try { localStorage.setItem(GOOGLE_NUDGE_DISMISSED_KEY, "1"); } catch (e) { /* sem storage: só volta a aparecer */ }
+      closeModal();
+      resolve();
+    });
   });
 }
 
@@ -5224,14 +5237,16 @@ async function maybeShowGoogleLinkNudge() {
 // marcar como vista e ver a próxima (ou fechar, se não sobrar nenhuma)
 const CHANGELOG_REACTIONS = ["👍", "😍", "🤩", "🎉"];
 
+// resolve quando a fila de novidades acaba (ou na hora, se não tiver nenhuma) — assim quem
+// chama pode encadear com await sem correr o risco de um aviso seguinte sobrescrever esse modal
 function maybeShowChangelog(mode) {
   const queue = unseenChangelogFor(mode);
-  if (!queue.length) return;
-  showNextChangelogEntry(queue, mode);
+  if (!queue.length) return Promise.resolve();
+  return new Promise((resolve) => showNextChangelogEntry(queue, mode, resolve));
 }
 
-function showNextChangelogEntry(queue, mode) {
-  if (!queue.length) return;
+function showNextChangelogEntry(queue, mode, resolve) {
+  if (!queue.length) return resolve();
   const entry = queue[0];
   const accentVar = mode === "amigos" ? "--friends-accent" : "--accent-btn";
   const onAccentVar = mode === "amigos" ? "--on-friends-accent" : "--on-accent-btn";
@@ -5249,8 +5264,8 @@ function showNextChangelogEntry(queue, mode) {
     btn.addEventListener("click", () => {
       markChangelogSeen(entry.id);
       const rest = queue.slice(1);
-      if (rest.length) showNextChangelogEntry(rest, mode);
-      else closeModal();
+      if (rest.length) showNextChangelogEntry(rest, mode, resolve);
+      else { closeModal(); resolve(); }
     });
   });
 }
