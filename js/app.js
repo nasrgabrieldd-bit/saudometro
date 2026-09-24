@@ -5,6 +5,7 @@ import { initErrorReporting, isAccessDenied } from "./errors.js";
 import { installGuideHTML, isInstalled, canPromptInstall, promptInstall, shouldShowInstallHint, dismissInstallHint } from "./install.js";
 import { supabase, isConfigured } from "./supabaseClient.js";
 import * as friends from "./friends.js";
+import { unseenChangelogFor, markChangelogSeen } from "./changelog.js";
 import { FRIEND_PERKS, FRIEND_PERK_BY_ID, FRIEND_PERK_CATEGORIES } from "./friendsPerks.js";
 import * as db from "./db.js";
 import { MOODS, MOOD_BY_ID, TALK_OPTIONS, TALK_BY_ID } from "./moods.js";
@@ -293,6 +294,7 @@ async function enterApp(profile) {
   if (feat("shop")) checkPendingDebts();
   maybeShowTour();
   maybeShowGoogleLinkNudge();
+  maybeShowChangelog("casal");
 }
 
 // avisa assim que abre o app se o par te resgatou algo na lojinha que você ainda não cumpriu
@@ -1053,6 +1055,7 @@ async function enterFriendsMode(group) {
   });
   setFriendsTab("home");
   updateFriendsStreakBadge();
+  maybeShowChangelog("amigos");
 }
 
 function setFriendsTab(tab) {
@@ -4811,6 +4814,40 @@ async function maybeShowGoogleLinkNudge() {
   });
 }
 
+// mostra as novidades ainda não vistas, uma de cada vez — a pessoa reage com um emoji pra
+// marcar como vista e ver a próxima (ou fechar, se não sobrar nenhuma)
+const CHANGELOG_REACTIONS = ["👍", "😍", "🤩", "🎉"];
+
+function maybeShowChangelog(mode) {
+  const queue = unseenChangelogFor(mode);
+  if (!queue.length) return;
+  showNextChangelogEntry(queue, mode);
+}
+
+function showNextChangelogEntry(queue, mode) {
+  if (!queue.length) return;
+  const entry = queue[0];
+  const accentVar = mode === "amigos" ? "--friends-accent" : "--accent-btn";
+  const onAccentVar = mode === "amigos" ? "--on-friends-accent" : "--on-accent-btn";
+  openModal(`
+    <p class="hint-text" style="text-align:center; font-weight:800; letter-spacing:.04em; text-transform:uppercase; margin:0 0 8px;">Novidade</p>
+    <div style="text-align:center; font-size:34px;">${entry.emoji}</div>
+    <h3 class="modal-title" style="text-align:center;">${escapeHTML(entry.title)}</h3>
+    <p class="card-sub" style="text-align:center;">${escapeHTML(entry.text)}</p>
+    <p class="hint-text" style="text-align:center; margin-top:16px;">Reage pra continuar:</p>
+    <div class="row" style="gap:8px; justify-content:center; margin-top:6px;">
+      ${CHANGELOG_REACTIONS.map((r) => `<button class="btn btn-sm" style="flex:none; font-size:20px; padding:8px 14px; background:var(${accentVar}); color:var(${onAccentVar});" data-changelog-react="${r}">${r}</button>`).join("")}
+    </div>
+  `);
+  $("#modal-sheet").querySelectorAll("[data-changelog-react]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      markChangelogSeen(entry.id);
+      const rest = queue.slice(1);
+      if (rest.length) showNextChangelogEntry(rest, mode);
+      else closeModal();
+    });
+  });
+}
 
 // ================= MEUS DADOS =================
 
