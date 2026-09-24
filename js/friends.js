@@ -314,3 +314,68 @@ export async function deleteFindComment(id) {
   const { error } = await supabase.from("friend_find_comments").delete().eq("id", id);
   if (error) throw error;
 }
+
+// ---------- feed de fotos (Experiências) ----------
+
+export async function listFeedPosts(friendGroupId, limit = 60) {
+  const nowISO = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("friend_feed_posts")
+    .select("*, friend_feed_likes(user_id), friend_feed_comments(id)")
+    .eq("friend_group_id", friendGroupId)
+    .or(`expires_at.is.null,expires_at.gt.${nowISO}`)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function feedPhotoUrl(path) {
+  const { data, error } = await supabase.storage.from("friend-feed").createSignedUrl(path, 3600);
+  if (error) throw error;
+  return data.signedUrl;
+}
+
+export async function createFeedPost(friendGroupId, userId, photoBlob, caption, isFofoca, hashtag, expiresAt) {
+  const path = `${friendGroupId}/${crypto.randomUUID()}.jpg`;
+  const up = await supabase.storage.from("friend-feed").upload(path, photoBlob, { contentType: "image/jpeg" });
+  if (up.error) throw up.error;
+  const { data, error } = await supabase
+    .from("friend_feed_posts")
+    .insert({ friend_group_id: friendGroupId, user_id: userId, photo_path: path, caption: caption || "", is_fofoca: !!isFofoca, hashtag: hashtag || null, expires_at: expiresAt || null })
+    .select()
+    .single();
+  if (error) {
+    await supabase.storage.from("friend-feed").remove([path]).catch(() => {});
+    throw error;
+  }
+  return data;
+}
+
+export async function deleteFeedPost(id, photoPath) {
+  await supabase.storage.from("friend-feed").remove([photoPath]).catch(() => {});
+  const { error } = await supabase.from("friend_feed_posts").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function likeFeedPost(postId, userId) {
+  const { error } = await supabase.from("friend_feed_likes").insert({ post_id: postId, user_id: userId });
+  if (error) throw error;
+}
+
+export async function unlikeFeedPost(postId, userId) {
+  const { error } = await supabase.from("friend_feed_likes").delete().eq("post_id", postId).eq("user_id", userId);
+  if (error) throw error;
+}
+
+export async function listFeedComments(postId) {
+  const { data, error } = await supabase.from("friend_feed_comments").select("*").eq("post_id", postId).order("created_at", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function addFeedComment(postId, userId, text) {
+  const { data, error } = await supabase.from("friend_feed_comments").insert({ post_id: postId, user_id: userId, text }).select().single();
+  if (error) throw error;
+  return data;
+}

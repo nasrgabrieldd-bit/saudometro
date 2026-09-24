@@ -8,7 +8,7 @@ export const CHANGELOG = [
     tag: "geral",
     emoji: "👥",
     title: "Chegou o Modo Amigos",
-    text: "Agora dá pra usar o Saudômetro com a turma também, não só o casal. Toque em \"Usar com amigos\" na entrada, ou troque de conta pelo Perfil a qualquer momento — sem precisar logar de novo.",
+    text: "Agora dá pra usar o Saudômetro com a turma também, não só o casal. Toque em \"Usar com amigos\" na entrada, ou troque de conta pelo Perfil a qualquer momento, sem precisar logar de novo.",
   },
   {
     id: "amigos-abas",
@@ -23,6 +23,20 @@ export const CHANGELOG = [
     emoji: "🎨",
     title: "Personalize e administre sua turma",
     text: "Em Turma, toque em \"Editar\" pra escolher um emoji e uma cor. Dá pra trocar o código quando quiser, propor remover alguém por votação da turma, ou excluir a turma inteira, se for o caso.",
+  },
+  {
+    id: "foto-de-perfil",
+    tag: "geral",
+    emoji: "👤",
+    title: "Foto de perfil",
+    text: "Toque no seu avatar (o círculo com a inicial, no topo da tela) pra trocar sua foto de perfil. Funciona no casal e em cada turma de amigos, e a foto fica igual em todo canto.",
+  },
+  {
+    id: "amigos-feed-convites",
+    tag: "amigos",
+    emoji: "📷",
+    title: "Feed de fotos e rolê marcado pra você",
+    text: "Experiências agora tem um feed de fotos da turma, privado, só pra vocês. Marque uma foto de fofoca pra ela ficar destacada, comente em thread e dê like. Nos Rolês, dá pra chamar só algumas pessoas pra um encontro, e quem for chamado recebe um aviso ao abrir a aba.",
   },
 ];
 
