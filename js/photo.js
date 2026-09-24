@@ -4,10 +4,10 @@
 const MAX_DIM = 1280; // maior lado da foto, em pixels
 const QUALITY = 0.75;
 
-export async function compressImage(file) {
+export async function compressImage(file, maxDim = MAX_DIM) {
   const bitmap = await createImageBitmap(file);
   try {
-    const scale = Math.min(1, MAX_DIM / Math.max(bitmap.width, bitmap.height));
+    const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
     const w = Math.max(1, Math.round(bitmap.width * scale));
     const h = Math.max(1, Math.round(bitmap.height * scale));
     const canvas = document.createElement("canvas");

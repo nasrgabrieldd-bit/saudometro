@@ -189,6 +189,7 @@ function renderGoogleGate() {
     </div>
     <p class="hint-text" style="text-align:center; font-size:11.5px; margin:16px 8px 0;"><a href="privacidade.html" target="_blank" rel="noopener" style="color:inherit;">Política de privacidade</a></p>
     <p class="hint-text" id="egg-text" style="text-align:center; font-size:11.5px; font-style:italic; margin:14px 8px 0; display:none;">Um app feito com amor: o Gabriel quis entender melhor a Tata, e criou um jeito de matar a saudade e falar de sentimentos. Que ele ajude você e quem você ama também.</p>
+    <p class="hint-text" style="text-align:center; font-size:10.5px; opacity:.55; margin:10px 8px 0;">👆 toque no coração aí em cima</p>
   `;
   $("#btn-google-gate").addEventListener("click", async () => {
     setBusy("#btn-google-gate", true);
@@ -219,7 +220,7 @@ function renderAccountSwitcher(profile, groups) {
         const pal = GROUP_PALETTES[g.colorKey] || GROUP_PALETTES.azul;
         const v = isDarkMode() ? pal.dark : pal.light;
         return `<button class="btn btn-block" style="background:${v.soft}; color:${v.strong}; display:flex; align-items:center; gap:10px; text-align:left;" data-switch="friends" data-id="${g.id}">
-          <span style="font-size:20px;">${escapeHTML(g.emoji || "🧭")}</span>
+          <span style="font-size:20px;">${escapeHTML(g.emoji || "👥")}</span>
           <span style="flex:1;">${escapeHTML(g.name)}</span>
           <span style="font-size:12px; font-weight:700; opacity:.75;">${g.memberCount || 1} pessoa${g.memberCount === 1 ? "" : "s"}</span>
         </button>`;
@@ -260,7 +261,9 @@ async function enterApp(profile) {
   $("#screen-onboarding").style.display = "none";
   $("#screen-app").style.display = "flex";
 
-  $("#avatar-badge").textContent = (myDisplayName() || "?").trim()[0]?.toUpperCase() || "?";
+  setAvatarBadge("#avatar-badge", myDisplayName(), State.profile?.avatar_url);
+  $("#avatar-badge").style.cursor = "pointer";
+  $("#avatar-badge").onclick = () => openEditProfileModal("casal");
   const hour = new Date().getHours();
   $("#greeting-eyebrow").textContent = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
   $("#greeting-name").textContent = myDisplayName();
@@ -527,11 +530,12 @@ function renderOnboardingChoices() {
     <div class="stack" id="onboarding-choices">
       <button class="btn btn-primary btn-block" id="btn-create">Criar nosso casal</button>
       <button class="btn btn-secondary btn-block" id="btn-join">Já tenho um código</button>
-      <button class="btn btn-block" id="btn-friends-mode" style="margin-top:14px; background:var(--friends-accent-soft); color:var(--friends-accent-strong); font-size:13.5px; padding:10px;">🧭 Usar com amigos</button>
+      <button class="btn btn-block" id="btn-friends-mode" style="margin-top:14px; background:var(--friends-accent-soft); color:var(--friends-accent-strong); font-size:13.5px; padding:10px;">👥 Usar com amigos</button>
     </div>
     <div id="onboarding-flow"></div>
     <p class="hint-text" style="text-align:center; font-size:11.5px; margin:16px 8px 0;"><a href="privacidade.html" target="_blank" rel="noopener" style="color:inherit;">Política de privacidade</a></p>
     <p class="hint-text" id="egg-text" style="text-align:center; font-size:11.5px; font-style:italic; margin:14px 8px 0; display:none;">Um app feito com amor: o Gabriel quis entender melhor a Tata, e criou um jeito de matar a saudade e falar de sentimentos. Que ele ajude você e quem você ama também.</p>
+    <p class="hint-text" style="text-align:center; font-size:10.5px; opacity:.55; margin:10px 8px 0;">👆 toque no coração aí em cima</p>
   `;
   $("#btn-create").addEventListener("click", startCreateFlow);
   $("#btn-join").addEventListener("click", startJoinFlow);
@@ -794,7 +798,7 @@ function friendsCreateStep() {
       <label class="field-label">Nome da turma</label>
       <input type="text" id="friends-group-name" maxlength="30" placeholder="ex: a turma do futebol" />
       <label class="field-label">Emoji da turma</label>
-      <input type="text" id="friends-group-emoji" maxlength="4" value="🧭" style="text-align:center; width:60px; font-size:22px;" />
+      <input type="text" id="friends-group-emoji" maxlength="4" value="👥" style="text-align:center; width:60px; font-size:22px;" />
       <label class="field-label">Cor da turma</label>
       ${colorPickerHTML("friends", colorKey)}
       <label class="field-label">Seu nome</label>
@@ -813,7 +817,7 @@ function friendsCreateStep() {
   $("#friends-back-btn").addEventListener("click", friendsChoiceStep);
   $("#friends-confirm-create").addEventListener("click", async () => {
     const groupName = $("#friends-group-name").value.trim();
-    const emoji = $("#friends-group-emoji").value.trim() || "🧭";
+    const emoji = $("#friends-group-emoji").value.trim() || "👥";
     const myName = cleanName($("#friends-my-name").value);
     const err = (m) => { $("#onboarding-error").textContent = m; };
     if (!myName) return err("Escreva seu nome.");
@@ -867,7 +871,7 @@ function friendsJoinStep() {
 // quer entrar no Modo Amigos pelo Perfil, sem passar pela tela de onboarding.
 function openFriendsGroupModal() {
   openModal(`
-    <h3 class="modal-title">🧭 Modo Amigos</h3>
+    <h3 class="modal-title">👥 Modo Amigos</h3>
     <div class="stack">
       <button class="btn btn-block" id="fm-create" style="background:var(--friends-accent); color:var(--on-friends-accent);">Criar uma turma</button>
       <button class="btn btn-secondary btn-block" id="fm-join">Já tenho um código de turma</button>
@@ -880,12 +884,12 @@ function openFriendsGroupModal() {
 function friendsModalCreateStep() {
   let colorKey = "azul";
   openModal(`
-    <h3 class="modal-title">🧭 Criar turma</h3>
+    <h3 class="modal-title">👥 Criar turma</h3>
     <div class="stack">
       <label class="field-label">Nome da turma</label>
       <input type="text" id="fm-group-name" maxlength="30" placeholder="ex: a turma do futebol" />
       <label class="field-label">Emoji da turma</label>
-      <input type="text" id="fm-group-emoji" maxlength="4" value="🧭" style="text-align:center; width:60px; font-size:22px;" />
+      <input type="text" id="fm-group-emoji" maxlength="4" value="👥" style="text-align:center; width:60px; font-size:22px;" />
       <label class="field-label">Cor da turma</label>
       ${colorPickerHTML("fm", colorKey)}
       <label class="field-label">Seu nome</label>
@@ -902,7 +906,7 @@ function friendsModalCreateStep() {
   });
   $("#fm-confirm-create").addEventListener("click", async () => {
     const groupName = $("#fm-group-name").value.trim();
-    const emoji = $("#fm-group-emoji").value.trim() || "🧭";
+    const emoji = $("#fm-group-emoji").value.trim() || "👥";
     const myName = cleanName($("#fm-my-name").value);
     const err = (m) => { $("#fm-error").textContent = m; };
     if (!myName) return err("Escreva seu nome.");
@@ -920,7 +924,7 @@ function friendsModalCreateStep() {
 
 function friendsModalJoinStep() {
   openModal(`
-    <h3 class="modal-title">🧭 Entrar numa turma</h3>
+    <h3 class="modal-title">👥 Entrar numa turma</h3>
     <div class="stack">
       <label class="field-label">Código da turma</label>
       <input type="text" id="fm-join-code" placeholder="ex: AB12CD34" style="text-transform:uppercase; text-align:center; letter-spacing:0.04em; font-family:'Baloo 2'; font-size:20px;" maxlength="40" />
@@ -1032,11 +1036,12 @@ async function enterFriendsMode(group) {
     <header class="topbar" style="background:var(--friends-accent-soft);">
       <div>
         <div class="greeting-eyebrow">Turma</div>
-        <h1>${escapeHTML(group.emoji || "🧭")} ${escapeHTML(group.name || "Minha turma")}</h1>
+        <h1>${escapeHTML(group.emoji || "👥")} ${escapeHTML(group.name || "Minha turma")}</h1>
       </div>
       <div class="topbar-actions">
         <span class="streak-badge" id="friends-streak-badge" title="Ofensiva da turma" hidden></span>
         <button class="theme-toggle" id="friends-switch-btn" title="Trocar de conta">🔀</button>
+        <div class="avatar" id="friends-avatar-badge" style="cursor:pointer; background:var(--friends-accent-soft); color:var(--friends-accent-strong);">?</div>
       </div>
     </header>
     <main id="friends-view" style="flex:1; padding:20px 16px; overflow:auto;"></main>
@@ -1044,6 +1049,12 @@ async function enterFriendsMode(group) {
       ${FRIENDS_TABS.map((t) => `<button class="nav-btn" data-friends-tab="${t.tab}"><span class="nav-icon">${icon(t.icon, { size: 22 })}</span><span class="nav-label">${t.label}</span></button>`).join("")}
     </nav>
   `;
+  setAvatarBadge("#friends-avatar-badge", group.myDisplayName, null);
+  $("#friends-avatar-badge").onclick = () => openEditProfileModal("amigos");
+  friends.listGroupMembers(group.id).then((members) => {
+    const me = members.find((m) => m.user_id === State.userId);
+    if (me) setAvatarBadge("#friends-avatar-badge", me.display_name, me.avatar_url);
+  }).catch(() => {});
   $("#friends-switch-btn")?.addEventListener("click", async () => {
     $("#screen-friends").style.display = "none";
     State.profile = await db.getMyProfile(State.userId).catch(() => null);
@@ -1181,7 +1192,7 @@ function nextRoleHeroHTML(event, byId) {
 function emptyRoleHeroHTML() {
   return `
     <div class="card" style="text-align:center; padding:28px 20px; cursor:pointer;" id="friends-home-role-card">
-      <div style="font-size:30px;">🧭</div>
+      <div style="font-size:30px;">👥</div>
       <div class="card-title" style="margin-top:6px;">Nenhum rolê marcado</div>
       <p class="card-sub" style="margin-bottom:0;">Toque pra marcar o próximo encontro da turma.</p>
     </div>`;
@@ -1497,7 +1508,7 @@ function rsvpButtonHTML(eventId, status, label, mine) {
 }
 
 const FRIEND_EVENT_CATEGORIES = {
-  amigos: { emoji: "🧭", label: "Rolê" },
+  amigos: { emoji: "👥", label: "Rolê" },
   trabalho: { emoji: "💼", label: "Trabalho" },
   outro: { emoji: "📌", label: "Outro" },
 };
@@ -1638,7 +1649,7 @@ async function renderFriendsRoles() {
       <div class="weekday-row"><span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span></div>
       <div class="day-grid" id="friends-day-grid"></div>
       <div class="legend">
-        <span>🧭 rolê</span><span>💼 trabalho</span><span>📌 outro</span>
+        <span>👥 rolê</span><span>💼 trabalho</span><span>📌 outro</span>
       </div>
     </div>
     <div id="friends-day-detail"></div>
@@ -1883,7 +1894,7 @@ async function renderFriendsGroup() {
       <div class="row" style="align-items:center;">
         <div style="flex:1;">
           <p class="field-label" style="color:var(--friends-accent-strong); margin-bottom:2px;">Turma</p>
-          <div style="font-size:20px; font-weight:800;">${escapeHTML(State.friendGroup.emoji || "🧭")} ${escapeHTML(State.friendGroup.name || "Minha turma")}</div>
+          <div style="font-size:20px; font-weight:800;">${escapeHTML(State.friendGroup.emoji || "👥")} ${escapeHTML(State.friendGroup.name || "Minha turma")}</div>
         </div>
         <button class="btn btn-ghost btn-sm" id="friends-edit-group-btn">Editar</button>
       </div>
@@ -1903,6 +1914,7 @@ async function renderFriendsGroup() {
       <div class="stack">
         ${members.map((m) => `
           <div class="entry-item">
+            ${avatarHTML(m.display_name, m.avatar_url, "width:34px; height:34px; font-size:14px; background:var(--friends-accent-soft); color:var(--friends-accent-strong);")}
             <div class="entry-body"><div class="entry-title">${m.user_id === State.userId ? "Você" : escapeHTML(m.display_name)}</div></div>
             ${m.user_id !== State.userId && !votedTargets.has(m.user_id) ? `<button class="btn btn-ghost btn-sm" data-propose-kick="${m.user_id}">Propor remover</button>` : ""}
           </div>`).join("") || '<p class="hint-text">Só você, por enquanto.</p>'}
@@ -1981,7 +1993,7 @@ function openEditGroupModal() {
       <label class="field-label">Nome da turma</label>
       <input type="text" id="eg-name" maxlength="30" value="${escapeHTML(group.name || "")}" />
       <label class="field-label">Emoji da turma</label>
-      <input type="text" id="eg-emoji" maxlength="4" value="${escapeHTML(group.emoji || "🧭")}" style="text-align:center; width:60px; font-size:22px;" />
+      <input type="text" id="eg-emoji" maxlength="4" value="${escapeHTML(group.emoji || "👥")}" style="text-align:center; width:60px; font-size:22px;" />
       <label class="field-label">Cor da turma</label>
       ${colorPickerHTML("eg", colorKey)}
       <button class="btn btn-block" style="margin-top:6px; background:var(--friends-accent); color:var(--on-friends-accent);" id="eg-confirm">Salvar</button>
@@ -1996,7 +2008,7 @@ function openEditGroupModal() {
   });
   $("#eg-confirm").addEventListener("click", async () => {
     const name = $("#eg-name").value.trim();
-    const emoji = $("#eg-emoji").value.trim() || "🧭";
+    const emoji = $("#eg-emoji").value.trim() || "👥";
     const err = (m) => { $("#eg-error").textContent = m; };
     if (!name) return err("Escreve um nome pra turma.");
     setBusy("#eg-confirm", true);
@@ -3169,6 +3181,95 @@ function escapeHTML(s) {
   return d.innerHTML;
 }
 
+// preenche um elemento .avatar (círculo já com tamanho/cor certos via CSS) com a foto, se
+// tiver, ou a inicial do nome — usado no badge do topo e em qualquer lista de gente
+function setAvatarBadge(selector, name, avatarUrl) {
+  const el = $(selector);
+  if (!el) return;
+  if (avatarUrl) {
+    el.innerHTML = `<img src="${escapeHTML(avatarUrl)}" alt="" style="width:100%; height:100%; border-radius:50%; object-fit:cover;" />`;
+  } else {
+    el.textContent = (name || "?").trim()[0]?.toUpperCase() || "?";
+  }
+}
+
+function avatarHTML(name, avatarUrl, extraStyle = "") {
+  const initial = (name || "?").trim()[0]?.toUpperCase() || "?";
+  return avatarUrl
+    ? `<img class="avatar" src="${escapeHTML(avatarUrl)}" alt="" style="object-fit:cover; ${extraStyle}" />`
+    : `<div class="avatar" style="${extraStyle}">${escapeHTML(initial)}</div>`;
+}
+
+// toca no avatar (casal ou amigos) pra trocar a foto de perfil; no modo casal, o nome
+// continua se editando por "Nomes e emojis" (edita os dois de uma vez, não só o seu)
+async function openEditProfileModal(mode) {
+  const isAmigos = mode === "amigos";
+  let currentName = "";
+  let currentAvatar = null;
+  if (isAmigos) {
+    const members = await friends.listGroupMembers(State.friendGroup.id).catch(() => []);
+    const me = members.find((m) => m.user_id === State.userId);
+    currentName = me?.display_name || State.friendGroup.myDisplayName || "";
+    currentAvatar = me?.avatar_url || null;
+  } else {
+    currentName = myDisplayName();
+    currentAvatar = State.profile?.avatar_url || null;
+  }
+
+  openModal(`
+    <h3 class="modal-title">👤 Editar perfil</h3>
+    <div style="text-align:center; margin:8px 0 14px;" id="ep-avatar-wrap">
+      ${avatarHTML(currentName, currentAvatar, "width:84px; height:84px; font-size:32px; margin:0 auto;")}
+    </div>
+    <label class="field-label">Foto de perfil</label>
+    <input type="file" id="ep-file" accept="image/*" style="margin:6px 0 14px; width:100%;" />
+    ${isAmigos ? `
+      <label class="field-label">Seu nome nessa turma</label>
+      <input type="text" id="ep-name" maxlength="24" value="${escapeHTML(currentName)}" />
+    ` : `
+      <p class="hint-text">Pra trocar seu nome, usa "✏️ Nomes e emojis" lá no Perfil.</p>
+    `}
+    <button class="btn btn-primary btn-block" style="margin-top:14px;" id="ep-save">Salvar</button>
+    <p class="error-text" id="ep-error"></p>
+  `);
+
+  let selectedBlob = null;
+  $("#ep-file").addEventListener("change", async (ev) => {
+    const file = ev.target.files?.[0];
+    if (!file) return;
+    try {
+      selectedBlob = await compressImage(file, 512);
+      $("#ep-avatar-wrap").innerHTML = avatarHTML(currentName, URL.createObjectURL(selectedBlob), "width:84px; height:84px; font-size:32px; margin:0 auto;");
+    } catch (e) {
+      $("#ep-error").textContent = "Não deu pra usar essa foto: " + (e.message || e);
+    }
+  });
+
+  $("#ep-save").addEventListener("click", async () => {
+    const err = (m) => { $("#ep-error").textContent = m; };
+    setBusy("#ep-save", true);
+    try {
+      let newAvatarUrl = currentAvatar;
+      if (selectedBlob) newAvatarUrl = await db.uploadMyAvatar(State.userId, selectedBlob);
+      if (isAmigos) {
+        const newName = cleanName($("#ep-name").value);
+        if (!newName) { err("Escreve seu nome."); setBusy("#ep-save", false); return; }
+        if (newName !== currentName) await friends.updateMyDisplayName(State.friendGroup.id, State.userId, newName);
+        State.friendGroup.myDisplayName = newName;
+        setAvatarBadge("#friends-avatar-badge", newName, newAvatarUrl);
+      } else {
+        State.profile = { ...State.profile, avatar_url: newAvatarUrl };
+        setAvatarBadge("#avatar-badge", currentName, newAvatarUrl);
+      }
+      closeModal();
+      if (isAmigos) renderFriendsActiveTab();
+    } catch (e) {
+      err("Não deu: " + (e.message || e));
+      setBusy("#ep-save", false);
+    }
+  });
+}
+
 // cabeçalho com "← Voltar" usado por toda tela dentro do hub de Recadinhos
 function subViewHeader(title) {
   return `
@@ -4049,7 +4150,7 @@ async function renderProfile() {
   view.innerHTML = `
     <div class="card">
       <div class="row" style="align-items:center;">
-        <div class="avatar" style="width:56px;height:56px;font-size:22px;">${ROLE_EMOJI[State.role]}</div>
+        ${State.profile?.avatar_url ? avatarHTML(myDisplayName(), State.profile.avatar_url, "width:56px;height:56px;font-size:22px;") : `<div class="avatar" style="width:56px;height:56px;font-size:22px;">${ROLE_EMOJI[State.role]}</div>`}
         <div>
           <div class="card-title">${escapeHTML(myDisplayName())}</div>
           <div class="card-sub" style="margin-bottom:0;">você é ${ROLE_LABEL[State.role]} · par de ${State.partner ? escapeHTML(partnerDisplayName()) : "..."}</div>
@@ -4090,7 +4191,7 @@ ${feat("streaks") ? `    <div class="section-title">Sequências 🔥</div>
            <button class="btn btn-secondary btn-block" id="btn-link-google">Ligar minha conta Google</button>`}
     </div>
 
-    <div class="section-title">Modo Amigos 🧭</div>
+    <div class="section-title">Modo Amigos 👥</div>
     <div class="card" style="border-color:var(--friends-accent-soft);">
       ${!googleLinked ? `
         <p class="card-sub" style="margin-bottom:0;">Pra usar com amigos, primeiro liga sua conta Google aqui em cima — depois volta nessa tela.</p>
@@ -4102,7 +4203,7 @@ ${feat("streaks") ? `    <div class="section-title">Sequências 🔥</div>
               const pal = GROUP_PALETTES[g.colorKey] || GROUP_PALETTES.azul;
               const v = isDarkMode() ? pal.dark : pal.light;
               return `<button class="btn btn-block" data-switch-friends="${g.id}" style="background:${v.soft}; color:${v.strong}; display:flex; align-items:center; gap:10px; text-align:left;">
-                <span style="font-size:18px;">${escapeHTML(g.emoji || "🧭")}</span>
+                <span style="font-size:18px;">${escapeHTML(g.emoji || "👥")}</span>
                 <span style="flex:1;">${escapeHTML(g.name)}</span>
                 <span style="font-size:11.5px; font-weight:700; opacity:.75;">${g.memberCount || 1} pessoa${g.memberCount === 1 ? "" : "s"}</span>
               </button>`;
@@ -4111,7 +4212,7 @@ ${feat("streaks") ? `    <div class="section-title">Sequências 🔥</div>
           <button class="btn btn-ghost btn-block" style="margin-top:8px;" id="btn-new-friend-group">Criar ou entrar em outra turma</button>
         ` : `
           <p class="card-sub">Um "modo" separado do casal, pra turma de amigos: código próprio, prêmios próprios, moedas separadas.</p>
-          <button class="btn btn-block" id="btn-new-friend-group" style="background:var(--friends-accent); color:var(--on-friends-accent);">🧭 Criar ou entrar numa turma</button>
+          <button class="btn btn-block" id="btn-new-friend-group" style="background:var(--friends-accent); color:var(--on-friends-accent);">👥 Criar ou entrar numa turma</button>
         `}
       `}
     </div>

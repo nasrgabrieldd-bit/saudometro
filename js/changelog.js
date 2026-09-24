@@ -6,7 +6,7 @@ export const CHANGELOG = [
   {
     id: "amigos-fundacao",
     tag: "geral",
-    emoji: "🧭",
+    emoji: "👥",
     title: "Chegou o Modo Amigos",
     text: "Agora dá pra usar o Saudômetro com a turma também, não só o casal. Toque em \"Usar com amigos\" na entrada, ou troque de conta pelo Perfil a qualquer momento — sem precisar logar de novo.",
   },
