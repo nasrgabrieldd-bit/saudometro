@@ -48,7 +48,6 @@ const State = {
   friendsCalendarMonth: startOfMonth(new Date()),
   friendsCalendarEvents: [],
   friendsSelectedDay: null,
-  friendsFindsView: "feed",
 };
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -1147,27 +1146,79 @@ function renderFriendsActiveTab() {
 
 // Experiências tem duas visões: o feed de fotos (estilo Instagram, padrão) e os achados
 // (filme/série/jogo/playlist já existentes) — um toggle no topo alterna entre as duas.
-function renderFriendsExperiencias() {
+// feed de fotos e achados (filme/série/jogo/playlist) misturados numa lista só, mais nova
+// primeiro, cada um com uma etiqueta pequena dizendo se é "Feed" ou "Achado" (referência:
+// scroll único estilo Instagram, em vez de duas abas separadas)
+async function renderFriendsExperiencias() {
   const view = $("#friends-view");
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const [members, posts, finds] = await Promise.all([
+    friends.listGroupMembers(State.friendGroup.id),
+    friends.listFeedPosts(State.friendGroup.id),
+    friends.listFinds(State.friendGroup.id),
+  ]);
+  const byId = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
+  const items = [
+    ...posts.map((p) => ({ type: "feed", createdAt: p.created_at, data: p })),
+    ...finds.map((f) => ({ type: "achado", createdAt: f.created_at, data: f })),
+  ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
   view.innerHTML = `
-    <div class="row" style="gap:8px; margin-bottom:14px;" id="fx-toggle-row">
-      <button class="btn btn-sm" style="flex:1;" data-fx-view="feed">📷 Feed</button>
-      <button class="btn btn-sm" style="flex:1;" data-fx-view="achados">🎬 Achados</button>
+    <div class="row" style="gap:8px; margin-bottom:14px;">
+      <button class="btn btn-sm" style="flex:1; background:var(--friends-accent); color:var(--on-friends-accent);" id="friends-new-post-btn">+ Postar uma foto</button>
+      <button class="btn btn-sm" style="flex:1; background:var(--friends-accent-soft); color:var(--friends-accent-strong);" id="friends-new-find-btn">+ Achado</button>
     </div>
-    <div id="fx-content"></div>
+    ${items.length ? items.map((it) => it.type === "feed" ? feedCardHTML(it.data, byId) : findCardHTML(it.data, byId)).join("") : `
+      <div class="card" style="text-align:center; padding:28px 20px;">
+        <div style="font-size:30px;">📷</div>
+        <p class="card-sub" style="margin-bottom:0;">Nada por aqui ainda. Manda a primeira foto ou indica um filme, jogo ou playlist pra turma.</p>
+      </div>`}
   `;
-  const setToggle = (v) => {
-    State.friendsFindsView = v;
-    $("#fx-toggle-row").querySelectorAll("[data-fx-view]").forEach((b) => {
-      const active = b.dataset.fxView === v;
-      b.style.background = active ? "var(--friends-accent)" : "var(--friends-accent-soft)";
-      b.style.color = active ? "var(--on-friends-accent)" : "var(--friends-accent-strong)";
+  $("#friends-new-post-btn").addEventListener("click", openNewFeedPostModal);
+  $("#friends-new-find-btn").addEventListener("click", openNewFindModal);
+
+  view.querySelectorAll(".feed-card-photo").forEach((el) => {
+    const post = posts.find((p) => p.id === el.dataset.postId);
+    friends.feedPhotoUrl(post.photo_path).then((url) => { el.style.backgroundImage = `url(${url})`; }).catch(() => {});
+  });
+  view.querySelectorAll("[data-open-post]").forEach((el) => {
+    const post = posts.find((p) => p.id === el.dataset.openPost);
+    el.addEventListener("click", () => openFeedPostDetail(post, byId));
+  });
+  view.querySelectorAll(".find-photo").forEach((el) => {
+    friends.feedPhotoUrl(el.dataset.photoPath).then((url) => { el.style.backgroundImage = `url(${url})`; }).catch(() => {});
+  });
+
+  view.querySelectorAll("[data-react]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      view.querySelectorAll("[data-react]").forEach((b) => { b.disabled = true; });
+      try {
+        // tocar de novo na reação já ativa remove ela; senão troca pra essa
+        if (btn.dataset.wasActive === "1") await friends.clearMyFindReaction(btn.dataset.findId, State.userId);
+        else await friends.setMyFindReaction(btn.dataset.findId, State.userId, btn.dataset.react);
+        await renderFriendsExperiencias();
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        await renderFriendsExperiencias();
+      }
     });
-    if (v === "feed") renderFriendsFeed().catch((e) => alert("Deu ruim: " + (e.message || e)));
-    else renderFriendsFinds().catch((e) => alert("Deu ruim: " + (e.message || e)));
-  };
-  $("#fx-toggle-row").querySelectorAll("[data-fx-view]").forEach((b) => b.addEventListener("click", () => setToggle(b.dataset.fxView)));
-  setToggle(State.friendsFindsView || "feed");
+  });
+  view.querySelectorAll("[data-delete-find]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Apagar esse achado?")) return;
+      btn.disabled = true;
+      try {
+        await friends.deleteFind(btn.dataset.deleteFind, btn.dataset.photoPath || null);
+        await renderFriendsExperiencias();
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        btn.disabled = false;
+      }
+    });
+  });
+  view.querySelectorAll("[data-toggle-comments]").forEach((btn) => {
+    btn.addEventListener("click", () => toggleFindComments(btn.dataset.toggleComments, byId));
+  });
 }
 
 function renderFriendsPlaceholder(icon, title, text) {
@@ -1374,6 +1425,8 @@ function findCardHTML(f, byId) {
   reactions.forEach((r) => { counts[r.reaction] = (counts[r.reaction] || 0) + 1; });
   return `
     <div class="card" style="margin-bottom:12px;">
+      ${f.photo_path ? `<div class="find-photo" data-photo-path="${escapeHTML(f.photo_path)}" style="aspect-ratio:1; border-radius:12px; background:var(--surface-alt) center/cover; margin-bottom:10px;"></div>` : ""}
+      <span style="display:inline-block; background:var(--friends-accent-soft); color:var(--friends-accent-strong); font-size:10px; font-weight:800; padding:2px 8px; border-radius:999px; text-transform:uppercase; letter-spacing:.03em; margin-bottom:6px;">🎬 Achado</span>
       <div class="row" style="align-items:flex-start;">
         <span style="font-size:24px;">${kind.emoji}</span>
         <div style="flex:1;">
@@ -1382,7 +1435,7 @@ function findCardHTML(f, byId) {
           ${f.link ? `<a href="${escapeHTML(f.link)}" target="_blank" rel="noopener" style="font-size:13px; word-break:break-all;">${escapeHTML(f.link)}</a>` : ""}
           ${f.note ? `<p class="card-sub" style="margin:6px 0 0;">${escapeHTML(f.note)}</p>` : ""}
         </div>
-        ${f.user_id === State.userId ? `<button class="btn btn-ghost btn-sm" style="padding:4px 8px;" data-delete-find="${f.id}">Apagar</button>` : ""}
+        ${f.user_id === State.userId ? `<button class="btn btn-ghost btn-sm" style="padding:4px 8px;" data-delete-find="${f.id}" data-photo-path="${escapeHTML(f.photo_path || "")}">Apagar</button>` : ""}
       </div>
       <div class="row" style="gap:8px; margin-top:10px;">
         ${Object.entries(FRIEND_FIND_REACTIONS).map(([id, r]) => {
@@ -1433,100 +1486,39 @@ async function toggleFindComments(findId, byId) {
   });
 }
 
-async function renderFriendsFinds() {
-  const view = $("#fx-content");
-  view.innerHTML = `<div class="center-note">Carregando...</div>`;
-  const [members, finds] = await Promise.all([
-    friends.listGroupMembers(State.friendGroup.id),
-    friends.listFinds(State.friendGroup.id),
-  ]);
-  const byId = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
-
-  view.innerHTML = `
-    <button class="btn btn-block" style="margin-bottom:14px; background:var(--friends-accent); color:var(--on-friends-accent);" id="friends-new-find-btn">+ Compartilhar um achado</button>
-    ${finds.length ? finds.map((f) => findCardHTML(f, byId)).join("") : `
-      <div class="card" style="text-align:center; padding:28px 20px;">
-        <div style="font-size:30px;">🎬</div>
-        <p class="card-sub" style="margin-bottom:0;">Nada compartilhado ainda. Que tal indicar um filme, uma playlist ou um jogo pra turma?</p>
-      </div>`}
-  `;
-  $("#friends-new-find-btn").addEventListener("click", openNewFindModal);
-  view.querySelectorAll("[data-react]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      view.querySelectorAll("[data-react]").forEach((b) => { b.disabled = true; });
-      try {
-        // tocar de novo na reação já ativa remove ela; senão troca pra essa
-        if (btn.dataset.wasActive === "1") await friends.clearMyFindReaction(btn.dataset.findId, State.userId);
-        else await friends.setMyFindReaction(btn.dataset.findId, State.userId, btn.dataset.react);
-        await renderFriendsFinds();
-      } catch (e) {
-        alert("Não deu: " + (e.message || e));
-        await renderFriendsFinds();
-      }
-    });
-  });
-  view.querySelectorAll("[data-delete-find]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      if (!confirm("Apagar esse achado?")) return;
-      btn.disabled = true;
-      try {
-        await friends.deleteFind(btn.dataset.deleteFind);
-        await renderFriendsFinds();
-      } catch (e) {
-        alert("Não deu: " + (e.message || e));
-        btn.disabled = false;
-      }
-    });
-  });
-  view.querySelectorAll("[data-toggle-comments]").forEach((btn) => {
-    btn.addEventListener("click", () => toggleFindComments(btn.dataset.toggleComments, byId));
-  });
-}
-
 // ================= FEED DE FOTOS (Experiências) =================
 // tipo Instagram, mas privado da turma: um grupo nunca vê o feed de outro. Post pode ser
 // "fofoca" (destaque colorido + hashtag) e pode ser temporário (some da vista de todo mundo
-// depois de alguns minutos) ou permanente.
+// depois de alguns minutos) ou permanente. Aparece misturado com os achados numa lista só,
+// mais nova primeiro (ver renderFriendsExperiencias).
 
-function feedThumbHTML(p) {
-  return `<div class="feed-thumb" data-post-id="${p.id}" style="aspect-ratio:1; border-radius:10px; background:var(--surface-alt) center/cover; cursor:pointer; position:relative; ${p.is_fofoca ? "outline:3px solid var(--friends-accent); outline-offset:-3px;" : ""}">
-    ${p.is_fofoca ? `<span style="position:absolute; top:4px; left:4px; background:var(--friends-accent); color:var(--on-friends-accent); font-size:9px; font-weight:800; padding:2px 6px; border-radius:999px;">🔥 fofoca</span>` : ""}
-  </div>`;
-}
-
-async function renderFriendsFeed() {
-  const view = $("#fx-content");
-  view.innerHTML = `<div class="center-note">Carregando...</div>`;
-  const [members, posts] = await Promise.all([
-    friends.listGroupMembers(State.friendGroup.id),
-    friends.listFeedPosts(State.friendGroup.id),
-  ]);
-  const byId = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
-
-  view.innerHTML = `
-    <button class="btn btn-block" style="margin-bottom:14px; background:var(--friends-accent); color:var(--on-friends-accent);" id="friends-new-post-btn">+ Postar uma foto</button>
-    ${posts.length ? `<div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px;">
-      ${posts.map((p) => feedThumbHTML(p)).join("")}
-    </div>` : `
-      <div class="card" style="text-align:center; padding:28px 20px;">
-        <div style="font-size:30px;">📷</div>
-        <p class="card-sub" style="margin-bottom:0;">Nada postado ainda. Manda a primeira foto do dia pra turma.</p>
-      </div>`}
-  `;
-  $("#friends-new-post-btn").addEventListener("click", openNewFeedPostModal);
-  view.querySelectorAll(".feed-thumb").forEach((el) => {
-    const post = posts.find((p) => p.id === el.dataset.postId);
-    friends.feedPhotoUrl(post.photo_path).then((url) => { el.style.backgroundImage = `url(${url})`; }).catch(() => {});
-    el.addEventListener("click", () => openFeedPostDetail(post, byId));
-  });
+function feedCardHTML(p, byId) {
+  const authorName = p.user_id === State.userId ? "Você" : escapeHTML(byId[p.user_id] || "alguém");
+  const likeCount = (p.friend_feed_likes || []).length;
+  const commentCount = (p.friend_feed_comments || []).length;
+  return `
+    <div class="card" style="margin-bottom:12px; padding:0; overflow:hidden; cursor:pointer;" data-open-post="${p.id}">
+      <div class="feed-card-photo" data-post-id="${p.id}" style="aspect-ratio:1; background:var(--surface-alt) center/cover; position:relative;">
+        <span style="position:absolute; top:8px; left:8px; background:${p.is_fofoca ? "var(--friends-accent)" : "rgba(0,0,0,.5)"}; color:#fff; font-size:10px; font-weight:800; padding:3px 9px; border-radius:999px; text-transform:uppercase; letter-spacing:.03em;">${p.is_fofoca ? `🔥 ${escapeHTML(p.hashtag || "fofoca")}` : "📷 Feed"}</span>
+      </div>
+      <div style="padding:10px 12px;">
+        <div style="font-size:12.5px; font-weight:800;">${authorName}</div>
+        ${p.caption ? `<div style="font-size:13.5px; margin-top:2px;">${escapeHTML(p.caption)}</div>` : ""}
+        <div class="hint-text" style="margin-top:6px;">${likeCount ? `💗 ${likeCount}` : "🤍"}${commentCount ? ` · 💬 ${commentCount}` : ""}</div>
+      </div>
+    </div>`;
 }
 
 function openNewFeedPostModal() {
   openModal(`
     <h3 class="modal-title">📷 Postar uma foto</h3>
     <div class="stack">
-      <input type="file" id="fp-file" accept="image/*" style="width:100%;" />
-      <div id="fp-preview" style="display:none; margin:10px 0;"><img id="fp-preview-img" style="width:100%; border-radius:12px; max-height:220px; object-fit:cover;" alt="" /></div>
+      <input type="file" id="fp-file" accept="image/*" capture="environment" style="display:none;" />
+      <div id="fp-picker" style="border:2px dashed var(--friends-accent-soft); border-radius:14px; padding:28px 10px; text-align:center; cursor:pointer;">
+        <div style="font-size:30px;">📷</div>
+        <div class="hint-text" style="margin-top:4px;">Toque pra tirar ou escolher uma foto</div>
+      </div>
+      <div id="fp-preview" style="display:none; margin:10px 0; cursor:pointer;"><img id="fp-preview-img" style="width:100%; border-radius:12px; max-height:220px; object-fit:cover;" alt="" /><div class="hint-text" style="text-align:center; margin-top:4px;">Toque pra trocar a foto</div></div>
       <label class="field-label">Legenda (opcional)</label>
       <input type="text" id="fp-caption" maxlength="120" placeholder="o que tá rolando" />
       <div class="row" style="align-items:center; gap:8px; margin-top:8px;">
@@ -1545,12 +1537,15 @@ function openNewFeedPostModal() {
   `);
   let selectedBlob = null;
   let duration = "permanent";
+  $("#fp-picker").addEventListener("click", () => $("#fp-file").click());
+  $("#fp-preview").addEventListener("click", () => $("#fp-file").click());
   $("#fp-file").addEventListener("change", async (ev) => {
     const file = ev.target.files?.[0];
     if (!file) return;
     try {
       selectedBlob = await compressImage(file, 1080);
       $("#fp-preview-img").src = URL.createObjectURL(selectedBlob);
+      $("#fp-picker").style.display = "none";
       $("#fp-preview").style.display = "";
     } catch (e) {
       $("#fp-error").textContent = "Não deu pra usar essa foto: " + (e.message || e);
@@ -1580,7 +1575,7 @@ function openNewFeedPostModal() {
       const expiresAt = duration === "temp" ? new Date(Date.now() + 2 * 60 * 1000).toISOString() : null;
       await friends.createFeedPost(State.friendGroup.id, State.userId, selectedBlob, $("#fp-caption").value.trim(), isFofoca, isFofoca ? hashtag : null, expiresAt);
       closeModal();
-      await renderFriendsFeed();
+      await renderFriendsExperiencias();
     } catch (e) {
       err("Não deu: " + (e.message || e));
       setBusy("#fp-confirm", false);
@@ -1612,7 +1607,7 @@ async function openFeedPostDetail(post, byId) {
       if (iLiked) await friends.unlikeFeedPost(post.id, State.userId);
       else await friends.likeFeedPost(post.id, State.userId);
       closeModal();
-      await renderFriendsFeed();
+      await renderFriendsExperiencias();
     } catch (e) {
       alert("Não deu: " + (e.message || e));
     }
@@ -1622,7 +1617,7 @@ async function openFeedPostDetail(post, byId) {
     try {
       await friends.deleteFeedPost(post.id, post.photo_path);
       closeModal();
-      await renderFriendsFeed();
+      await renderFriendsExperiencias();
     } catch (e) {
       alert("Não deu: " + (e.message || e));
     }
@@ -1668,11 +1663,19 @@ function openNewFindModal() {
       <input type="text" id="ff-link" maxlength="300" placeholder="cola o link do Spotify, IMDb..." />
       <label class="field-label">Comentário (opcional)</label>
       <textarea id="ff-note" maxlength="200" rows="2" placeholder="por que a turma tem que ver/ouvir isso"></textarea>
+      <label class="field-label">Foto (opcional)</label>
+      <input type="file" id="ff-file" accept="image/*" capture="environment" style="display:none;" />
+      <div id="ff-picker" style="border:2px dashed var(--friends-accent-soft); border-radius:14px; padding:20px 10px; text-align:center; cursor:pointer;">
+        <div style="font-size:24px;">📷</div>
+        <div class="hint-text" style="margin-top:2px;">Toque pra tirar ou escolher uma foto</div>
+      </div>
+      <div id="ff-preview" style="display:none; margin:6px 0; cursor:pointer;"><img id="ff-preview-img" style="width:100%; border-radius:12px; max-height:180px; object-fit:cover;" alt="" /></div>
       <button class="btn btn-block" style="margin-top:6px; background:var(--friends-accent); color:var(--on-friends-accent);" id="ff-confirm">Compartilhar</button>
       <p class="error-text" id="ff-error"></p>
     </div>
   `);
   let kind = "filme";
+  let selectedBlob = null;
   $("#ff-kind-row").querySelectorAll("[data-kind]").forEach((btn) => {
     btn.addEventListener("click", () => {
       kind = btn.dataset.kind;
@@ -1682,6 +1685,20 @@ function openNewFindModal() {
       });
     });
   });
+  $("#ff-picker").addEventListener("click", () => $("#ff-file").click());
+  $("#ff-preview").addEventListener("click", () => $("#ff-file").click());
+  $("#ff-file").addEventListener("change", async (ev) => {
+    const file = ev.target.files?.[0];
+    if (!file) return;
+    try {
+      selectedBlob = await compressImage(file, 1080);
+      $("#ff-preview-img").src = URL.createObjectURL(selectedBlob);
+      $("#ff-picker").style.display = "none";
+      $("#ff-preview").style.display = "";
+    } catch (e) {
+      $("#ff-error").textContent = "Não deu pra usar essa foto: " + (e.message || e);
+    }
+  });
   $("#ff-confirm").addEventListener("click", async () => {
     const title = $("#ff-title").value.trim();
     const link = $("#ff-link").value.trim();
@@ -1690,9 +1707,9 @@ function openNewFindModal() {
     if (!title) return err("Escreve um título.");
     setBusy("#ff-confirm", true);
     try {
-      await friends.createFind(State.friendGroup.id, State.userId, kind, title, link, note);
+      await friends.createFind(State.friendGroup.id, State.userId, kind, title, link, note, selectedBlob);
       closeModal();
-      await renderFriendsFinds();
+      await renderFriendsExperiencias();
     } catch (e) {
       err("Não deu: " + (e.message || e));
       setBusy("#ff-confirm", false);
@@ -2140,6 +2157,17 @@ function kickVoteRowHTML(v, byId) {
     </div>`;
 }
 
+// depois de sair (por vontade própria) ou excluir a turma: sai da tela de amigos e cai no
+// lugar certo (casal, outra turma, ou a tela de escolher conta, se sobrar mais de uma opção)
+async function afterLeavingFriendGroup() {
+  $("#screen-friends").style.display = "none";
+  State.profile = await db.getMyProfile(State.userId).catch(() => null);
+  State.friendGroups = await friends.listMyFriendGroups().catch(() => []);
+  if (State.profile && !State.friendGroups.length) await enterApp(State.profile);
+  else if (State.friendGroups.length === 1 && !State.profile) await enterFriendsMode(State.friendGroups[0]);
+  else renderAccountSwitcher(State.profile, State.friendGroups);
+}
+
 async function renderFriendsGroup() {
   const view = $("#friends-view");
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
@@ -2183,7 +2211,9 @@ async function renderFriendsGroup() {
     </div>
     <div class="card" style="margin-top:14px;">
       <p class="field-label">Zona de risco</p>
-      <p class="hint-text">Excluir a turma apaga tudo (rolês, humor, achados, prêmios e o cofre) pra sempre, pra todo mundo.</p>
+      <p class="hint-text">Sair da turma tira só você. Os dados dela continuam existindo pros outros.</p>
+      <button class="btn btn-ghost btn-block" id="friends-leave-group-btn">Sair da turma</button>
+      <p class="hint-text" style="margin-top:12px;">Excluir a turma apaga tudo (rolês, humor, achados, prêmios e o cofre) pra sempre, pra todo mundo.</p>
       <button class="btn btn-ghost btn-block" style="color:var(--danger-text);" id="friends-delete-group-btn">Excluir turma</button>
     </div>
   `;
@@ -2206,15 +2236,21 @@ async function renderFriendsGroup() {
     setBusy("#friends-delete-group-btn", true);
     try {
       await friends.deleteFriendGroup(State.friendGroup.id);
-      $("#screen-friends").style.display = "none";
-      State.profile = await db.getMyProfile(State.userId).catch(() => null);
-      State.friendGroups = await friends.listMyFriendGroups().catch(() => []);
-      if (State.profile && !State.friendGroups.length) await enterApp(State.profile);
-      else if (State.friendGroups.length === 1 && !State.profile) await enterFriendsMode(State.friendGroups[0]);
-      else renderAccountSwitcher(State.profile, State.friendGroups);
+      await afterLeavingFriendGroup();
     } catch (e) {
       alert("Não deu: " + (e.message || e));
       setBusy("#friends-delete-group-btn", false);
+    }
+  });
+  $("#friends-leave-group-btn").addEventListener("click", async () => {
+    if (!confirm(`Sair de "${State.friendGroup.name}"? Você deixa de ver os dados dela, mas ela continua existindo pros outros.`)) return;
+    setBusy("#friends-leave-group-btn", true);
+    try {
+      await friends.leaveFriendGroup(State.friendGroup.id);
+      await afterLeavingFriendGroup();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#friends-leave-group-btn", false);
     }
   });
   view.querySelectorAll("[data-propose-kick]").forEach((btn) => {
@@ -3479,11 +3515,11 @@ async function openEditProfileModal(mode) {
 
   openModal(`
     <h3 class="modal-title">👤 Editar perfil</h3>
-    <div style="text-align:center; margin:8px 0 14px;" id="ep-avatar-wrap">
+    <input type="file" id="ep-file" accept="image/*" capture="environment" style="display:none;" />
+    <div style="text-align:center; margin:8px 0 4px; cursor:pointer;" id="ep-avatar-wrap">
       ${avatarHTML(currentName, currentAvatar, "width:84px; height:84px; font-size:32px; margin:0 auto;")}
     </div>
-    <label class="field-label">Foto de perfil</label>
-    <input type="file" id="ep-file" accept="image/*" style="margin:6px 0 14px; width:100%;" />
+    <p class="hint-text" style="text-align:center; margin:0 0 14px;">📷 Toque na foto pra trocar</p>
     ${isAmigos ? `
       <label class="field-label">Seu nome nessa turma</label>
       <input type="text" id="ep-name" maxlength="24" value="${escapeHTML(currentName)}" />
@@ -3495,6 +3531,7 @@ async function openEditProfileModal(mode) {
   `);
 
   let selectedBlob = null;
+  $("#ep-avatar-wrap").addEventListener("click", () => $("#ep-file").click());
   $("#ep-file").addEventListener("change", async (ev) => {
     const file = ev.target.files?.[0];
     if (!file) return;
@@ -3914,8 +3951,12 @@ async function renderMemoriesView() {
     <div class="card">
       <div class="card-sub">Uma foto de algo que te lembrou ${ROLE_LABEL[otherRole()]} hoje, com uma observação. Ex.: "esse Danone me lembrou de você..."</div>
       ${atLimit ? `<p class="hint-text" style="margin-top:8px;">Você já mandou 5 hoje, o limite volta amanhã.</p>` : `
-        <input type="file" id="memory-file" accept="image/*" capture="environment" style="margin:10px 0; width:100%;" />
-        <div id="memory-preview" style="display:none; margin-bottom:10px; text-align:center;"><img id="memory-preview-img" style="max-width:100%; max-height:200px; border-radius:12px;" /></div>
+        <input type="file" id="memory-file" accept="image/*" capture="environment" style="display:none;" />
+        <div id="memory-picker" style="border:2px dashed var(--surface-alt); border-radius:14px; padding:24px 10px; text-align:center; cursor:pointer; margin-top:10px;">
+          <div style="font-size:28px;">📷</div>
+          <div class="hint-text" style="margin-top:4px;">Toque pra tirar ou escolher uma foto</div>
+        </div>
+        <div id="memory-preview" style="display:none; margin-bottom:10px; text-align:center; cursor:pointer;"><img id="memory-preview-img" style="max-width:100%; max-height:200px; border-radius:12px;" /><div class="hint-text" style="margin-top:4px;">Toque pra trocar a foto</div></div>
         <textarea id="memory-caption" rows="2" maxlength="300" placeholder="esse Danone me lembrou de você..."></textarea>
         <button class="btn btn-primary btn-block" style="margin-top:12px;" id="btn-send-memory">📷 Mandar lembrança</button>
         <p class="error-text" id="memory-err" style="margin-top:8px;" hidden></p>
@@ -3941,6 +3982,8 @@ async function renderMemoriesView() {
   });
 
   let selectedBlob = null;
+  $("#memory-picker")?.addEventListener("click", () => $("#memory-file").click());
+  $("#memory-preview")?.addEventListener("click", () => $("#memory-file").click());
   $("#memory-file")?.addEventListener("change", async (ev) => {
     const file = ev.target.files?.[0];
     if (!file) return;
@@ -3948,6 +3991,7 @@ async function renderMemoriesView() {
     try {
       selectedBlob = await compressImage(file);
       $("#memory-preview-img").src = URL.createObjectURL(selectedBlob);
+      $("#memory-picker").style.display = "none";
       $("#memory-preview").style.display = "";
     } catch (e) {
       $("#memory-err").hidden = false;
