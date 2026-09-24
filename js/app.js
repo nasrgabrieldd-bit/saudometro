@@ -214,7 +214,15 @@ function renderAccountSwitcher(profile, groups) {
     <p class="tagline" style="font-size:13px;">Você tem mais de uma conta neste Saudômetro. As moedas e os dados de cada uma são separados.</p>
     <div class="stack" id="switch-choices">
       ${profile ? `<button class="btn btn-primary btn-block" data-switch="couple">💗 Casal</button>` : ""}
-      ${groups.map((g) => `<button class="btn btn-block" style="background:var(--friends-accent-soft); color:var(--friends-accent-strong);" data-switch="friends" data-id="${g.id}">🧭 ${escapeHTML(g.name)}</button>`).join("")}
+      ${groups.map((g) => {
+        const pal = GROUP_PALETTES[g.colorKey] || GROUP_PALETTES.azul;
+        const v = isDarkMode() ? pal.dark : pal.light;
+        return `<button class="btn btn-block" style="background:${v.soft}; color:${v.strong}; display:flex; align-items:center; gap:10px; text-align:left;" data-switch="friends" data-id="${g.id}">
+          <span style="font-size:20px;">${escapeHTML(g.emoji || "🧭")}</span>
+          <span style="flex:1;">${escapeHTML(g.name)}</span>
+          <span style="font-size:12px; font-weight:700; opacity:.75;">${g.memberCount || 1} pessoa${g.memberCount === 1 ? "" : "s"}</span>
+        </button>`;
+      }).join("")}
     </div>
   `;
   $("#switch-choices").querySelectorAll("[data-switch]").forEach((btn) => {
@@ -778,10 +786,15 @@ function friendsChoiceStep() {
 }
 
 function friendsCreateStep() {
+  let colorKey = "azul";
   $("#onboarding-flow").innerHTML = `
     <div class="stack">
       <label class="field-label">Nome da turma</label>
       <input type="text" id="friends-group-name" maxlength="30" placeholder="ex: a turma do futebol" />
+      <label class="field-label">Emoji da turma</label>
+      <input type="text" id="friends-group-emoji" maxlength="4" value="🧭" style="text-align:center; width:60px; font-size:22px;" />
+      <label class="field-label">Cor da turma</label>
+      ${colorPickerHTML("friends", colorKey)}
       <label class="field-label">Seu nome</label>
       <input type="text" id="friends-my-name" maxlength="24" placeholder="seu nome" />
       <button class="btn btn-block" id="friends-confirm-create" style="background:var(--friends-accent); color:var(--on-friends-accent);">Criar turma</button>
@@ -789,16 +802,23 @@ function friendsCreateStep() {
       <p class="error-text" id="onboarding-error"></p>
     </div>
   `;
+  $("#friends-color-row").querySelectorAll("[data-color]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      colorKey = btn.dataset.color;
+      $("#friends-color-row").querySelectorAll("[data-color]").forEach((b) => { b.style.borderColor = b.dataset.color === colorKey ? "var(--text)" : "transparent"; });
+    });
+  });
   $("#friends-back-btn").addEventListener("click", friendsChoiceStep);
   $("#friends-confirm-create").addEventListener("click", async () => {
     const groupName = $("#friends-group-name").value.trim();
+    const emoji = $("#friends-group-emoji").value.trim() || "🧭";
     const myName = cleanName($("#friends-my-name").value);
     const err = (m) => { $("#onboarding-error").textContent = m; };
     if (!myName) return err("Escreva seu nome.");
     setBusy("#friends-confirm-create", true);
     try {
-      const created = await friends.createFriendGroup(groupName, myName);
-      await enterFriendsMode({ id: created.id, name: groupName || "Minha turma", code: created.code });
+      const created = await friends.createFriendGroup(groupName, myName, emoji, colorKey);
+      await enterFriendsMode(created);
     } catch (e) {
       err(e.message === "nome_invalido" ? "Escreva seu nome." : "Não deu pra criar a turma: " + (e.message || e));
       setBusy("#friends-confirm-create", false);
@@ -856,27 +876,39 @@ function openFriendsGroupModal() {
 }
 
 function friendsModalCreateStep() {
+  let colorKey = "azul";
   openModal(`
     <h3 class="modal-title">🧭 Criar turma</h3>
     <div class="stack">
       <label class="field-label">Nome da turma</label>
       <input type="text" id="fm-group-name" maxlength="30" placeholder="ex: a turma do futebol" />
+      <label class="field-label">Emoji da turma</label>
+      <input type="text" id="fm-group-emoji" maxlength="4" value="🧭" style="text-align:center; width:60px; font-size:22px;" />
+      <label class="field-label">Cor da turma</label>
+      ${colorPickerHTML("fm", colorKey)}
       <label class="field-label">Seu nome</label>
       <input type="text" id="fm-my-name" maxlength="24" placeholder="seu nome" value="${escapeHTML(myDisplayName() || "")}" />
       <button class="btn btn-block" id="fm-confirm-create" style="background:var(--friends-accent); color:var(--on-friends-accent);">Criar turma</button>
       <p class="error-text" id="fm-error"></p>
     </div>
   `);
+  $("#fm-color-row").querySelectorAll("[data-color]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      colorKey = btn.dataset.color;
+      $("#fm-color-row").querySelectorAll("[data-color]").forEach((b) => { b.style.borderColor = b.dataset.color === colorKey ? "var(--text)" : "transparent"; });
+    });
+  });
   $("#fm-confirm-create").addEventListener("click", async () => {
     const groupName = $("#fm-group-name").value.trim();
+    const emoji = $("#fm-group-emoji").value.trim() || "🧭";
     const myName = cleanName($("#fm-my-name").value);
     const err = (m) => { $("#fm-error").textContent = m; };
     if (!myName) return err("Escreva seu nome.");
     setBusy("#fm-confirm-create", true);
     try {
-      const created = await friends.createFriendGroup(groupName, myName);
+      const created = await friends.createFriendGroup(groupName, myName, emoji, colorKey);
       closeModal();
-      await enterFriendsMode({ id: created.id, name: groupName || "Minha turma", code: created.code });
+      await enterFriendsMode(created);
     } catch (e) {
       err(e.message === "nome_invalido" ? "Escreva seu nome." : "Não deu pra criar a turma: " + (e.message || e));
       setBusy("#fm-confirm-create", false);
@@ -919,8 +951,63 @@ function friendsModalJoinStep() {
   });
 }
 
-// tela mínima do Modo Amigos (fundação) — as abas de verdade (rolês, humor, recados,
-// prêmios) chegam nas próximas etapas; por enquanto mostra o código e quem já entrou.
+// paleta de cada turma: 5 opções fixas (não é cor livre) pra manter contraste bom nos dois
+// temas e não colidir com o rosa do casal. Valores conferidos por script (WCAG AA, ≥4.5:1
+// em todo par texto/fundo usado no app).
+const GROUP_PALETTES = {
+  azul: {
+    label: "Azul", swatch: "#3D66C9",
+    light: { accent: "#3D66C9", strong: "#2c4991", soft: "#e8edf9", on: "#ffffff" },
+    dark: { accent: "#8ea6e0", strong: "#8ea6e0", soft: "#111d38", on: "#ffffff" },
+  },
+  verde: {
+    label: "Verde", swatch: "#1F7A4C",
+    light: { accent: "#1F7A4C", strong: "#165837", soft: "#e4efea", on: "#ffffff" },
+    dark: { accent: "#7db297", strong: "#7db297", soft: "#092215", on: "#ffffff" },
+  },
+  roxo: {
+    label: "Roxo", swatch: "#7259CC",
+    light: { accent: "#7259CC", strong: "#524093", soft: "#eeebf9", on: "#ffffff" },
+    dark: { accent: "#ad9fe1", strong: "#ad9fe1", soft: "#201939", on: "#ffffff" },
+  },
+  ambar: {
+    label: "Âmbar", swatch: "#B35F0F",
+    light: { accent: "#B35F0F", strong: "#81440b", soft: "#f6ece2", on: "#ffffff" },
+    dark: { accent: "#d3a274", strong: "#d3a274", soft: "#321b04", on: "#ffffff" },
+  },
+  ceu: {
+    label: "Céu", swatch: "#1D7BA3",
+    light: { accent: "#1D7BA3", strong: "#155975", soft: "#e4eff4", on: "#ffffff" },
+    dark: { accent: "#7cb2ca", strong: "#7cb2ca", soft: "#08222e", on: "#ffffff" },
+  },
+};
+
+function isDarkMode() {
+  const explicit = document.documentElement.getAttribute("data-theme");
+  if (explicit === "dark") return true;
+  if (explicit === "light") return false;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+// aplica a cor escolhida pela turma nas variáveis --friends-accent* — todo o resto do Modo
+// Amigos já usa essas variáveis, então isso muda a cor em tudo automaticamente
+function applyGroupColors(colorKey) {
+  const palette = GROUP_PALETTES[colorKey] || GROUP_PALETTES.azul;
+  const v = isDarkMode() ? palette.dark : palette.light;
+  const el = $("#screen-friends");
+  if (!el) return;
+  el.style.setProperty("--friends-accent", v.accent);
+  el.style.setProperty("--friends-accent-strong", v.strong);
+  el.style.setProperty("--friends-accent-soft", v.soft);
+  el.style.setProperty("--on-friends-accent", v.on);
+}
+
+function colorPickerHTML(idPrefix, selected) {
+  return `<div class="row" style="gap:8px;" id="${idPrefix}-color-row">
+    ${Object.entries(GROUP_PALETTES).map(([key, p]) => `<button type="button" data-color="${key}" title="${p.label}" style="width:34px; height:34px; border-radius:50%; background:${p.swatch}; border:3px solid ${key === selected ? "var(--text)" : "transparent"}; flex:none; cursor:pointer;"></button>`).join("")}
+  </div>`;
+}
+
 // mesmos ícones do casal (Lucide), só muda a cor — nada de emoji na navegação
 const FRIENDS_TABS = [
   { tab: "home", icon: "home", label: "Hoje" },
@@ -938,11 +1025,12 @@ async function enterFriendsMode(group) {
   $("#screen-onboarding").style.display = "none";
   $("#screen-app").style.display = "none";
   $("#screen-friends").style.display = "flex";
+  applyGroupColors(group.colorKey);
   $("#screen-friends").innerHTML = `
     <header class="topbar" style="background:var(--friends-accent-soft);">
       <div>
         <div class="greeting-eyebrow">Turma</div>
-        <h1>${escapeHTML(group.name || "Minha turma")}</h1>
+        <h1>${escapeHTML(group.emoji || "🧭")} ${escapeHTML(group.name || "Minha turma")}</h1>
       </div>
       <div class="topbar-actions">
         <span class="streak-badge" id="friends-streak-badge" title="Ofensiva da turma" hidden></span>
@@ -1724,17 +1812,69 @@ async function renderFriendsGroup() {
   const members = await friends.listGroupMembers(State.friendGroup.id).catch(() => []);
   view.innerHTML = `
     <div class="card" style="border-color:var(--friends-accent-soft);">
+      <div class="row" style="align-items:center;">
+        <div style="flex:1;">
+          <p class="field-label" style="color:var(--friends-accent-strong); margin-bottom:2px;">Turma</p>
+          <div style="font-size:20px; font-weight:800;">${escapeHTML(State.friendGroup.emoji || "🧭")} ${escapeHTML(State.friendGroup.name || "Minha turma")}</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="friends-edit-group-btn">Editar</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:14px; border-color:var(--friends-accent-soft);">
       <p class="field-label" style="color:var(--friends-accent-strong);">Código da turma</p>
       <p style="font-family:'Baloo 2'; font-size:22px; letter-spacing:0.04em;">${escapeHTML(State.friendGroup.code || "")}</p>
       <p class="hint-text">Compartilhe esse código pra mais gente entrar na turma.</p>
     </div>
     <div class="card" style="margin-top:14px;">
-      <p class="field-label">Quem está na turma</p>
+      <p class="field-label">Quem está na turma (${members.length})</p>
       <div class="stack">
         ${members.map((m) => `<div class="entry-item"><div class="entry-body"><div class="entry-title">${m.user_id === State.userId ? "Você" : escapeHTML(m.display_name)}</div></div></div>`).join("") || '<p class="hint-text">Só você, por enquanto.</p>'}
       </div>
     </div>
   `;
+  $("#friends-edit-group-btn").addEventListener("click", openEditGroupModal);
+}
+
+function openEditGroupModal() {
+  const group = State.friendGroup;
+  let colorKey = group.colorKey || "azul";
+  openModal(`
+    <h3 class="modal-title">✏️ Editar turma</h3>
+    <div class="stack">
+      <label class="field-label">Nome da turma</label>
+      <input type="text" id="eg-name" maxlength="30" value="${escapeHTML(group.name || "")}" />
+      <label class="field-label">Emoji da turma</label>
+      <input type="text" id="eg-emoji" maxlength="4" value="${escapeHTML(group.emoji || "🧭")}" style="text-align:center; width:60px; font-size:22px;" />
+      <label class="field-label">Cor da turma</label>
+      ${colorPickerHTML("eg", colorKey)}
+      <button class="btn btn-block" style="margin-top:6px; background:var(--friends-accent); color:var(--on-friends-accent);" id="eg-confirm">Salvar</button>
+      <p class="error-text" id="eg-error"></p>
+    </div>
+  `);
+  $("#eg-color-row").querySelectorAll("[data-color]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      colorKey = btn.dataset.color;
+      $("#eg-color-row").querySelectorAll("[data-color]").forEach((b) => { b.style.borderColor = b.dataset.color === colorKey ? "var(--text)" : "transparent"; });
+    });
+  });
+  $("#eg-confirm").addEventListener("click", async () => {
+    const name = $("#eg-name").value.trim();
+    const emoji = $("#eg-emoji").value.trim() || "🧭";
+    const err = (m) => { $("#eg-error").textContent = m; };
+    if (!name) return err("Escreve um nome pra turma.");
+    setBusy("#eg-confirm", true);
+    try {
+      await friends.updateFriendGroup(group.id, { name, emoji, colorKey });
+      State.friendGroup = { ...group, name, emoji, colorKey };
+      applyGroupColors(colorKey);
+      closeModal();
+      $("#screen-friends h1").textContent = `${emoji} ${name}`;
+      await renderFriendsGroup();
+    } catch (e) {
+      err("Não deu: " + (e.message || e));
+      setBusy("#eg-confirm", false);
+    }
+  });
 }
 
 // ================= HOME =================
@@ -3821,7 +3961,15 @@ ${feat("streaks") ? `    <div class="section-title">Sequências 🔥</div>
         ${myFriendGroups.length ? `
           <p class="card-sub">Você faz parte de ${myFriendGroups.length === 1 ? "1 turma" : myFriendGroups.length + " turmas"}. Trocar de conta não pede login de novo.</p>
           <div class="stack">
-            ${myFriendGroups.map((g) => `<button class="btn btn-block" data-switch-friends="${g.id}" style="background:var(--friends-accent-soft); color:var(--friends-accent-strong);">🧭 ${escapeHTML(g.name)}</button>`).join("")}
+            ${myFriendGroups.map((g) => {
+              const pal = GROUP_PALETTES[g.colorKey] || GROUP_PALETTES.azul;
+              const v = isDarkMode() ? pal.dark : pal.light;
+              return `<button class="btn btn-block" data-switch-friends="${g.id}" style="background:${v.soft}; color:${v.strong}; display:flex; align-items:center; gap:10px; text-align:left;">
+                <span style="font-size:18px;">${escapeHTML(g.emoji || "🧭")}</span>
+                <span style="flex:1;">${escapeHTML(g.name)}</span>
+                <span style="font-size:11.5px; font-weight:700; opacity:.75;">${g.memberCount || 1} pessoa${g.memberCount === 1 ? "" : "s"}</span>
+              </button>`;
+            }).join("")}
           </div>
           <button class="btn btn-ghost btn-block" style="margin-top:8px;" id="btn-new-friend-group">Criar ou entrar em outra turma</button>
         ` : `

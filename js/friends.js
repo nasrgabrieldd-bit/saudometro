@@ -4,16 +4,28 @@
 import { supabase } from "./supabaseClient.js";
 
 export async function listMyFriendGroups() {
-  const { data, error } = await supabase
-    .from("friend_members")
-    .select("friend_group_id, display_name, friend_groups(id, name, code)")
-    .order("joined_at", { ascending: true });
-  if (error) throw error;
-  return (data || []).map((r) => ({
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr) throw userErr;
+  const myId = userData?.user?.id;
+  // duas consultas: a primeira só a MINHA linha em cada turma (uma por turma que eu faço parte);
+  // a segunda traz todo mundo de todas as minhas turmas, só pra contar quantos tem em cada uma
+  // (sem esse filtro por user_id, uma turma de 3 pessoas aparecia repetida 3x na lista)
+  const [{ data: mine, error: err1 }, { data: allMembers, error: err2 }] = await Promise.all([
+    supabase.from("friend_members").select("friend_group_id, display_name, friend_groups(id, name, code, emoji, color_key)").eq("user_id", myId).order("joined_at", { ascending: true }),
+    supabase.from("friend_members").select("friend_group_id"),
+  ]);
+  if (err1) throw err1;
+  if (err2) throw err2;
+  const counts = {};
+  (allMembers || []).forEach((r) => { counts[r.friend_group_id] = (counts[r.friend_group_id] || 0) + 1; });
+  return (mine || []).map((r) => ({
     id: r.friend_group_id,
     name: r.friend_groups?.name || "Turma",
     code: r.friend_groups?.code || "",
+    emoji: r.friend_groups?.emoji || "🧭",
+    colorKey: r.friend_groups?.color_key || "azul",
     myDisplayName: r.display_name,
+    memberCount: counts[r.friend_group_id] || 1,
   }));
 }
 
@@ -27,10 +39,19 @@ export async function listGroupMembers(friendGroupId) {
   return data || [];
 }
 
-export async function createFriendGroup(name, displayName) {
-  const { data, error } = await supabase.rpc("create_friend_group", { p_name: name, p_display_name: displayName });
+export async function createFriendGroup(name, displayName, emoji, colorKey) {
+  const { data, error } = await supabase.rpc("create_friend_group", { p_name: name, p_display_name: displayName, p_emoji: emoji || "🧭", p_color_key: colorKey || "azul" });
   if (error) throw error;
-  return data;
+  return { id: data.id, name: data.name, code: data.code, emoji: data.emoji, colorKey: data.color_key };
+}
+
+export async function updateFriendGroup(friendGroupId, { name, emoji, colorKey }) {
+  const fields = {};
+  if (name !== undefined) fields.name = name;
+  if (emoji !== undefined) fields.emoji = emoji;
+  if (colorKey !== undefined) fields.color_key = colorKey;
+  const { error } = await supabase.from("friend_groups").update(fields).eq("id", friendGroupId);
+  if (error) throw error;
 }
 
 export async function joinFriendGroup(code, displayName) {
@@ -38,7 +59,7 @@ export async function joinFriendGroup(code, displayName) {
   if (error) throw error;
   // código errado vem como resposta (não como exceção) pra a tentativa poder ficar registrada
   if (data?.error) throw new Error(data.error);
-  return data;
+  return { id: data.id, name: data.name, code: data.code, emoji: data.emoji, colorKey: data.color_key };
 }
 
 // ---------- humor da turma ----------
