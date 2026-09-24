@@ -1350,7 +1350,46 @@ function findCardHTML(f, byId) {
           return `<button class="btn btn-sm" style="flex:1; ${active ? "background:var(--friends-accent); color:var(--on-friends-accent);" : "background:var(--friends-accent-soft); color:var(--friends-accent-strong);"}" data-react="${id}" data-find-id="${f.id}" data-was-active="${active ? "1" : "0"}">${r.emoji} ${r.label}${n ? ` · ${n}` : ""}</button>`;
         }).join("")}
       </div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:8px; width:100%;" data-toggle-comments="${f.id}">💬 Comentários</button>
+      <div id="find-comments-${f.id}" style="display:none; margin-top:8px;"></div>
     </div>`;
+}
+
+function commentRowHTML(c, byId) {
+  return `<div style="background:var(--surface-alt); border-radius:10px; padding:8px 10px;">
+    <div style="font-size:12px; font-weight:800;">${c.user_id === State.userId ? "Você" : escapeHTML(byId[c.user_id] || "alguém")}</div>
+    <div style="font-size:13.5px;">${escapeHTML(c.text)}</div>
+  </div>`;
+}
+
+async function toggleFindComments(findId, byId) {
+  const panel = $(`#find-comments-${findId}`);
+  if (!panel) return;
+  if (panel.style.display !== "none") { panel.style.display = "none"; return; }
+  panel.style.display = "block";
+  panel.innerHTML = `<div class="hint-text">Carregando...</div>`;
+  const comments = await friends.listFindComments(findId).catch(() => []);
+  panel.innerHTML = `
+    <div class="stack" style="gap:6px;">${comments.map((c) => commentRowHTML(c, byId)).join("") || '<p class="hint-text" style="margin:0;">Nenhum comentário ainda.</p>'}</div>
+    <div class="row" style="gap:8px; margin-top:8px;">
+      <input type="text" id="fc-input-${findId}" maxlength="300" placeholder="Escreva um comentário..." style="flex:1;" />
+      <button class="btn btn-sm" style="background:var(--friends-accent); color:var(--on-friends-accent);" id="fc-send-${findId}">Enviar</button>
+    </div>
+  `;
+  $(`#fc-send-${findId}`).addEventListener("click", async () => {
+    const input = $(`#fc-input-${findId}`);
+    const text = input.value.trim();
+    if (!text) return;
+    setBusy(`#fc-send-${findId}`, true);
+    try {
+      await friends.addFindComment(findId, State.userId, text);
+      await toggleFindComments(findId, byId); // fecha
+      await toggleFindComments(findId, byId); // reabre já com o comentário novo
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy(`#fc-send-${findId}`, false);
+    }
+  });
 }
 
 async function renderFriendsFinds() {
@@ -1397,6 +1436,9 @@ async function renderFriendsFinds() {
         btn.disabled = false;
       }
     });
+  });
+  view.querySelectorAll("[data-toggle-comments]").forEach((btn) => {
+    btn.addEventListener("click", () => toggleFindComments(btn.dataset.toggleComments, byId));
   });
 }
 
@@ -1806,10 +1848,33 @@ function openNewCustomPerkModal() {
   });
 }
 
+function kickVoteRowHTML(v, byId) {
+  const ballots = v.friend_kick_ballots || [];
+  const mine = ballots.find((b) => b.user_id === State.userId);
+  const yes = ballots.filter((b) => b.vote).length;
+  const targetName = byId[v.target_user_id] || "alguém";
+  return `
+    <div class="entry-item" style="flex-direction:column; align-items:stretch;">
+      <div class="entry-title">Remover ${escapeHTML(targetName)}?</div>
+      <div class="entry-meta">${yes} voto${yes === 1 ? "" : "s"} a favor até agora</div>
+      ${mine ? `<p class="hint-text" style="margin:6px 0 0;">Você votou: ${mine.vote ? "a favor" : "contra"}.</p>` : `
+        <div class="row" style="gap:8px; margin-top:8px;">
+          <button class="btn btn-sm" style="flex:1; background:var(--friends-accent-soft); color:var(--friends-accent-strong);" data-kick-vote="${v.id}" data-vote="true">A favor</button>
+          <button class="btn btn-sm" style="flex:1; background:var(--surface-alt);" data-kick-vote="${v.id}" data-vote="false">Contra</button>
+        </div>`}
+    </div>`;
+}
+
 async function renderFriendsGroup() {
   const view = $("#friends-view");
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
-  const members = await friends.listGroupMembers(State.friendGroup.id).catch(() => []);
+  const [members, kickVotes] = await Promise.all([
+    friends.listGroupMembers(State.friendGroup.id).catch(() => []),
+    friends.listActiveKickVotes(State.friendGroup.id).catch(() => []),
+  ]);
+  const byId = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
+  const votedTargets = new Set(kickVotes.map((v) => v.target_user_id));
+
   view.innerHTML = `
     <div class="card" style="border-color:var(--friends-accent-soft);">
       <div class="row" style="align-items:center;">
@@ -1824,15 +1889,84 @@ async function renderFriendsGroup() {
       <p class="field-label" style="color:var(--friends-accent-strong);">Código da turma</p>
       <p style="font-family:'Baloo 2'; font-size:22px; letter-spacing:0.04em;">${escapeHTML(State.friendGroup.code || "")}</p>
       <p class="hint-text">Compartilhe esse código pra mais gente entrar na turma.</p>
+      <button class="btn btn-ghost btn-sm" style="margin-top:8px;" id="friends-regen-code-btn">Trocar código</button>
     </div>
+    ${kickVotes.length ? `
+      <div class="section-title">Votações em andamento</div>
+      <div class="card"><div class="stack">${kickVotes.map((v) => kickVoteRowHTML(v, byId)).join("")}</div></div>
+    ` : ""}
     <div class="card" style="margin-top:14px;">
       <p class="field-label">Quem está na turma (${members.length})</p>
       <div class="stack">
-        ${members.map((m) => `<div class="entry-item"><div class="entry-body"><div class="entry-title">${m.user_id === State.userId ? "Você" : escapeHTML(m.display_name)}</div></div></div>`).join("") || '<p class="hint-text">Só você, por enquanto.</p>'}
+        ${members.map((m) => `
+          <div class="entry-item">
+            <div class="entry-body"><div class="entry-title">${m.user_id === State.userId ? "Você" : escapeHTML(m.display_name)}</div></div>
+            ${m.user_id !== State.userId && !votedTargets.has(m.user_id) ? `<button class="btn btn-ghost btn-sm" data-propose-kick="${m.user_id}">Propor remover</button>` : ""}
+          </div>`).join("") || '<p class="hint-text">Só você, por enquanto.</p>'}
       </div>
+    </div>
+    <div class="card" style="margin-top:14px;">
+      <p class="field-label">Zona de risco</p>
+      <p class="hint-text">Excluir a turma apaga tudo — rolês, humor, achados, prêmios e o cofre — pra sempre, pra todo mundo.</p>
+      <button class="btn btn-ghost btn-block" style="color:var(--danger-text);" id="friends-delete-group-btn">Excluir turma</button>
     </div>
   `;
   $("#friends-edit-group-btn").addEventListener("click", openEditGroupModal);
+  $("#friends-regen-code-btn").addEventListener("click", async () => {
+    if (!confirm("Trocar o código? Quem tiver o código antigo não vai mais conseguir entrar com ele.")) return;
+    setBusy("#friends-regen-code-btn", true);
+    try {
+      const newCode = await friends.regenerateFriendGroupCode(State.friendGroup.id);
+      State.friendGroup = { ...State.friendGroup, code: newCode };
+      await renderFriendsGroup();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#friends-regen-code-btn", false);
+    }
+  });
+  $("#friends-delete-group-btn").addEventListener("click", async () => {
+    if (!confirm(`Excluir "${State.friendGroup.name}" pra sempre? Essa ação não pode ser desfeita.`)) return;
+    if (!confirm("Tem certeza mesmo? Todo mundo da turma perde acesso aos dados dela.")) return;
+    setBusy("#friends-delete-group-btn", true);
+    try {
+      await friends.deleteFriendGroup(State.friendGroup.id);
+      $("#screen-friends").style.display = "none";
+      State.profile = await db.getMyProfile(State.userId).catch(() => null);
+      State.friendGroups = await friends.listMyFriendGroups().catch(() => []);
+      if (State.profile && !State.friendGroups.length) await enterApp(State.profile);
+      else if (State.friendGroups.length === 1 && !State.profile) await enterFriendsMode(State.friendGroups[0]);
+      else renderAccountSwitcher(State.profile, State.friendGroups);
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#friends-delete-group-btn", false);
+    }
+  });
+  view.querySelectorAll("[data-propose-kick]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!confirm(`Propor remover ${byId[btn.dataset.proposeKick] || "essa pessoa"} da turma? A turma toda vai poder votar.`)) return;
+      btn.disabled = true;
+      try {
+        await friends.proposeKickVote(State.friendGroup.id, btn.dataset.proposeKick);
+        await renderFriendsGroup();
+      } catch (e) {
+        alert("Não deu: " + (e.message === "ja_tem_votacao_ativa" ? "Já tem uma votação em andamento pra essa pessoa." : (e.message || e)));
+        btn.disabled = false;
+      }
+    });
+  });
+  view.querySelectorAll("[data-kick-vote]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      view.querySelectorAll("[data-kick-vote]").forEach((b) => { b.disabled = true; });
+      try {
+        const result = await friends.castKickBallot(btn.dataset.kickVote, btn.dataset.vote === "true");
+        if (result.removed) alert("A votação passou — a pessoa foi removida da turma.");
+        await renderFriendsGroup();
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        await renderFriendsGroup();
+      }
+    });
+  });
 }
 
 function openEditGroupModal() {
