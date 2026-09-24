@@ -163,10 +163,10 @@ export async function listEventsForMonth(friendGroupId, monthStartISO, monthEndI
   return data || [];
 }
 
-export async function createEvent(friendGroupId, userId, title, startDateISO, startTime, category, details) {
+export async function createEvent(friendGroupId, userId, title, startDateISO, startTime, category, details, invitedUserIds) {
   const { data, error } = await supabase
     .from("friend_events")
-    .insert({ friend_group_id: friendGroupId, title, start_date: startDateISO, start_time: startTime || null, category: category || "amigos", details: details || "", created_by: userId })
+    .insert({ friend_group_id: friendGroupId, title, start_date: startDateISO, start_time: startTime || null, category: category || "amigos", details: details || "", invited_user_ids: invitedUserIds && invitedUserIds.length ? invitedUserIds : null, created_by: userId })
     .select()
     .single();
   if (error) throw error;

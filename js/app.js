@@ -1524,14 +1524,20 @@ function friendEventDetailItemHTML(ev, byId) {
   // quem confirmou primeiro aparece primeiro — reforça o "efeito bola de neve" de ver gente confirmando
   const going = rsvps.filter((r) => r.status === "sim").sort((a, b) => (a.updated_at || "").localeCompare(b.updated_at || ""));
   const goingNames = going.map((r) => (r.user_id === State.userId ? "Você" : byId[r.user_id] || "alguém")).join(", ");
+  const invitedIds = ev.invited_user_ids;
+  const isLimited = Array.isArray(invitedIds) && invitedIds.length > 0;
+  const imInvited = isLimited && invitedIds.includes(State.userId);
+  const invitedNames = isLimited ? invitedIds.map((uid) => (uid === State.userId ? "Você" : byId[uid] || "alguém")).join(", ") : "";
   return `
     <div class="entry-item" style="flex-direction:column; align-items:stretch;">
+      ${imInvited ? `<span style="align-self:flex-start; background:var(--friends-accent); color:var(--on-friends-accent); font-size:11px; font-weight:800; padding:3px 9px; border-radius:999px; margin-bottom:6px;">🔖 Você foi chamado(a) especialmente</span>` : ""}
       <div class="row" style="align-items:flex-start;">
         <div class="entry-icon">${cat.emoji}</div>
         <div class="entry-body">
           <div class="entry-title">${escapeHTML(ev.title)}</div>
           <div class="entry-meta">${cat.label}${ev.start_time ? ` · ${ev.start_time.slice(0, 5)}` : ""}</div>
           ${ev.details ? `<div class="hint-text" style="margin-top:4px;">${escapeHTML(ev.details)}</div>` : ""}
+          ${isLimited ? `<div class="hint-text" style="margin-top:4px;">Chamados: ${escapeHTML(invitedNames)}</div>` : ""}
         </div>
         ${ev.created_by === State.userId ? `<button class="btn btn-ghost btn-sm" style="padding:4px 8px;" data-delete-event="${ev.id}">Cancelar</button>` : ""}
       </div>
@@ -1685,11 +1691,27 @@ function openNewEventModal(dateISO, byId) {
       <input type="time" id="fe-time" />
       <label class="field-label">Detalhes (opcional)</label>
       <textarea id="fe-details" maxlength="200" rows="2" placeholder="endereço, o que levar..."></textarea>
+      <label class="field-label">Quem você quer chamar?</label>
+      <p class="hint-text" style="margin:-2px 0 6px;">O rolê fica visível pra turma toda de qualquer jeito — isso só destaca pra quem foi chamado.</p>
+      <div class="row" style="gap:6px; flex-wrap:wrap;" id="fe-invite-row">
+        ${Object.entries(byId || {}).map(([uid, name]) => `<button type="button" class="btn btn-sm" style="background:var(--friends-accent-soft); color:var(--friends-accent-strong);" data-invite="${uid}">${escapeHTML(uid === State.userId ? "Você" : name)}</button>`).join("")}
+      </div>
       <button class="btn btn-block" style="margin-top:6px; background:var(--friends-accent); color:var(--on-friends-accent);" id="fe-confirm">Marcar</button>
       <p class="error-text" id="fe-error"></p>
     </div>
   `);
   let category = "amigos";
+  const allUserIds = Object.keys(byId || {});
+  const invited = new Set(allUserIds); // começa com todo mundo marcado
+  $("#fe-invite-row").querySelectorAll("[data-invite]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const uid = btn.dataset.invite;
+      if (invited.has(uid)) invited.delete(uid); else invited.add(uid);
+      btn.style.background = invited.has(uid) ? "var(--friends-accent-soft)" : "";
+      btn.style.color = invited.has(uid) ? "var(--friends-accent-strong)" : "";
+      btn.style.opacity = invited.has(uid) ? "1" : ".5";
+    });
+  });
   $("#fe-category-row").querySelectorAll("[data-category]").forEach((btn) => {
     btn.addEventListener("click", () => {
       category = btn.dataset.category;
@@ -1707,9 +1729,12 @@ function openNewEventModal(dateISO, byId) {
     const err = (m) => { $("#fe-error").textContent = m; };
     if (!title) return err("Escreve o que vai rolar.");
     if (!fdate) return err("Escolhe a data.");
+    if (!invited.size) return err("Chama pelo menos uma pessoa.");
     setBusy("#fe-confirm", true);
     try {
-      const created = await friends.createEvent(State.friendGroup.id, State.userId, title, fdate, time || null, category, details);
+      // todo mundo marcado = mesma coisa que não restringir (lista vazia/nula)
+      const invitedIds = invited.size === allUserIds.length ? null : [...invited];
+      const created = await friends.createEvent(State.friendGroup.id, State.userId, title, fdate, time || null, category, details, invitedIds);
       await friends.setMyRsvp(created.id, State.userId, "sim").catch(() => {});
       closeModal();
       State.friendsSelectedDay = fdate;
