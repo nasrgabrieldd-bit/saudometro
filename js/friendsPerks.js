@@ -2,7 +2,7 @@
 // pessoa como no casal) — pensados pra turma, não reaproveita os itens românticos do casal.
 // Custo sempre fixo e visível: nunca caixa-surpresa/sorteio (ver estudo sobre gamificação ética).
 export const FRIEND_PERK_CATEGORIES = {
-  role: { emoji: "🧭", label: "Regalias de rolê" },
+  role: { emoji: "👥", label: "Regalias de rolê" },
   zoeira: { emoji: "🃏", label: "Regalias de zoeira" },
   pratico: { emoji: "🛠️", label: "Regalias práticas" },
 };

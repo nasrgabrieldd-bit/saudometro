@@ -22,7 +22,7 @@ export async function listMyFriendGroups() {
     id: r.friend_group_id,
     name: r.friend_groups?.name || "Turma",
     code: r.friend_groups?.code || "",
-    emoji: r.friend_groups?.emoji || "🧭",
+    emoji: r.friend_groups?.emoji || "👥",
     colorKey: r.friend_groups?.color_key || "azul",
     myDisplayName: r.display_name,
     memberCount: counts[r.friend_group_id] || 1,
@@ -32,15 +32,20 @@ export async function listMyFriendGroups() {
 export async function listGroupMembers(friendGroupId) {
   const { data, error } = await supabase
     .from("friend_members")
-    .select("user_id, display_name, joined_at")
+    .select("user_id, display_name, avatar_url, joined_at")
     .eq("friend_group_id", friendGroupId)
     .order("joined_at", { ascending: true });
   if (error) throw error;
   return data || [];
 }
 
+export async function updateMyDisplayName(friendGroupId, userId, displayName) {
+  const { error } = await supabase.from("friend_members").update({ display_name: displayName }).eq("friend_group_id", friendGroupId).eq("user_id", userId);
+  if (error) throw error;
+}
+
 export async function createFriendGroup(name, displayName, emoji, colorKey) {
-  const { data, error } = await supabase.rpc("create_friend_group", { p_name: name, p_display_name: displayName, p_emoji: emoji || "🧭", p_color_key: colorKey || "azul" });
+  const { data, error } = await supabase.rpc("create_friend_group", { p_name: name, p_display_name: displayName, p_emoji: emoji || "👥", p_color_key: colorKey || "azul" });
   if (error) throw error;
   return { id: data.id, name: data.name, code: data.code, emoji: data.emoji, colorKey: data.color_key };
 }

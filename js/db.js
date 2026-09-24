@@ -494,6 +494,22 @@ export async function listMemories(coupleId, limit = 30) {
   return data || [];
 }
 
+// foto de perfil: sobe pro espaço público "avatars" (sempre no mesmo arquivo, um por pessoa —
+// trocar substitui a antiga) e atualiza em todo lugar que guarda essa foto (perfil do casal
+// e a linha em cada turma de amigos que a pessoa faz parte), pra ficar igual em todo canto
+export async function uploadMyAvatar(userId, blob) {
+  const path = `${userId}/avatar.jpg`;
+  const up = await supabase.storage.from("avatars").upload(path, blob, { contentType: "image/jpeg", upsert: true });
+  if (up.error) throw up.error;
+  const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+  const url = `${data.publicUrl}?v=${Date.now()}`; // muda a query pra forçar recarregar (o navegador cacheia por nome de arquivo)
+  await Promise.all([
+    supabase.from("profiles").update({ avatar_url: url }).eq("id", userId),
+    supabase.from("friend_members").update({ avatar_url: url }).eq("user_id", userId),
+  ]);
+  return url;
+}
+
 // devolve um link temporário (1h) pra mostrar a foto — o espaço de arquivo é privado, só do casal
 export async function memoryPhotoUrl(path) {
   const { data, error } = await supabase.storage.from("memories").createSignedUrl(path, 3600);
