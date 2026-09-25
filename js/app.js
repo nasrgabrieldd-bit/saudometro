@@ -4249,10 +4249,10 @@ async function renderStarBattleGame(scope) {
         <span id="sbg-counter" style="font-weight:800; color:${accentStrong};"></span>
         <span id="sbg-hearts"></span>
       </div>
-      <div class="row" style="justify-content:center; gap:5px; margin-top:10px; flex-wrap:wrap;">
-        <span style="font-size:9.5px; font-weight:700; padding:3px 8px; border-radius:999px; background:${accentBtn}; color:${onAccentBtn};">1 capivara por cor</span>
-        <span style="font-size:9.5px; font-weight:700; padding:3px 8px; border-radius:999px; background:${accentSoft}; color:${accentStrong};">1 por linha e coluna</span>
-        <span style="font-size:9.5px; font-weight:700; padding:3px 8px; border-radius:999px; background:${accentSoft}; color:${accentStrong};">não se tocam</span>
+      <div class="row" style="gap:6px; margin-top:10px;">
+        <div class="sbg-rule-pill">1 capivara por cor</div>
+        <div class="sbg-rule-pill">1 capivara por linha e coluna</div>
+        <div class="sbg-rule-pill">Capivaras não se tocam</div>
       </div>
       <p class="hint-text" style="margin:8px 0 0;">Toque 1: marca ✕ (sem risco). Toque 2 na marcada: revela de verdade.</p>
     </div>
@@ -5421,7 +5421,9 @@ function showNextChangelogEntry(queue, mode, resolve) {
   const onAccentVar = mode === "amigos" ? "--on-friends-accent" : "--on-accent-btn";
   openModal(`
     <p class="hint-text" style="text-align:center; font-weight:800; letter-spacing:.04em; text-transform:uppercase; margin:0 0 8px;">Novidade</p>
-    <div style="text-align:center; font-size:34px;">${entry.emoji}</div>
+    <div style="text-align:center;">${entry.image
+      ? `<img src="${escapeHTML(entry.image)}" alt="" style="width:64px; height:64px; border-radius:16px; object-fit:cover;" />`
+      : `<span style="font-size:34px;">${entry.emoji}</span>`}</div>
     <h3 class="modal-title" style="text-align:center;">${escapeHTML(entry.title)}</h3>
     <p class="card-sub" style="text-align:center;">${escapeHTML(entry.text)}</p>
     <p class="hint-text" style="text-align:center; margin-top:16px;">Reage pra continuar:</p>
