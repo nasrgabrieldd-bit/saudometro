@@ -1329,9 +1329,48 @@ async function renderFriendsHome() {
         <div class="hint-text" style="margin:0;">na turma</div>
       </div>
     </div>
+
+    <div id="home-game-card-friends"></div>
   `;
   $("#friends-home-mood-card")?.addEventListener("click", () => setFriendsTab("mood"));
   $("#friends-home-role-card")?.addEventListener("click", () => setFriendsTab("roles"));
+  renderFriendsHomeGameCard(members, byId);
+}
+
+// card da Home mostrando em que fase a turma está no jogo e quanto já ganhou jogando —
+// carrega depois do resto da Home (não trava o resto da tela esperando essa consulta a mais)
+async function renderFriendsHomeGameCard(members, byId) {
+  const el = $("#home-game-card-friends");
+  if (!el) return;
+  try {
+    const [level, coins] = await Promise.all([
+      friends.getGameProgress(State.friendGroup.id, STAR_BATTLE_GAME_ID),
+      friends.getGameCoinsEarned(State.friendGroup.id, "Capibatman"),
+    ]);
+    el.innerHTML = `
+      <div class="card" id="home-game-card-friends-inner" style="margin-top:14px; cursor:pointer;">
+        <div class="row" style="align-items:center; gap:10px;">
+          <img src="icons/capivarinhas.jpg" alt="" style="width:40px; height:40px; border-radius:10px; object-fit:cover; flex:none;" />
+          <div style="flex:1;">
+            <div class="card-title" style="font-size:14px; margin-bottom:2px;">Capibatman</div>
+            <div class="hint-text" style="margin:0;">💰 ${coins} moedas ganhas jogando</div>
+          </div>
+        </div>
+        <div class="row" style="gap:6px; margin-top:10px; flex-wrap:wrap;">
+          ${members.map((m) => `
+            <div style="flex:1; min-width:64px; text-align:center; background:var(--friends-accent-soft); border-radius:10px; padding:8px 6px;">
+              <div style="font-weight:800; font-size:12px;">${m.user_id === State.userId ? "Você" : escapeHTML(m.display_name)}</div>
+              <div class="hint-text" style="margin:0;">Fase ${level}</div>
+            </div>`).join("")}
+        </div>
+      </div>
+    `;
+    $("#home-game-card-friends-inner").addEventListener("click", () => {
+      State.friendsTab = "shop";
+      document.querySelectorAll("[data-friends-tab]").forEach((b) => { b.style.color = b.dataset.friendsTab === "shop" ? "var(--friends-accent-strong)" : ""; });
+      renderStarBattleGame("amigos");
+    });
+  } catch (e) { /* jogo ainda não tem progresso ou deu erro de rede: só não mostra o card */ }
 }
 
 async function renderFriendsMood() {
@@ -2043,9 +2082,9 @@ async function renderFriendsShop() {
     <div class="section-title">🎮 Games</div>
     <div class="card" id="btn-open-star-battle-friends" style="cursor:pointer;">
       <div class="row" style="align-items:center; gap:10px;">
-        <img src="icons/capivarinhas.jpg" alt="Capivarinhas" style="width:48px; height:48px; border-radius:12px; object-fit:cover; flex:none;" />
+        <img src="icons/capivarinhas.jpg" alt="Capibatman" style="width:48px; height:48px; border-radius:12px; object-fit:cover; flex:none;" />
         <div style="flex:1;">
-          <div class="card-title" style="font-size:15px; margin-bottom:0;">Capivarinhas</div>
+          <div class="card-title" style="font-size:15px; margin-bottom:0;">Capibatman</div>
           <div class="hint-text" style="margin:0;">Quebra-cabeça de lógica · ganha moeda pra turma a cada fase</div>
         </div>
       </div>
@@ -2524,7 +2563,10 @@ async function renderHome() {
 ${widgetIds.map((id) => html[id] || "").join("")}
 
     ${widgetIds.length ? "" : todayMoodCardHTML(recentMoods, todayStr)}
+
+    <div id="home-game-card"></div>
   `;
+  renderHomeGameCard();
 
   $("#btn-goto-define")?.addEventListener("click", () => setActiveTab("calendar"));
   $("#today-mood-card")?.addEventListener("click", () => setActiveTab("mood"));
@@ -4196,7 +4238,7 @@ function formatNoteTimestamp(iso) {
 
 // ================= LOJINHA =================
 
-// ================= JOGOS (Capivarinhas) =================
+// ================= JOGOS (Capibatman) =================
 // o motor e as fases (js/games/) não sabem nada de casal, turma ou moeda — só devolvem um
 // tabuleiro e dizem se ganhou. Aqui é onde isso se liga ao resto do app.
 
@@ -4244,15 +4286,15 @@ async function renderStarBattleGame(scope) {
   container.innerHTML = `
     <button class="btn btn-ghost btn-sm" id="sbg-back" style="margin-bottom:10px;">← Voltar</button>
     <div class="card" style="background:${accentSoft}; text-align:center; padding:14px;">
-      <div style="font-family:'Baloo 2',sans-serif; font-weight:800; color:${accentStrong};"><img src="icons/capivarinhas.jpg" alt="" style="width:20px; height:20px; border-radius:6px; object-fit:cover; vertical-align:-4px;" /> Capivarinhas · Fase ${currentLevel}</div>
+      <div style="font-family:'Baloo 2',sans-serif; font-weight:800; font-size:16px; color:${accentStrong};"><img src="icons/capivarinhas.jpg" alt="" style="width:30px; height:30px; border-radius:8px; object-fit:cover; vertical-align:-8px;" /> Capibatman · Fase ${currentLevel}</div>
       <div class="row" style="justify-content:center; gap:14px; margin-top:8px;">
         <span id="sbg-counter" style="font-weight:800; color:${accentStrong};"></span>
         <span id="sbg-hearts"></span>
       </div>
-      <div class="row" style="gap:6px; margin-top:10px;">
-        <div class="sbg-rule-pill">1 capivara por cor</div>
-        <div class="sbg-rule-pill">1 capivara por linha e coluna</div>
-        <div class="sbg-rule-pill">Capivaras não se tocam</div>
+      <div class="row" style="gap:6px; margin-top:12px;">
+        <div class="sbg-rule-pill" style="border-color:${accentBtn};">1 capivara por cor</div>
+        <div class="sbg-rule-pill" style="border-color:${accentBtn};">1 capivara por linha e coluna</div>
+        <div class="sbg-rule-pill" style="border-color:${accentBtn};">Capivaras não se tocam</div>
       </div>
       <p class="hint-text" style="margin:8px 0 0;">Toque 1: marca ✕ (sem risco). Toque 2 na marcada: revela de verdade.</p>
     </div>
@@ -4315,28 +4357,71 @@ async function renderStarBattleGame(scope) {
     over = true;
     const reward = coinsForStarBattleLevel(levelData.size);
     const nextLevel = Math.min(currentLevel + 1, STAR_BATTLE_LEVELS.length);
+    const stars = livesLeft; // 3 corações intactos = 3 estrelas, foi perdendo, ganha menos
     boardWrap.querySelectorAll(".sbg-cell").forEach((cell) => { cell.style.pointerEvents = "none"; });
-    container.insertAdjacentHTML("beforeend", `
-      <div class="card sbg-celebrate" style="margin-top:14px; text-align:center; background:${accentBtn}; color:${onAccentBtn};">
-        <div style="font-size:30px;">🎉</div>
-        <div style="font-family:'Baloo 2',sans-serif; font-weight:800; font-size:17px; margin-top:4px;">Fase ${currentLevel} completa!</div>
-        <div style="margin-top:6px; font-size:15px;"><span class="sbg-coin-float">💰</span> +${reward} moedas</div>
-        <p style="margin:8px 0 0; opacity:.9; font-size:13px;">Indo pra fase ${nextLevel}...</p>
+    openModal(`
+      <div class="sbg-celebrate" style="text-align:center;">
+        <div style="font-size:36px; letter-spacing:8px;">${"⭐".repeat(stars)}${"☆".repeat(STAR_BATTLE_LIVES - stars)}</div>
+        <div style="font-family:'Baloo 2',sans-serif; font-weight:800; font-size:22px; color:${accentStrong}; margin-top:8px;">Fase ${currentLevel} completa!</div>
+        <div style="margin-top:12px; font-size:18px; font-weight:800; color:${accentStrong};"><span class="sbg-coin-float">💰</span> +${reward} moedas</div>
+        <button class="btn btn-block" style="margin-top:20px; background:${accentBtn}; color:${onAccentBtn};" id="sbg-continue">OK, fase ${nextLevel}</button>
       </div>
     `);
     try {
       if (isAmigos) {
-        await friends.addCoinBonus(State.friendGroup.id, State.userId, reward, `Capivarinhas: fase ${currentLevel}`);
+        await friends.addCoinBonus(State.friendGroup.id, State.userId, reward, `Capibatman: fase ${currentLevel}`);
         await friends.advanceGameProgress(State.friendGroup.id, STAR_BATTLE_GAME_ID, nextLevel);
       } else {
-        await earnCoins(State.role, reward, `Capivarinhas: fase ${currentLevel}`);
+        await earnCoins(State.role, reward, `Capibatman: fase ${currentLevel}`);
         await db.advanceGameProgress(State.coupleId, STAR_BATTLE_GAME_ID, nextLevel);
       }
     } catch (e) { /* progresso não salvou: continua jogável, tenta de novo na próxima fase */ }
-    setTimeout(() => renderStarBattleGame(scope), 1800);
+    $("#sbg-continue").addEventListener("click", () => {
+      closeModal();
+      renderStarBattleGame(scope);
+    });
   }
 
   redraw();
+}
+
+// card da Home mostrando em que fase o casal está no jogo e quanto já ganhou jogando —
+// carrega depois do resto da Home (não trava o resto da tela esperando essa consulta a mais)
+async function renderHomeGameCard() {
+  const el = $("#home-game-card");
+  if (!el) return;
+  try {
+    const [level, coins] = await Promise.all([
+      db.getGameProgress(State.coupleId, STAR_BATTLE_GAME_ID),
+      db.getGameCoinsEarned(State.coupleId, "Capibatman"),
+    ]);
+    el.innerHTML = `
+      <div class="card" id="home-game-card-inner" style="cursor:pointer;">
+        <div class="row" style="align-items:center; gap:10px;">
+          <img src="icons/capivarinhas.jpg" alt="" style="width:40px; height:40px; border-radius:10px; object-fit:cover; flex:none;" />
+          <div style="flex:1;">
+            <div class="card-title" style="font-size:14px; margin-bottom:2px;">Capibatman</div>
+            <div class="hint-text" style="margin:0;">💰 ${coins} moedas ganhas jogando</div>
+          </div>
+        </div>
+        <div class="row" style="gap:8px; margin-top:10px;">
+          <div style="flex:1; text-align:center; background:var(--accent-soft); border-radius:10px; padding:8px;">
+            <div style="font-weight:800; font-size:13px;">${ROLE_LABEL[State.role]}</div>
+            <div class="hint-text" style="margin:0;">Fase ${level}</div>
+          </div>
+          <div style="flex:1; text-align:center; background:var(--accent-soft); border-radius:10px; padding:8px;">
+            <div style="font-weight:800; font-size:13px;">${ROLE_LABEL[otherRole()]}</div>
+            <div class="hint-text" style="margin:0;">Fase ${level}</div>
+          </div>
+        </div>
+      </div>
+    `;
+    $("#home-game-card-inner").addEventListener("click", () => {
+      State.activeTab = "shop";
+      document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === "shop"));
+      renderStarBattleGame("casal");
+    });
+  } catch (e) { /* jogo ainda não tem progresso ou deu erro de rede: só não mostra o card */ }
 }
 
 async function renderShop() {
@@ -4413,9 +4498,9 @@ async function renderShop() {
     <div class="section-title">🎮 Games</div>
     <div class="card" id="btn-open-star-battle" style="cursor:pointer;">
       <div class="row" style="align-items:center; gap:10px;">
-        <img src="icons/capivarinhas.jpg" alt="Capivarinhas" style="width:48px; height:48px; border-radius:12px; object-fit:cover; flex:none;" />
+        <img src="icons/capivarinhas.jpg" alt="Capibatman" style="width:48px; height:48px; border-radius:12px; object-fit:cover; flex:none;" />
         <div style="flex:1;">
-          <div class="card-title" style="font-size:15px; margin-bottom:0;">Capivarinhas</div>
+          <div class="card-title" style="font-size:15px; margin-bottom:0;">Capibatman</div>
           <div class="hint-text" style="margin:0;">Quebra-cabeça de lógica · ganha moeda a cada fase</div>
         </div>
       </div>

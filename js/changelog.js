@@ -43,7 +43,7 @@ export const CHANGELOG = [
     tag: "casal",
     emoji: "🦫",
     image: "icons/capivarinhas.jpg",
-    title: "Capivarinhas chegou pra vocês dois",
+    title: "Capibatman chegou pra vocês dois",
     text: "Um quebra-cabeça fofo de achar capivara escondida, na Lojinha. Cada fase que vocês passam já cai moeda na carteira do casal, e vai ficando mais gostoso de difícil conforme avança. Bora descobrir onde elas estão?",
   },
   {
@@ -51,7 +51,7 @@ export const CHANGELOG = [
     tag: "amigos",
     emoji: "🦫",
     image: "icons/capivarinhas.jpg",
-    title: "Capivarinhas chegou pra turma",
+    title: "Capibatman chegou pra turma",
     text: "Um quebra-cabeça de achar capivara escondida, agora nos Prêmios da turma. Cada fase que a turma passa cai moeda no cofre, e a dificuldade sobe aos poucos. Quem topa ser o primeiro a jogar?",
   },
 ];

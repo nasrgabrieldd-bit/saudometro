@@ -409,7 +409,15 @@ export async function addCoinTransaction(coupleId, role, delta, reason) {
   if (error) throw error;
 }
 
-// ---------- progresso em jogos (Capivarinhas etc.) ----------
+// ---------- progresso em jogos (Capibatman etc.) ----------
+
+// soma quanta moeda já veio de um jogo específico (o motivo de cada lançamento começa com o
+// nome do jogo, ex.: "Capibatman: fase 7") — pra mostrar na Home sem precisar de tabela nova
+export async function getGameCoinsEarned(coupleId, gameLabel) {
+  const { data, error } = await supabase.from("coin_ledger").select("delta").eq("couple_id", coupleId).like("reason", `${gameLabel}:%`);
+  if (error) throw error;
+  return (data || []).reduce((sum, r) => sum + r.delta, 0);
+}
 
 export async function getGameProgress(coupleId, gameId) {
   const { data, error } = await supabase

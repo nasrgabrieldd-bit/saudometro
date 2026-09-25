@@ -1,4 +1,4 @@
-// Motor puro do jogo "Capivarinhas": não sabe nada sobre casal, turma, Supabase ou moedas.
+// Motor puro do jogo "Capibatman": não sabe nada sobre casal, turma, Supabase ou moedas.
 // Pensado assim de propósito: se um dia isso virar um app próprio, essa pasta inteira já
 // serve de base, sem precisar reescrever a lógica do jogo.
 //
