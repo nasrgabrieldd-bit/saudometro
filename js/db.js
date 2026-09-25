@@ -409,6 +409,26 @@ export async function addCoinTransaction(coupleId, role, delta, reason) {
   if (error) throw error;
 }
 
+// ---------- progresso em jogos (Capivarinhas etc.) ----------
+
+export async function getGameProgress(coupleId, gameId) {
+  const { data, error } = await supabase
+    .from("couple_game_progress")
+    .select("current_level")
+    .eq("couple_id", coupleId)
+    .eq("game_id", gameId)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.current_level || 1;
+}
+
+export async function advanceGameProgress(coupleId, gameId, newLevel) {
+  const { error } = await supabase
+    .from("couple_game_progress")
+    .upsert({ couple_id: coupleId, game_id: gameId, current_level: newLevel, updated_at: new Date().toISOString() }, { onConflict: "couple_id,game_id" });
+  if (error) throw error;
+}
+
 export async function listCoinHistory(coupleId, limit = 20) {
   const { data, error } = await supabase
     .from("coin_ledger")

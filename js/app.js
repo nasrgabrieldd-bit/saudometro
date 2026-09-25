@@ -13,6 +13,8 @@ import { weekIndexSince, questionForWeek } from "./questions.js";
 import { dayIndexSince, challengeForDay } from "./challenges.js";
 import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush, needsHomeScreenFirst } from "./push.js";
 import { PERKS, PERK_BY_ID, customToPerk, suggestedReward } from "./perks.js";
+import { cycleCell, checkWin, emptyGrid, CELL_MARK, CELL_PIECE } from "./games/starBattle.js";
+import { STAR_BATTLE_LEVELS } from "./games/starBattleLevels.js";
 import { cycleInfo, cycleRingSVG, cycleLegendHTML, cycleTilesHTML, cycleHelpHTML, cyclePhaseName, cycleTip, cyclePhaseOnDate, averageCycleLength, CYCLE_COLORS, CYCLE_DISCLAIMER } from "./cycle.js";
 import { pickSaudadeNudge } from "./nudges.js";
 import { nameOf, genderOf, emojiOf, gen, genMixed, cleanName, setPeopleSettings, defaultEmojis, legacyPeople, feat, goalTarget, HOME_WIDGETS, homeOrder, homeWidgetOn, togetherSince, coinRule, luckyOn, perkHidden, COIN_DEFAULTS } from "./people.js";
@@ -2038,6 +2040,17 @@ async function renderFriendsShop() {
       </div>
     </div>
 
+    <div class="section-title">🎮 Games</div>
+    <div class="card" id="btn-open-star-battle-friends" style="cursor:pointer;">
+      <div class="row" style="align-items:center; gap:10px;">
+        <span style="font-size:26px;">🦫</span>
+        <div style="flex:1;">
+          <div class="card-title" style="font-size:15px; margin-bottom:0;">Capivarinhas</div>
+          <div class="hint-text" style="margin:0;">Quebra-cabeça de lógica · ganha moeda pra turma a cada fase</div>
+        </div>
+      </div>
+    </div>
+
     ${Object.entries(FRIEND_PERK_CATEGORIES).map(([catId, cat]) => `
       <div class="section-title">${cat.emoji} ${cat.label}</div>
       ${FRIEND_PERKS.filter((p) => p.category === catId).map(perkCardHTML).join("")}
@@ -2065,6 +2078,7 @@ async function renderFriendsShop() {
       </div>
     ` : ""}
   `;
+  $("#btn-open-star-battle-friends").addEventListener("click", () => renderStarBattleGame("amigos"));
   $("#friends-new-perk-btn").addEventListener("click", openNewCustomPerkModal);
   view.querySelectorAll("[data-redeem]").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -4182,6 +4196,86 @@ function formatNoteTimestamp(iso) {
 
 // ================= LOJINHA =================
 
+// ================= JOGOS (Capivarinhas) =================
+// o motor e as fases (js/games/) não sabem nada de casal, turma ou moeda — só devolvem um
+// tabuleiro e dizem se ganhou. Aqui é onde isso se liga ao resto do app.
+
+const STAR_BATTLE_GAME_ID = "star_battle";
+const STAR_BATTLE_PALETTE = ["#ffb3c6", "#ffd679", "#c3b2ef", "#7bd6c4", "#a8cf7d", "#8fc7ee", "#f2a6c9", "#e0b36b", "#9fd0e6", "#c9e08a"];
+const coinsForStarBattleLevel = (size) => size;
+
+function starBattleBoardHTML(size, regions, grid) {
+  let cells = "";
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const bg = STAR_BATTLE_PALETTE[regions[r][c] % STAR_BATTLE_PALETTE.length];
+      const state = grid[r][c];
+      const mark = state === CELL_MARK ? `<span class="sbg-x">✕</span>` : state === CELL_PIECE ? "🦫" : "";
+      cells += `<div class="sbg-cell" data-r="${r}" data-c="${c}" style="background:${bg};">${mark}</div>`;
+    }
+  }
+  return `<div class="sbg-board" style="grid-template-columns:repeat(${size}, 1fr);">${cells}</div>`;
+}
+
+async function renderStarBattleGame(scope) {
+  const isAmigos = scope === "amigos";
+  const container = isAmigos ? $("#friends-view") : view;
+  const accent = isAmigos ? "var(--friends-accent)" : "var(--accent-btn)";
+  const accentStrong = isAmigos ? "var(--friends-accent-strong)" : "var(--accent-strong)";
+  const accentSoft = isAmigos ? "var(--friends-accent-soft)" : "var(--accent-soft)";
+  const onAccent = isAmigos ? "var(--on-friends-accent)" : "var(--on-accent-btn)";
+  const backFn = isAmigos ? renderFriendsShop : renderShop;
+
+  container.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const currentLevel = isAmigos
+    ? await friends.getGameProgress(State.friendGroup.id, STAR_BATTLE_GAME_ID).catch(() => 1)
+    : await db.getGameProgress(State.coupleId, STAR_BATTLE_GAME_ID).catch(() => 1);
+  const levelData = STAR_BATTLE_LEVELS[Math.min(currentLevel, STAR_BATTLE_LEVELS.length) - 1];
+  const grid = emptyGrid(levelData.size);
+
+  container.innerHTML = `
+    <button class="btn btn-ghost btn-sm" id="sbg-back" style="margin-bottom:10px;">← Voltar</button>
+    <div class="card" style="background:${accentSoft}; text-align:center; padding:14px;">
+      <div style="font-family:'Baloo 2',sans-serif; font-weight:800; color:${accentStrong};">🦫 Capivarinhas · Fase ${currentLevel}</div>
+      <p class="hint-text" style="margin:4px 0 0;">Toque: vazio → ✕ → capivara. Uma capivara por região, linha e coluna, sem se tocar.</p>
+    </div>
+    <div id="sbg-board-wrap" style="margin-top:14px; display:flex; justify-content:center;"></div>
+    <p class="hint-text" id="sbg-status" style="text-align:center; margin-top:10px;"></p>
+  `;
+  $("#sbg-back").addEventListener("click", () => backFn());
+  const boardWrap = $("#sbg-board-wrap");
+
+  function redraw() {
+    boardWrap.innerHTML = starBattleBoardHTML(levelData.size, levelData.regions, grid);
+    boardWrap.querySelectorAll(".sbg-cell").forEach((cell) => {
+      cell.addEventListener("click", async () => {
+        const r = Number(cell.dataset.r), c = Number(cell.dataset.c);
+        grid[r][c] = cycleCell(grid[r][c]);
+        redraw();
+        if (checkWin(levelData.size, levelData.regions, grid)) await onLevelWon();
+      });
+    });
+  }
+
+  async function onLevelWon() {
+    const reward = coinsForStarBattleLevel(levelData.size);
+    const nextLevel = Math.min(currentLevel + 1, STAR_BATTLE_LEVELS.length);
+    $("#sbg-status").textContent = `🎉 Fase completa! +${reward} moedas`;
+    try {
+      if (isAmigos) {
+        await friends.addCoinBonus(State.friendGroup.id, State.userId, reward, `Capivarinhas: fase ${currentLevel}`);
+        await friends.advanceGameProgress(State.friendGroup.id, STAR_BATTLE_GAME_ID, nextLevel);
+      } else {
+        await earnCoins(State.role, reward, `Capivarinhas: fase ${currentLevel}`);
+        await db.advanceGameProgress(State.coupleId, STAR_BATTLE_GAME_ID, nextLevel);
+      }
+    } catch (e) { /* progresso não salvou: continua jogável, tenta de novo na próxima fase */ }
+    setTimeout(() => renderStarBattleGame(scope), 1400);
+  }
+
+  redraw();
+}
+
 async function renderShop() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const [coins, redemptions, customRows] = await Promise.all([
@@ -4253,6 +4347,17 @@ async function renderShop() {
       </div>
     </div>
 
+    <div class="section-title">🎮 Games</div>
+    <div class="card" id="btn-open-star-battle" style="cursor:pointer;">
+      <div class="row" style="align-items:center; gap:10px;">
+        <span style="font-size:26px;">🦫</span>
+        <div style="flex:1;">
+          <div class="card-title" style="font-size:15px; margin-bottom:0;">Capivarinhas</div>
+          <div class="hint-text" style="margin:0;">Quebra-cabeça de lógica · ganha moeda a cada fase</div>
+        </div>
+      </div>
+    </div>
+
     <div class="section-title">Trocar moedas por</div>
     <div class="stack">
       ${PERKS.filter((x) => !perkHidden(x.id)).map((x) => perkById[x.id] || x).map(perkCardHTML).join("")}
@@ -4308,6 +4413,7 @@ async function renderShop() {
       }
     });
   });
+  $("#btn-open-star-battle").addEventListener("click", () => renderStarBattleGame("casal"));
   $("#btn-new-perk").addEventListener("click", () => openPerkModal(null));
   view.querySelectorAll("[data-act='edit-perk']").forEach((btn) => {
     btn.addEventListener("click", () => openPerkModal(customRows.find((r) => r.id === btn.dataset.id)));

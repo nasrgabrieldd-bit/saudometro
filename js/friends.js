@@ -106,6 +106,26 @@ export async function addCoinBonus(friendGroupId, userId, delta, reason) {
   if (error) throw error;
 }
 
+// ---------- progresso em jogos (Capivarinhas etc.) ----------
+
+export async function getGameProgress(friendGroupId, gameId) {
+  const { data, error } = await supabase
+    .from("friend_game_progress")
+    .select("current_level")
+    .eq("friend_group_id", friendGroupId)
+    .eq("game_id", gameId)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.current_level || 1;
+}
+
+export async function advanceGameProgress(friendGroupId, gameId, newLevel) {
+  const { error } = await supabase
+    .from("friend_game_progress")
+    .upsert({ friend_group_id: friendGroupId, game_id: gameId, current_level: newLevel, updated_at: new Date().toISOString() }, { onConflict: "friend_group_id,game_id" });
+  if (error) throw error;
+}
+
 export async function listGroupRedemptions(friendGroupId, limit = 30) {
   const { data, error } = await supabase
     .from("friend_redemptions")
