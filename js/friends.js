@@ -430,6 +430,13 @@ export async function unlikeFeedPost(postId, userId) {
   if (error) throw error;
 }
 
+// denuncia um achado/post/comentário pra revisão manual (modo dono) — nunca esconde nada
+// sozinho. kind: "achado" | "feed_post" | "feed_comment" | "find_comment"
+export async function reportContent(kind, targetId, reason) {
+  const { error } = await supabase.rpc("report_content", { p_kind: kind, p_target_id: targetId, p_reason: reason });
+  if (error) throw error;
+}
+
 export async function listFeedComments(postId) {
   const { data, error } = await supabase.from("friend_feed_comments").select("*").eq("post_id", postId).order("created_at", { ascending: true });
   if (error) throw error;
