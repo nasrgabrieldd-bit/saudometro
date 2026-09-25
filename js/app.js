@@ -713,7 +713,7 @@ function createCodeStep(st) {
     const code = $("#couple-code").value.trim().toUpperCase();
     st.code = code;
     $("#onboarding-error").textContent = "";
-    if (code.replace(/s/g, "").length < 8) { $("#onboarding-error").textContent = "O código precisa ter pelo menos 8 caracteres."; return; }
+    if (code.replace(/\s/g, "").length < 8) { $("#onboarding-error").textContent = "O código precisa ter pelo menos 8 caracteres."; return; }
     const slots = ["gabriel", "tata"];
     const emo = defaultEmojis(st.p[0].g, st.p[1].g);
     const names = { gabriel: st.p[0].n, tata: st.p[1].n };
@@ -1215,6 +1215,11 @@ function renderFriendsActiveTab() {
   };
   Promise.resolve((map[State.friendsTab] || renderFriendsHome)()).catch((e) => {
     if (db.isNetworkError(e)) { renderOfflineFallback($("#friends-view"), "amigos"); return; }
+    if (isAccessDenied(e)) {
+      alert("Você não faz mais parte dessa turma (pode ter sido removido(a), ou o grupo foi apagado).");
+      afterLeavingFriendGroup();
+      return;
+    }
     alert("Deu ruim: " + (e.message || e));
   });
 }
@@ -2911,7 +2916,7 @@ function openSweetNoteModal(alreadyEarnedToday) {
   openModal(`
     <h3 class="modal-title">💌 Recadinho fofo</h3>
     <p class="card-sub">${!coinsOn() || coinRule("note") === 0 ? "Manda quantos quiser." : alreadyEarnedToday ? "Você já ganhou a moeda de hoje, mas manda quantos quiser." : `O primeiro recadinho do dia já dá ${coinWord(coinRule("note"))} pra você.`}</p>
-    <textarea id="sweet-note-text" rows="3" placeholder="tô pensando em você..."></textarea>
+    <textarea id="sweet-note-text" rows="3" maxlength="500" placeholder="tô pensando em você..."></textarea>
     <button class="btn btn-primary btn-block" style="margin-top:16px;" id="btn-send-sweet-note">Mandar</button>
   `);
   $("#btn-send-sweet-note").addEventListener("click", async () => {
@@ -3417,7 +3422,7 @@ async function renderMood() {
       </div>
 
       <label class="field-label">Um recadinho (opcional)</label>
-      <textarea id="mood-note" rows="2" placeholder="algo que quer contar pra ele/ela...">${escapeHTML(mine?.note || "")}</textarea>
+      <textarea id="mood-note" rows="2" maxlength="300" placeholder="algo que quer contar pra ele/ela...">${escapeHTML(mine?.note || "")}</textarea>
 
       <button class="btn btn-primary btn-block" style="margin-top:16px;" id="save-mood">Salvar humor de hoje</button>
     </div>
