@@ -4211,7 +4211,7 @@ function starBattleBoardHTML(size, regions, grid) {
     for (let c = 0; c < size; c++) {
       const bg = STAR_BATTLE_PALETTE[regions[r][c] % STAR_BATTLE_PALETTE.length];
       const state = grid[r][c];
-      const mark = state === CELL_MARK ? `<span class="sbg-x">✕</span>` : state === CELL_CAT ? "🦫" : "";
+      const mark = state === CELL_MARK ? `<span class="sbg-x">✕</span>` : state === CELL_CAT ? `<img src="icons/capivarinhas.jpg" alt="capivara" class="sbg-cat-icon" />` : "";
       const locked = state === CELL_CAT ? "cursor:default;" : "";
       cells += `<div class="sbg-cell" data-r="${r}" data-c="${c}" style="background:${bg}; ${locked}">${mark}</div>`;
     }
@@ -4244,7 +4244,7 @@ async function renderStarBattleGame(scope) {
   container.innerHTML = `
     <button class="btn btn-ghost btn-sm" id="sbg-back" style="margin-bottom:10px;">← Voltar</button>
     <div class="card" style="background:${accentSoft}; text-align:center; padding:14px;">
-      <div style="font-family:'Baloo 2',sans-serif; font-weight:800; color:${accentStrong};">🦫 Capivarinhas · Fase ${currentLevel}</div>
+      <div style="font-family:'Baloo 2',sans-serif; font-weight:800; color:${accentStrong};"><img src="icons/capivarinhas.jpg" alt="" style="width:20px; height:20px; border-radius:6px; object-fit:cover; vertical-align:-4px;" /> Capivarinhas · Fase ${currentLevel}</div>
       <div class="row" style="justify-content:center; gap:14px; margin-top:8px;">
         <span id="sbg-counter" style="font-weight:800; color:${accentStrong};"></span>
         <span id="sbg-hearts"></span>
@@ -4263,7 +4263,7 @@ async function renderStarBattleGame(scope) {
   const boardWrap = $("#sbg-board-wrap");
 
   function updateHud() {
-    $("#sbg-counter").textContent = `🦫 ${countFound(grid)}/${levelData.size}`;
+    $("#sbg-counter").innerHTML = `<img src="icons/capivarinhas.jpg" alt="" style="width:16px; height:16px; border-radius:4px; object-fit:cover; vertical-align:-2px;" /> ${countFound(grid)}/${levelData.size}`;
     $("#sbg-hearts").textContent = starBattleHeartsHTML(livesLeft);
   }
 
@@ -4315,7 +4315,15 @@ async function renderStarBattleGame(scope) {
     over = true;
     const reward = coinsForStarBattleLevel(levelData.size);
     const nextLevel = Math.min(currentLevel + 1, STAR_BATTLE_LEVELS.length);
-    $("#sbg-status").textContent = `🎉 Fase completa! +${reward} moedas`;
+    boardWrap.querySelectorAll(".sbg-cell").forEach((cell) => { cell.style.pointerEvents = "none"; });
+    container.insertAdjacentHTML("beforeend", `
+      <div class="card sbg-celebrate" style="margin-top:14px; text-align:center; background:${accentBtn}; color:${onAccentBtn};">
+        <div style="font-size:30px;">🎉</div>
+        <div style="font-family:'Baloo 2',sans-serif; font-weight:800; font-size:17px; margin-top:4px;">Fase ${currentLevel} completa!</div>
+        <div style="margin-top:6px; font-size:15px;"><span class="sbg-coin-float">💰</span> +${reward} moedas</div>
+        <p style="margin:8px 0 0; opacity:.9; font-size:13px;">Indo pra fase ${nextLevel}...</p>
+      </div>
+    `);
     try {
       if (isAmigos) {
         await friends.addCoinBonus(State.friendGroup.id, State.userId, reward, `Capivarinhas: fase ${currentLevel}`);
@@ -4325,7 +4333,7 @@ async function renderStarBattleGame(scope) {
         await db.advanceGameProgress(State.coupleId, STAR_BATTLE_GAME_ID, nextLevel);
       }
     } catch (e) { /* progresso não salvou: continua jogável, tenta de novo na próxima fase */ }
-    setTimeout(() => renderStarBattleGame(scope), 1400);
+    setTimeout(() => renderStarBattleGame(scope), 1800);
   }
 
   redraw();

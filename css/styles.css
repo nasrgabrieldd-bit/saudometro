@@ -964,3 +964,9 @@ label.field-label:first-child { margin-top: 0; }
   font-size: clamp(14px, 4vw, 22px); cursor: pointer; user-select: none;
 }
 .sbg-x { color: rgba(0,0,0,.4); font-weight: 800; }
+.sbg-cat-icon { width: 72%; height: 72%; object-fit: contain; pointer-events: none; }
+
+.sbg-celebrate { animation: sbg-pop .35s cubic-bezier(.34,1.56,.64,1); }
+@keyframes sbg-pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.sbg-coin-float { display: inline-block; animation: sbg-float 1.1s ease-in-out infinite; }
+@keyframes sbg-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }

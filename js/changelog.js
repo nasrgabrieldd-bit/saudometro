@@ -38,6 +38,20 @@ export const CHANGELOG = [
     title: "Feed de fotos e rolê marcado pra você",
     text: "Experiências agora tem um feed de fotos da turma, privado, só pra vocês. Marque uma foto de fofoca pra ela ficar destacada, comente em thread e dê like. Nos Rolês, dá pra chamar só algumas pessoas pra um encontro, e quem for chamado recebe um aviso ao abrir a aba.",
   },
+  {
+    id: "jogo-capivarinhas-casal",
+    tag: "casal",
+    emoji: "🦫",
+    title: "Capivarinhas chegou pra vocês dois",
+    text: "Um quebra-cabeça fofo de achar capivara escondida, na Lojinha. Cada fase que vocês passam já cai moeda na carteira do casal, e vai ficando mais gostoso de difícil conforme avança. Bora descobrir onde elas estão?",
+  },
+  {
+    id: "jogo-capivarinhas-amigos",
+    tag: "amigos",
+    emoji: "🦫",
+    title: "Capivarinhas chegou pra turma",
+    text: "Um quebra-cabeça de achar capivara escondida, agora nos Prêmios da turma. Cada fase que a turma passa cai moeda no cofre, e a dificuldade sobe aos poucos. Quem topa ser o primeiro a jogar?",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
