@@ -99,7 +99,7 @@ function generateLevel(level, maxAttempts) {
     if (!solution) continue;
     const regions = growRegions(n, solution, rng);
     if (countSolutions(n, regions, 2) === 1) {
-      return { level, size: n, regions };
+      return { level, size: n, regions, solution };
     }
   }
   throw new Error(`não deu pra gerar a fase ${level} (tamanho ${n}) em ${maxAttempts} tentativas`);

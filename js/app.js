@@ -13,7 +13,7 @@ import { weekIndexSince, questionForWeek } from "./questions.js";
 import { dayIndexSince, challengeForDay } from "./challenges.js";
 import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush, needsHomeScreenFirst } from "./push.js";
 import { PERKS, PERK_BY_ID, customToPerk, suggestedReward } from "./perks.js";
-import { cycleCell, checkWin, emptyGrid, CELL_MARK, CELL_PIECE } from "./games/starBattle.js";
+import { emptyGrid, markCell, revealCell, countFound, CELL_EMPTY, CELL_MARK, CELL_CAT } from "./games/starBattle.js";
 import { STAR_BATTLE_LEVELS } from "./games/starBattleLevels.js";
 import { cycleInfo, cycleRingSVG, cycleLegendHTML, cycleTilesHTML, cycleHelpHTML, cyclePhaseName, cycleTip, cyclePhaseOnDate, averageCycleLength, CYCLE_COLORS, CYCLE_DISCLAIMER } from "./cycle.js";
 import { pickSaudadeNudge } from "./nudges.js";
@@ -4202,6 +4202,7 @@ function formatNoteTimestamp(iso) {
 
 const STAR_BATTLE_GAME_ID = "star_battle";
 const STAR_BATTLE_PALETTE = ["#ffb3c6", "#ffd679", "#c3b2ef", "#7bd6c4", "#a8cf7d", "#8fc7ee", "#f2a6c9", "#e0b36b", "#9fd0e6", "#c9e08a"];
+const STAR_BATTLE_LIVES = 3;
 const coinsForStarBattleLevel = (size) => size;
 
 function starBattleBoardHTML(size, regions, grid) {
@@ -4210,20 +4211,25 @@ function starBattleBoardHTML(size, regions, grid) {
     for (let c = 0; c < size; c++) {
       const bg = STAR_BATTLE_PALETTE[regions[r][c] % STAR_BATTLE_PALETTE.length];
       const state = grid[r][c];
-      const mark = state === CELL_MARK ? `<span class="sbg-x">✕</span>` : state === CELL_PIECE ? "🦫" : "";
-      cells += `<div class="sbg-cell" data-r="${r}" data-c="${c}" style="background:${bg};">${mark}</div>`;
+      const mark = state === CELL_MARK ? `<span class="sbg-x">✕</span>` : state === CELL_CAT ? "🦫" : "";
+      const locked = state === CELL_CAT ? "cursor:default;" : "";
+      cells += `<div class="sbg-cell" data-r="${r}" data-c="${c}" style="background:${bg}; ${locked}">${mark}</div>`;
     }
   }
   return `<div class="sbg-board" style="grid-template-columns:repeat(${size}, 1fr);">${cells}</div>`;
 }
 
+function starBattleHeartsHTML(livesLeft) {
+  return Array.from({ length: STAR_BATTLE_LIVES }, (_, i) => (i < livesLeft ? "❤️" : "🤍")).join(" ");
+}
+
 async function renderStarBattleGame(scope) {
   const isAmigos = scope === "amigos";
   const container = isAmigos ? $("#friends-view") : view;
-  const accent = isAmigos ? "var(--friends-accent)" : "var(--accent-btn)";
   const accentStrong = isAmigos ? "var(--friends-accent-strong)" : "var(--accent-strong)";
   const accentSoft = isAmigos ? "var(--friends-accent-soft)" : "var(--accent-soft)";
-  const onAccent = isAmigos ? "var(--on-friends-accent)" : "var(--on-accent-btn)";
+  const accentBtn = isAmigos ? "var(--friends-accent)" : "var(--accent-btn)";
+  const onAccentBtn = isAmigos ? "var(--on-friends-accent)" : "var(--on-accent-btn)";
   const backFn = isAmigos ? renderFriendsShop : renderShop;
 
   container.innerHTML = `<div class="center-note">Carregando...</div>`;
@@ -4231,13 +4237,24 @@ async function renderStarBattleGame(scope) {
     ? await friends.getGameProgress(State.friendGroup.id, STAR_BATTLE_GAME_ID).catch(() => 1)
     : await db.getGameProgress(State.coupleId, STAR_BATTLE_GAME_ID).catch(() => 1);
   const levelData = STAR_BATTLE_LEVELS[Math.min(currentLevel, STAR_BATTLE_LEVELS.length) - 1];
-  const grid = emptyGrid(levelData.size);
+  let grid = emptyGrid(levelData.size);
+  let livesLeft = STAR_BATTLE_LIVES;
+  let over = false;
 
   container.innerHTML = `
     <button class="btn btn-ghost btn-sm" id="sbg-back" style="margin-bottom:10px;">← Voltar</button>
     <div class="card" style="background:${accentSoft}; text-align:center; padding:14px;">
       <div style="font-family:'Baloo 2',sans-serif; font-weight:800; color:${accentStrong};">🦫 Capivarinhas · Fase ${currentLevel}</div>
-      <p class="hint-text" style="margin:4px 0 0;">Toque: vazio → ✕ → capivara. Uma capivara por região, linha e coluna, sem se tocar.</p>
+      <div class="row" style="justify-content:center; gap:14px; margin-top:8px;">
+        <span id="sbg-counter" style="font-weight:800; color:${accentStrong};"></span>
+        <span id="sbg-hearts"></span>
+      </div>
+      <div class="row" style="justify-content:center; gap:5px; margin-top:10px; flex-wrap:wrap;">
+        <span style="font-size:9.5px; font-weight:700; padding:3px 8px; border-radius:999px; background:${accentBtn}; color:${onAccentBtn};">1 capivara por cor</span>
+        <span style="font-size:9.5px; font-weight:700; padding:3px 8px; border-radius:999px; background:${accentSoft}; color:${accentStrong};">1 por linha e coluna</span>
+        <span style="font-size:9.5px; font-weight:700; padding:3px 8px; border-radius:999px; background:${accentSoft}; color:${accentStrong};">não se tocam</span>
+      </div>
+      <p class="hint-text" style="margin:8px 0 0;">Toque 1: marca ✕ (sem risco). Toque 2 na marcada: revela de verdade.</p>
     </div>
     <div id="sbg-board-wrap" style="margin-top:14px; display:flex; justify-content:center;"></div>
     <p class="hint-text" id="sbg-status" style="text-align:center; margin-top:10px;"></p>
@@ -4245,19 +4262,57 @@ async function renderStarBattleGame(scope) {
   $("#sbg-back").addEventListener("click", () => backFn());
   const boardWrap = $("#sbg-board-wrap");
 
+  function updateHud() {
+    $("#sbg-counter").textContent = `🦫 ${countFound(grid)}/${levelData.size}`;
+    $("#sbg-hearts").textContent = starBattleHeartsHTML(livesLeft);
+  }
+
   function redraw() {
+    updateHud();
     boardWrap.innerHTML = starBattleBoardHTML(levelData.size, levelData.regions, grid);
+    if (over) return;
     boardWrap.querySelectorAll(".sbg-cell").forEach((cell) => {
       cell.addEventListener("click", async () => {
         const r = Number(cell.dataset.r), c = Number(cell.dataset.c);
-        grid[r][c] = cycleCell(grid[r][c]);
-        redraw();
-        if (checkWin(levelData.size, levelData.regions, grid)) await onLevelWon();
+        const state = grid[r][c];
+        if (state === CELL_CAT) return;
+        if (state === CELL_EMPTY) {
+          markCell(grid, r, c);
+          redraw();
+          return;
+        }
+        const found = revealCell(levelData.solution, grid, r, c);
+        if (found) {
+          redraw();
+          if (countFound(grid) === levelData.size) await onLevelWon();
+        } else {
+          livesLeft--;
+          redraw();
+          $("#sbg-status").textContent = livesLeft > 0 ? "❌ Não tinha capivara aí." : "💔 Acabaram os corações!";
+          if (livesLeft <= 0) onOutOfLives();
+        }
       });
     });
   }
 
+  function onOutOfLives() {
+    over = true;
+    boardWrap.querySelectorAll(".sbg-cell").forEach((cell) => { cell.style.pointerEvents = "none"; cell.style.opacity = ".6"; });
+    container.insertAdjacentHTML("beforeend", `
+      <button class="btn btn-block" style="margin-top:14px; background:${accentBtn}; color:${onAccentBtn};" id="sbg-retry">Tentar de novo</button>
+    `);
+    $("#sbg-retry").addEventListener("click", () => {
+      grid = emptyGrid(levelData.size);
+      livesLeft = STAR_BATTLE_LIVES;
+      over = false;
+      $("#sbg-retry").remove();
+      $("#sbg-status").textContent = "";
+      redraw();
+    });
+  }
+
   async function onLevelWon() {
+    over = true;
     const reward = coinsForStarBattleLevel(levelData.size);
     const nextLevel = Math.min(currentLevel + 1, STAR_BATTLE_LEVELS.length);
     $("#sbg-status").textContent = `🎉 Fase completa! +${reward} moedas`;
