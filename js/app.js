@@ -113,6 +113,21 @@ function openInstallGuide() {
 
 // ---------------- boot ----------------
 
+// pra abrir o app offline: guarda o que veio da última vez que carregou com internet (perfil,
+// parceiro, config do casal, turmas) e usa isso como base quando a rede falha no boot. Escopado
+// por userId porque mais de uma conta Google pode já ter aberto no mesmo aparelho.
+const APP_CACHE_KEY = "appOfflineCache";
+function getAppCache(userId) {
+  try { return JSON.parse(localStorage.getItem(APP_CACHE_KEY) || "{}")[userId] || {}; } catch (e) { return {}; }
+}
+function setAppCache(userId, patch) {
+  try {
+    const all = JSON.parse(localStorage.getItem(APP_CACHE_KEY) || "{}");
+    all[userId] = { ...(all[userId] || {}), ...patch };
+    localStorage.setItem(APP_CACHE_KEY, JSON.stringify(all));
+  } catch (e) { /* sem storage: só não guarda cache, próxima entrada online resolve */ }
+}
+
 function watchForAppUpdates() {
   if (!("serviceWorker" in navigator)) return;
   navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).catch(() => {});
@@ -158,10 +173,21 @@ async function boot() {
     return;
   }
   State.userId = session.user.id;
-  const [profile, myFriendGroups] = await Promise.all([
-    db.getMyProfile(State.userId),
-    friends.listMyFriendGroups().catch(() => []),
-  ]);
+  let profile, myFriendGroups;
+  try {
+    [profile, myFriendGroups] = await Promise.all([
+      db.getMyProfile(State.userId),
+      friends.listMyFriendGroups().catch(() => []),
+    ]);
+    setAppCache(State.userId, { profile, friendGroups: myFriendGroups });
+  } catch (e) {
+    if (!db.isNetworkError(e)) { showBootError(e); return; }
+    // sem internet: usa o que ficou salvo da última vez que abriu com internet, pra não travar o boot
+    const cached = getAppCache(State.userId);
+    if (!cached.profile && !(cached.friendGroups || []).length) { showBootError(e); return; }
+    profile = cached.profile || null;
+    myFriendGroups = cached.friendGroups || [];
+  }
   State.friendGroups = myFriendGroups;
 
   // 2+ contas (casal + turma, ou várias turmas): a pessoa escolhe qual quer usar agora
@@ -255,11 +281,21 @@ async function enterApp(profile) {
   State.profile = profile;
   State.coupleId = profile.couple_id;
   State.role = profile.role;
-  State.settings = await db.getCoupleSettings(State.coupleId).catch(() => null);
+  try {
+    State.settings = await db.getCoupleSettings(State.coupleId);
+    State.partner = await db.getPartnerProfile(State.coupleId, State.role);
+    const coupleMeta = await db.getCoupleMeta(State.coupleId);
+    State.coupleCreatedAt = coupleMeta.created_at;
+    setAppCache(State.userId, { settings: State.settings, partner: State.partner, coupleCreatedAt: State.coupleCreatedAt });
+  } catch (e) {
+    if (!db.isNetworkError(e)) throw e;
+    // sem internet: usa o que ficou salvo da última vez, pra abrir o app mesmo assim
+    const cached = getAppCache(State.userId);
+    State.settings = cached.settings || null;
+    State.partner = cached.partner || null;
+    State.coupleCreatedAt = cached.coupleCreatedAt || null;
+  }
   setPeopleSettings(State.settings);
-  State.partner = await db.getPartnerProfile(State.coupleId, State.role);
-  const coupleMeta = await db.getCoupleMeta(State.coupleId);
-  State.coupleCreatedAt = coupleMeta.created_at;
 
   $("#screen-onboarding").style.display = "none";
   $("#screen-app").style.display = "flex";
@@ -501,6 +537,30 @@ function renderActiveTab() {
   Promise.resolve((map[State.activeTab] || renderHome)()).catch(handleRenderError);
 }
 
+// sem internet: a aba que estava carregando não tem como mostrar dados de verdade, mas o jogo
+// (offline por natureza) continua acessível daqui em vez de deixar a tela travada em "Carregando..."
+function renderOfflineFallback(container, scope) {
+  const isAmigos = scope === "amigos";
+  container.innerHTML = `
+    <div class="card" style="text-align:center; padding:28px 20px;">
+      <div style="font-size:34px;">📴</div>
+      <div class="card-title" style="margin-top:8px;">Sem internet agora</div>
+      <p class="card-sub">Essa parte precisa de conexão. Assim que voltar, atualiza sozinho. Enquanto isso dá pra jogar Capibatman offline.</p>
+      <button class="btn btn-primary btn-block" id="offline-fallback-play" style="margin-top:6px;">🦫 Jogar Capibatman</button>
+    </div>
+  `;
+  $("#offline-fallback-play", container)?.addEventListener("click", () => {
+    if (isAmigos) {
+      State.friendsTab = "shop";
+      document.querySelectorAll("[data-friends-tab]").forEach((b) => { b.style.color = b.dataset.friendsTab === "shop" ? "var(--friends-accent-strong)" : ""; });
+    } else {
+      State.activeTab = "shop";
+      document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === "shop"));
+    }
+    renderStarBattleGame(scope);
+  });
+}
+
 // se o banco recusou porque o casal não existe mais (foi apagado com o app aberto), volta pro início em vez de travar
 async function handleRenderError(e) {
   if (isAccessDenied(e)) {
@@ -508,6 +568,7 @@ async function handleRenderError(e) {
     try { profile = await db.getMyProfile(State.userId); } catch (e2) { /* sem rede: não é esse caso */ }
     if (!profile && State.userId) { returnToOnboarding(); return; }
   }
+  if (db.isNetworkError(e)) { renderOfflineFallback(view, "casal"); return; }
   throw e; // outro tipo de erro: segue pro registro de erros
 }
 
@@ -1151,7 +1212,10 @@ function renderFriendsActiveTab() {
     shop: renderFriendsShop,
     group: renderFriendsGroup,
   };
-  Promise.resolve((map[State.friendsTab] || renderFriendsHome)()).catch((e) => alert("Deu ruim: " + (e.message || e)));
+  Promise.resolve((map[State.friendsTab] || renderFriendsHome)()).catch((e) => {
+    if (db.isNetworkError(e)) { renderOfflineFallback($("#friends-view"), "amigos"); return; }
+    alert("Deu ruim: " + (e.message || e));
+  });
 }
 
 // Experiências tem duas visões: o feed de fotos (estilo Instagram, padrão) e os achados
@@ -1358,11 +1422,11 @@ async function renderFriendsHomeGameCard(members, byId) {
           <img src="icons/capivarinhas.jpg" alt="" style="width:40px; height:40px; border-radius:10px; object-fit:cover; flex:none;" />
           <div class="card-title" style="font-size:14px; margin-bottom:0;">Capibatman</div>
         </div>
-        <div class="row" style="gap:6px; margin-top:10px; flex-wrap:wrap;">
+        <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; margin-top:10px;">
           ${members.map((m) => `
-            <div style="flex:1; min-width:64px; text-align:center; background:var(--friends-accent-soft); border-radius:10px; padding:8px 6px;">
-              <div style="font-weight:800; font-size:12px; color:var(--friends-accent-strong);">${m.user_id === State.userId ? "Você" : escapeHTML(m.display_name)}</div>
-              <div class="hint-text" style="margin:0;">Fase ${levels[m.user_id] || 1} · 💰${coins[m.user_id] || 0}</div>
+            <div style="text-align:center; background:var(--friends-accent-soft); border-radius:10px; padding:8px 6px;">
+              <div style="font-weight:800; font-size:12.5px; color:var(--friends-accent-strong); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${m.user_id === State.userId ? "Você" : escapeHTML(m.display_name)}</div>
+              <div class="hint-text" style="margin:2px 0 0; white-space:nowrap;">Fase ${levels[m.user_id] || 1} · 💰${coins[m.user_id] || 0}</div>
             </div>`).join("")}
         </div>
       </div>
