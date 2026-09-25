@@ -5,26 +5,30 @@ import { getCaptchaToken } from "./captcha.js";
 // ---------- auth / casal / perfil ----------
 
 // falha de rede/servidor (não de sessão inválida): nesse caso NÃO pode criar conta nova, senão a pessoa perde o perfil
-function isNetworkError(e) {
-  return !navigator.onLine || e?.name === "AuthRetryableFetchError" || e?.status === 0 || e?.status >= 500;
+export function isNetworkError(e) {
+  return !navigator.onLine || e?.name === "AuthRetryableFetchError" || e?.status === 0 || e?.status >= 500
+    || e?.message === "Failed to fetch";
 }
 
 // confere se já tem uma sessão salva e válida (renovando se preciso), sem criar nenhuma conta nova.
 // Devolve null se não tiver sessão ou se ela não valer mais (nesse caso precisa entrar de novo).
+// Sem internet: confia na sessão salva localmente (sem checar com o servidor) pra deixar abrir o
+// app offline — só quando a internet volta é que uma sessão realmente vencida/revogada é detectada.
 async function validatedSession() {
   const { data } = await supabase.auth.getSession();
   if (!data.session) return null;
+  if (!navigator.onLine) return data.session;
   // getSession só lê o que tá guardado localmente, sem checar se ainda vale;
   // getUser confirma de verdade com o servidor
   const check = await supabase.auth.getUser();
   if (!check.error) return data.session;
-  if (isNetworkError(check.error)) throw check.error;
+  if (isNetworkError(check.error)) return data.session;
   try {
     const refreshed = await supabase.auth.refreshSession();
     if (!refreshed.error && refreshed.data.session) return refreshed.data.session;
-    if (refreshed.error && isNetworkError(refreshed.error)) throw refreshed.error;
+    if (refreshed.error && isNetworkError(refreshed.error)) return data.session;
   } catch (e) {
-    if (isNetworkError(e)) throw e;
+    if (isNetworkError(e)) return data.session;
     // refresh token também inválido/vencido: sessão salva não vale mais
   }
   return null;
