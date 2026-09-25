@@ -1299,6 +1299,7 @@ async function renderFriendsExperiencias() {
   view.querySelectorAll("[data-toggle-comments]").forEach((btn) => {
     btn.addEventListener("click", () => toggleFindComments(btn.dataset.toggleComments, byId));
   });
+  wireReportButtons(view);
 }
 
 function renderFriendsPlaceholder(icon, title, text) {
@@ -1551,7 +1552,7 @@ function findCardHTML(f, byId) {
           ${f.link ? `<a href="${escapeHTML(f.link)}" target="_blank" rel="noopener" style="font-size:13px; word-break:break-all;">${escapeHTML(f.link)}</a>` : ""}
           ${f.note ? `<p class="card-sub" style="margin:6px 0 0;">${escapeHTML(f.note)}</p>` : ""}
         </div>
-        ${f.user_id === State.userId ? `<button class="btn btn-ghost btn-sm" style="padding:4px 8px;" data-delete-find="${f.id}" data-photo-path="${escapeHTML(f.photo_path || "")}">Apagar</button>` : ""}
+        ${f.user_id === State.userId ? `<button class="btn btn-ghost btn-sm" style="padding:4px 8px;" data-delete-find="${f.id}" data-photo-path="${escapeHTML(f.photo_path || "")}">Apagar</button>` : `<button class="btn btn-ghost btn-sm" style="padding:4px 8px;" data-report-kind="achado" data-report-id="${f.id}" title="Denunciar">🚩</button>`}
       </div>
       <div class="row" style="gap:8px; margin-top:10px;">
         ${Object.entries(FRIEND_FIND_REACTIONS).map(([id, r]) => {
@@ -1565,11 +1566,52 @@ function findCardHTML(f, byId) {
     </div>`;
 }
 
-function commentRowHTML(c, byId) {
+function commentRowHTML(c, byId, kind) {
+  const canReport = c.user_id !== State.userId;
   return `<div style="background:var(--friends-accent-soft); color:var(--friends-accent-strong); border-radius:10px; padding:8px 10px;">
-    <div style="font-size:12px; font-weight:800;">${c.user_id === State.userId ? "Você" : escapeHTML(byId[c.user_id] || "alguém")}</div>
+    <div class="row" style="justify-content:space-between; align-items:center; gap:6px;">
+      <div style="font-size:12px; font-weight:800;">${c.user_id === State.userId ? "Você" : escapeHTML(byId[c.user_id] || "alguém")}</div>
+      ${canReport ? `<button class="btn btn-ghost btn-sm" style="padding:1px 6px; font-size:11px;" data-report-kind="${kind}" data-report-id="${c.id}" title="Denunciar">🚩</button>` : ""}
+    </div>
     <div style="font-size:13.5px;">${escapeHTML(c.text)}</div>
   </div>`;
+}
+
+// abre o motivo da denúncia (4 opções rápidas, clicar já envia) — revisão é sempre manual,
+// nada some sozinho da tela de quem denunciou nem da turma
+function openReportModal(kind, targetId) {
+  const reasons = [
+    ["spam", "Spam"],
+    ["ofensivo", "Ofensivo ou abusivo"],
+    ["impropio", "Conteúdo impróprio"],
+    ["outro", "Outro motivo"],
+  ];
+  openModal(`
+    <h3 class="modal-title">🚩 Denunciar</h3>
+    <p class="card-sub">Por quê? A denúncia é revisada manualmente; ninguém na turma vê que você denunciou.</p>
+    <div class="stack">
+      ${reasons.map(([id, label]) => `<button class="btn btn-secondary btn-block" data-report-go="${id}">${label}</button>`).join("")}
+    </div>
+  `);
+  document.querySelectorAll("[data-report-go]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      document.querySelectorAll("[data-report-go]").forEach((b) => { b.disabled = true; });
+      try {
+        await friends.reportContent(kind, targetId, btn.dataset.reportGo);
+        closeModal();
+        alert("Denúncia enviada. Obrigado por avisar.");
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        document.querySelectorAll("[data-report-go]").forEach((b) => { b.disabled = false; });
+      }
+    });
+  });
+}
+
+function wireReportButtons(root) {
+  root.querySelectorAll("[data-report-kind]").forEach((btn) => {
+    btn.addEventListener("click", () => openReportModal(btn.dataset.reportKind, btn.dataset.reportId));
+  });
 }
 
 async function toggleFindComments(findId, byId) {
@@ -1580,12 +1622,13 @@ async function toggleFindComments(findId, byId) {
   panel.innerHTML = `<div class="hint-text">Carregando...</div>`;
   const comments = await friends.listFindComments(findId).catch(() => []);
   panel.innerHTML = `
-    <div class="stack" style="gap:6px;">${comments.map((c) => commentRowHTML(c, byId)).join("") || '<p class="hint-text" style="margin:0;">Nenhum comentário ainda.</p>'}</div>
+    <div class="stack" style="gap:6px;">${comments.map((c) => commentRowHTML(c, byId, "find_comment")).join("") || '<p class="hint-text" style="margin:0;">Nenhum comentário ainda.</p>'}</div>
     <div class="row" style="gap:8px; margin-top:8px;">
       <input type="text" id="fc-input-${findId}" maxlength="300" placeholder="Escreva um comentário..." style="flex:1;" />
       <button class="btn btn-sm" style="background:var(--friends-accent); color:var(--on-friends-accent);" id="fc-send-${findId}">Enviar</button>
     </div>
   `;
+  wireReportButtons(panel);
   $(`#fc-send-${findId}`).addEventListener("click", async () => {
     const input = $(`#fc-input-${findId}`);
     const text = input.value.trim();
@@ -1712,10 +1755,11 @@ async function openFeedPostDetail(post, byId) {
     ${post.caption ? `<p class="card-sub" style="margin:0 0 10px;">${escapeHTML(post.caption)}</p>` : ""}
     <div class="row" style="gap:8px;">
       <button class="btn btn-sm" style="flex:1; ${iLiked ? "background:var(--friends-accent); color:var(--on-friends-accent);" : "background:var(--friends-accent-soft); color:var(--friends-accent-strong);"}" id="fpd-like">${iLiked ? `💗 Curtido${likes.length ? ` · ${likes.length}` : ""}` : `🤍 Curtir${likes.length ? ` · ${likes.length}` : ""}`}</button>
-      ${post.user_id === State.userId ? `<button class="btn btn-ghost btn-sm" id="fpd-delete">Apagar</button>` : ""}
+      ${post.user_id === State.userId ? `<button class="btn btn-ghost btn-sm" id="fpd-delete">Apagar</button>` : `<button class="btn btn-ghost btn-sm" data-report-kind="feed_post" data-report-id="${post.id}" title="Denunciar">🚩</button>`}
     </div>
     <div id="fpd-comments" style="margin-top:14px;"></div>
   `);
+  wireReportButtons($("#modal-sheet"));
   friends.feedPhotoUrl(post.photo_path).then((url) => { $("#fpd-img").src = url; }).catch(() => {});
   $("#fpd-like").addEventListener("click", async () => {
     $("#fpd-like").disabled = true;
@@ -1741,12 +1785,13 @@ async function openFeedPostDetail(post, byId) {
   const comments = await friends.listFeedComments(post.id).catch(() => []);
   $("#fpd-comments").innerHTML = `
     <p class="field-label">Comentários</p>
-    <div class="stack" style="gap:6px;">${comments.map((c) => commentRowHTML(c, byId)).join("") || '<p class="hint-text" style="margin:0;">Seja o primeiro a comentar.</p>'}</div>
+    <div class="stack" style="gap:6px;">${comments.map((c) => commentRowHTML(c, byId, "feed_comment")).join("") || '<p class="hint-text" style="margin:0;">Seja o primeiro a comentar.</p>'}</div>
     <div class="row" style="gap:8px; margin-top:8px;">
       <input type="text" id="fpd-comment-input" maxlength="300" placeholder="Escreva um comentário" style="flex:1;" />
       <button class="btn btn-sm" style="background:var(--friends-accent); color:var(--on-friends-accent);" id="fpd-comment-send">Enviar</button>
     </div>
   `;
+  wireReportButtons($("#fpd-comments"));
   $("#fpd-comment-send").addEventListener("click", async () => {
     const input = $("#fpd-comment-input");
     const text = input.value.trim();
@@ -1755,7 +1800,8 @@ async function openFeedPostDetail(post, byId) {
     try {
       await friends.addFeedComment(post.id, State.userId, text);
       const fresh = await friends.listFeedComments(post.id);
-      $("#fpd-comments .stack").innerHTML = fresh.map((c) => commentRowHTML(c, byId)).join("");
+      $("#fpd-comments .stack").innerHTML = fresh.map((c) => commentRowHTML(c, byId, "feed_comment")).join("");
+      wireReportButtons($("#fpd-comments"));
       input.value = "";
     } catch (e) {
       alert("Não deu: " + (e.message || e));
@@ -5888,8 +5934,11 @@ async function showAdminStats(key) {
     const s = await db.adminStats(key);
     let errs = [];
     try { errs = await db.adminErrors(key); } catch (e) { errs = null; } // migração de erros ainda não rodou
+    let reports = [];
+    try { reports = await db.adminContentReports(key); } catch (e) { reports = null; } // migração de denúncia ainda não rodou
     try { sessionStorage.setItem("adminKey", key); } catch (e) { /* sem storage */ }
     const fmt = (iso) => (iso ? humanDateShort(parseISODate(String(iso).slice(0, 10))) : "-");
+    const REPORT_KIND_LABEL = { achado: "🎬 Achado", feed_post: "📷 Foto do feed", feed_comment: "💬 Comentário (feed)", find_comment: "💬 Comentário (achado)" };
     const stat = (n, label) => `<div class="card" style="text-align:center; margin:0;"><div style="font-family:'Baloo 2',sans-serif; font-size:28px; font-weight:800; color:var(--accent-strong);">${n}</div><div class="hint-text" style="margin:0;">${label}</div></div>`;
     openModal(`
       <h3 class="modal-title">🔐 Modo dono</h3>
@@ -5924,7 +5973,19 @@ async function showAdminStats(key) {
             </div>
           </div>`).join("") : `<div class="empty-state">Nenhum erro nos últimos 7 dias 🎉</div>`}
       </div>
-      <p class="hint-text" style="margin-top:12px;">Só números e datas, nenhum código de casal ou conteúdo privado aparece aqui.</p>
+      <div class="section-title">🚩 Denúncias de conteúdo (30 dias)</div>
+      <div class="stack" style="max-height:30vh; overflow-y:auto;">
+        ${reports === null ? `<div class="empty-state">Monitoramento ainda não ativado no banco.</div>`
+          : reports.length ? reports.map((r) => `
+          <div class="entry-item">
+            <div class="entry-icon">🚩</div>
+            <div class="entry-body">
+              <div class="entry-title" style="word-break:break-word;">${REPORT_KIND_LABEL[r.target_kind] || r.target_kind}${r.content_preview ? `: "${escapeHTML(r.content_preview)}"` : " (conteúdo já apagado)"}</div>
+              <div class="entry-meta">${r.reports}x · ${r.reporters} pessoa(s) · motivo: ${escapeHTML(r.sample_reason)} · último: ${fmt(r.last_reported)}</div>
+            </div>
+          </div>`).join("") : `<div class="empty-state">Nenhuma denúncia nos últimos 30 dias 🎉</div>`}
+      </div>
+      <p class="hint-text" style="margin-top:12px;">Casais e erros mostram só números e datas. A seção de denúncias é a única exceção: mostra um trecho do conteúdo denunciado, só pra dar pra revisar sem abrir o banco.</p>
       <button class="btn btn-ghost btn-block" style="margin-top:10px;" id="admin-logout">Sair do modo dono</button>
     `);
     $("#admin-logout").addEventListener("click", () => {
