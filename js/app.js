@@ -13,6 +13,7 @@ import { weekIndexSince, questionForWeek } from "./questions.js";
 import { dayIndexSince, challengeForDay } from "./challenges.js";
 import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush, needsHomeScreenFirst } from "./push.js";
 import { PERKS, PERK_BY_ID, customToPerk, suggestedReward } from "./perks.js";
+import { planLabel } from "./plans.js";
 import { emptyGrid, markCell, revealCell, countFound, CELL_EMPTY, CELL_MARK, CELL_CAT } from "./games/starBattle.js";
 import { STAR_BATTLE_LEVELS } from "./games/starBattleLevels.js";
 import { cycleInfo, cycleRingSVG, cycleLegendHTML, cycleTilesHTML, cycleHelpHTML, cyclePhaseName, cycleTip, cyclePhaseOnDate, averageCycleLength, CYCLE_COLORS, CYCLE_DISCLAIMER } from "./cycle.js";
@@ -2353,9 +2354,10 @@ async function afterLeavingFriendGroup() {
 async function renderFriendsGroup() {
   const view = $("#friends-view");
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
-  const [members, kickVotes] = await Promise.all([
+  const [members, kickVotes, myPlan] = await Promise.all([
     friends.listGroupMembers(State.friendGroup.id).catch(() => []),
     friends.listActiveKickVotes(State.friendGroup.id).catch(() => []),
+    db.getMyUserPlan(State.userId).catch(() => ({ plan: null, plan_expires_at: null, plan_source: null })),
   ]);
   const byId = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
   const votedTargets = new Set(kickVotes.map((v) => v.target_user_id));
@@ -2369,6 +2371,20 @@ async function renderFriendsGroup() {
         </div>
         <button class="btn btn-ghost btn-sm" id="friends-edit-group-btn">Editar</button>
       </div>
+    </div>
+    <div class="card" style="margin-top:14px; border-color:var(--friends-accent-soft);">
+      <p class="field-label" style="color:var(--friends-accent-strong);">Sua assinatura</p>
+      <p class="card-sub" style="margin-bottom:8px;">Plano atual: <strong>${planLabel(myPlan)}</strong>${myPlan.plan_source && myPlan.plan_source !== "legado" && myPlan.plan_expires_at ? ` · renova em ${humanDateShort(parseISODate(myPlan.plan_expires_at.slice(0, 10)))}` : ""}</p>
+      ${myPlan.plan_source === "legado" ? `
+        <p class="hint-text" style="margin:0;">Você tem acesso total, sem precisar assinar nada — obrigado por ser um dos primeiros a usar o app. 💗</p>
+      ` : `
+        <div class="stack" style="gap:8px;">
+          <button class="btn btn-sm" style="background:var(--friends-accent-soft); color:var(--friends-accent-strong);" data-subscribe-friend="entrada">Assinar Entrada · R$1,99/mês</button>
+          <button class="btn btn-sm" style="background:var(--friends-accent-soft); color:var(--friends-accent-strong);" data-subscribe-friend="acessivel">Assinar Acessível · R$4,99/mês</button>
+          <button class="btn btn-sm" style="background:var(--friends-accent-soft); color:var(--friends-accent-strong);" data-subscribe-friend="premium">Assinar Premium · R$14,90/mês</button>
+        </div>
+        <p class="hint-text" style="margin-top:8px;">É individual: só o seu benefício, mas vale em qualquer turma sua.</p>
+      `}
     </div>
     <div class="card" style="margin-top:14px; border-color:var(--friends-accent-soft);">
       <p class="field-label" style="color:var(--friends-accent-strong);">Código da turma</p>
@@ -2400,6 +2416,18 @@ async function renderFriendsGroup() {
     </div>
   `;
   $("#friends-edit-group-btn").addEventListener("click", openEditGroupModal);
+  view.querySelectorAll("[data-subscribe-friend]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      try {
+        const url = await db.createSubscriptionCheckout("individual", btn.dataset.subscribeFriend);
+        window.location.href = url;
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        btn.disabled = false;
+      }
+    });
+  });
   $("#friends-regen-code-btn").addEventListener("click", async () => {
     if (!confirm("Trocar o código? Quem tiver o código antigo não vai mais conseguir entrar com ele.")) return;
     setBusy("#friends-regen-code-btn", true);
@@ -4903,7 +4931,7 @@ function openPerkCostModal(perk) {
 async function renderProfile() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const moodSince = toISODate(addDays(new Date(), -60));
-  const [coins, history, couple, loginStreakInfo, moodHistory, googleLinked, myFriendGroups] = await Promise.all([
+  const [coins, history, couple, loginStreakInfo, moodHistory, googleLinked, myFriendGroups, couplePlan] = await Promise.all([
     db.getCoinBalances(State.coupleId),
     db.listCoinHistory(State.coupleId, 12),
     supabase.from("couples").select("code").eq("id", State.coupleId).single(),
@@ -4911,6 +4939,7 @@ async function renderProfile() {
     db.getMoodHistory(State.coupleId, moodSince),
     db.getGoogleLinkStatus(),
     friends.listMyFriendGroups().catch(() => []),
+    db.getMyCouplePlan(State.coupleId).catch(() => ({ plan: null, plan_expires_at: null, plan_source: null })),
   ]);
   const loginStreak = loginStreakInfo.streak;
   const moodStreak = countMoodStreakFromHistory(moodHistory, State.role);
@@ -4984,6 +5013,21 @@ ${feat("streaks") ? `    <div class="section-title">Sequências 🔥</div>
           <p class="card-sub">Um "modo" separado do casal, pra turma de amigos: código próprio, prêmios próprios, moedas separadas.</p>
           <button class="btn btn-block" id="btn-new-friend-group" style="background:var(--friends-accent); color:var(--on-friends-accent);">👥 Criar ou entrar numa turma</button>
         `}
+      `}
+    </div>
+
+    <div class="section-title">Assinatura 💳</div>
+    <div class="card">
+      <div class="card-sub" style="margin-bottom:8px;">Plano atual: <strong>${planLabel(couplePlan)}</strong>${couplePlan.plan_source && couplePlan.plan_source !== "legado" && couplePlan.plan_expires_at ? ` · renova em ${humanDateShort(parseISODate(couplePlan.plan_expires_at.slice(0, 10)))}` : ""}</div>
+      ${couplePlan.plan_source === "legado" ? `
+        <p class="hint-text" style="margin:0;">Vocês têm acesso total, sem precisar assinar nada — obrigado por serem os primeiros a usar o app. 💗</p>
+      ` : `
+        <div class="stack" style="gap:8px;">
+          <button class="btn btn-secondary btn-block" data-subscribe="entrada">Assinar Entrada · R$1,99/mês</button>
+          <button class="btn btn-secondary btn-block" data-subscribe="acessivel">Assinar Acessível · R$4,99/mês</button>
+          <button class="btn btn-secondary btn-block" data-subscribe="premium">Assinar Premium · R$14,90/mês</button>
+        </div>
+        <p class="hint-text" style="margin-top:8px;">Um pagamento cobre vocês dois. Você vai ser levado(a) pro checkout do Mercado Pago.</p>
       `}
     </div>
 
@@ -5065,6 +5109,18 @@ ${coinsOn() ? `    <div class="section-title">Moedas 💰</div>
   $("#btn-edit-names")?.addEventListener("click", openNamesEditor);
   $("#btn-personalize")?.addEventListener("click", openPersonalizeModal);
   $("#btn-export-data")?.addEventListener("click", openMyDataModal);
+  view.querySelectorAll("[data-subscribe]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      try {
+        const url = await db.createSubscriptionCheckout("casal", btn.dataset.subscribe);
+        window.location.href = url;
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        btn.disabled = false;
+      }
+    });
+  });
   $("#btn-link-google")?.addEventListener("click", async () => {
     setBusy("#btn-link-google", true);
     try {

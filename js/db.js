@@ -1,4 +1,4 @@
-import { supabase } from "./supabaseClient.js";
+import { supabase, SUPABASE_URL } from "./supabaseClient.js";
 import { monthKey, prevMonthKey, nextMonthKey, toISODate } from "./util.js";
 import { getCaptchaToken } from "./captcha.js";
 
@@ -92,6 +92,36 @@ export async function getCoupleMeta(coupleId) {
     .single();
   if (error) throw error;
   return data;
+}
+
+// ---------- planos / cobrança (Fase 1: só consulta, nada trava recurso ainda) ----------
+
+export async function getMyCouplePlan(coupleId) {
+  const { data, error } = await supabase.from("couples").select("plan, plan_expires_at, plan_source").eq("id", coupleId).single();
+  if (error) throw error;
+  return data;
+}
+
+export async function getMyUserPlan(userId) {
+  const { data, error } = await supabase.from("user_plans").select("plan, plan_expires_at, plan_source").eq("user_id", userId).maybeSingle();
+  if (error) throw error;
+  return data || { plan: null, plan_expires_at: null, plan_source: null };
+}
+
+// cria uma assinatura no Mercado Pago (Edge Function, não RPC — precisa do JWT da sessão pra
+// autenticar quem está pedindo) e devolve a URL de checkout hospedada por eles pra redirecionar.
+export async function createSubscriptionCheckout(scope, tier) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  if (!token) throw new Error("não autenticado");
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/mp-create-subscription`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ scope, tier }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || "não deu pra criar a assinatura");
+  return body.init_point;
 }
 
 export async function createCouple(code, names = {}, genders = {}, emojis = {}) {
