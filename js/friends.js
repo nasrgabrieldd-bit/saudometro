@@ -142,6 +142,17 @@ export async function advanceGameProgress(friendGroupId, userId, gameId, newLeve
   if (error) throw error;
 }
 
+// tempo real do progresso de jogo da turma (fase e moeda de cada um): a turma ainda não tem
+// uma assinatura em tempo real geral como o casal tem, essa aqui é só pro card de jogos da Home
+export function subscribeFriendGameChanges(friendGroupId, onChange) {
+  const channel = supabase
+    .channel(`friend-games-${friendGroupId}`)
+    .on("postgres_changes", { event: "*", schema: "public", table: "friend_game_progress", filter: `friend_group_id=eq.${friendGroupId}` }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "friend_coin_ledger", filter: `friend_group_id=eq.${friendGroupId}` }, onChange)
+    .subscribe();
+  return () => supabase.removeChannel(channel);
+}
+
 export async function listGroupRedemptions(friendGroupId, limit = 30) {
   const { data, error } = await supabase
     .from("friend_redemptions")

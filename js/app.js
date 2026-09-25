@@ -276,6 +276,7 @@ async function enterApp(profile) {
   });
 
   if (State.unsubscribe) State.unsubscribe();
+  if (State.friendsGameUnsubscribe) { State.friendsGameUnsubscribe(); State.friendsGameUnsubscribe = null; } // saindo da turma (se estava nela): para de ouvir o progresso de jogo dela
   State.unsubscribe = db.subscribeCoupleChanges(
     State.coupleId,
     (p) => {
@@ -1033,6 +1034,7 @@ const FRIENDS_TABS = [
 
 async function enterFriendsMode(group) {
   if (State.unsubscribe) { State.unsubscribe(); State.unsubscribe = null; } // saindo do casal (se estava nele): para de ouvir as mudanças dele
+  if (State.friendsGameUnsubscribe) { State.friendsGameUnsubscribe(); State.friendsGameUnsubscribe = null; } // trocando de turma: para de ouvir a turma anterior
   State.friendGroup = group;
   State.friendsTab = "home";
   $("#screen-onboarding").style.display = "none";
@@ -1063,6 +1065,7 @@ async function enterFriendsMode(group) {
     if (me) setAvatarBadge("#friends-avatar-badge", me.display_name, me.avatar_url);
   }).catch(() => {});
   $("#friends-switch-btn")?.addEventListener("click", async () => {
+    if (State.friendsGameUnsubscribe) { State.friendsGameUnsubscribe(); State.friendsGameUnsubscribe = null; }
     $("#screen-friends").style.display = "none";
     State.profile = await db.getMyProfile(State.userId).catch(() => null);
     State.friendGroups = await friends.listMyFriendGroups().catch(() => []);
@@ -1074,6 +1077,7 @@ async function enterFriendsMode(group) {
   setFriendsTab("home");
   updateFriendsStreakBadge();
   maybeShowChangelog("amigos");
+  State.friendsGameUnsubscribe = friends.subscribeFriendGameChanges(group.id, () => renderFriendsActiveTab());
 }
 
 function setFriendsTab(tab) {
@@ -1299,6 +1303,8 @@ async function renderFriendsHome() {
   view.innerHTML = `
     ${nextEvents[0] ? nextRoleHeroHTML(nextEvents[0], byId) : emptyRoleHeroHTML()}
 
+    <div id="home-game-card-friends" style="margin-top:14px;"></div>
+
     <div class="card" style="margin-top:14px; cursor:pointer;" id="friends-home-mood-card">
       <div class="card-title" style="font-size:15px;">Como a turma tá hoje</div>
       <div class="row" style="gap:8px; margin-top:10px; flex-wrap:wrap;">
@@ -1330,8 +1336,6 @@ async function renderFriendsHome() {
         <div class="hint-text" style="margin:0;">na turma</div>
       </div>
     </div>
-
-    <div id="home-game-card-friends"></div>
   `;
   $("#friends-home-mood-card")?.addEventListener("click", () => setFriendsTab("mood"));
   $("#friends-home-role-card")?.addEventListener("click", () => setFriendsTab("roles"));
@@ -2214,6 +2218,7 @@ function kickVoteRowHTML(v, byId) {
 // depois de sair (por vontade própria) ou excluir a turma: sai da tela de amigos e cai no
 // lugar certo (casal, outra turma, ou a tela de escolher conta, se sobrar mais de uma opção)
 async function afterLeavingFriendGroup() {
+  if (State.friendsGameUnsubscribe) { State.friendsGameUnsubscribe(); State.friendsGameUnsubscribe = null; }
   $("#screen-friends").style.display = "none";
   State.profile = await db.getMyProfile(State.userId).catch(() => null);
   State.friendGroups = await friends.listMyFriendGroups().catch(() => []);
@@ -2558,11 +2563,16 @@ async function renderHome() {
       </div>
     ` : ""}
 
-${widgetIds.map((id) => html[id] || "").join("")}
+${(() => {
+      const parts = widgetIds.map((id) => html[id] || "");
+      const kissIdx = widgetIds.indexOf("kiss");
+      const gameCard = `<div id="home-game-card"></div>`;
+      if (kissIdx >= 0) parts.splice(kissIdx + 1, 0, gameCard);
+      else parts.unshift(gameCard);
+      return parts.join("");
+    })()}
 
     ${widgetIds.length ? "" : todayMoodCardHTML(recentMoods, todayStr)}
-
-    <div id="home-game-card"></div>
   `;
   renderHomeGameCard();
 
