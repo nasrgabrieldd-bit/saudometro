@@ -106,7 +106,13 @@ export async function addCoinBonus(friendGroupId, userId, delta, reason) {
   if (error) throw error;
 }
 
-// ---------- progresso em jogos (Capivarinhas etc.) ----------
+// ---------- progresso em jogos (Capibatman etc.) ----------
+
+export async function getGameCoinsEarned(friendGroupId, gameLabel) {
+  const { data, error } = await supabase.from("friend_coin_ledger").select("delta").eq("friend_group_id", friendGroupId).like("reason", `${gameLabel}:%`);
+  if (error) throw error;
+  return (data || []).reduce((sum, r) => sum + r.delta, 0);
+}
 
 export async function getGameProgress(friendGroupId, gameId) {
   const { data, error } = await supabase
