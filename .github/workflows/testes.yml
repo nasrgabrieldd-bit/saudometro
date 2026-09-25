@@ -52,7 +52,7 @@ jobs:
       - name: Conferir os arquivos do site
         run: |
           falhou=0
-          for f in "" index.html js/app.js js/db.js js/people.js js/errors.js css/styles.css sw.js manifest.json privacidade.html icons/icon.png; do
+          for f in "" index.html js/app.js js/db.js js/people.js js/errors.js css/styles.css sw.js manifest.json privacidade.html termos.html icons/icon.png; do
             code=$(curl -s -o /dev/null -w '%{http_code}' --retry 3 --retry-delay 5 "$SITE/$f")
             echo "$code  /$f"
             [ "$code" = "200" ] || falhou=1
