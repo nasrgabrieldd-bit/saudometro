@@ -1,49 +1,41 @@
-// Motor puro do jogo "Capivarinhas" (estilo Star Battle / Queens): não sabe nada sobre casal,
-// turma, Supabase ou moedas. Só sabe ciclar uma jogada e dizer se o tabuleiro está resolvido.
-// Pensado assim de propósito: se um dia isso virar um app próprio, essa pasta inteira já serve
-// de base, sem precisar reescrever a lógica do jogo.
+// Motor puro do jogo "Capivarinhas": não sabe nada sobre casal, turma, Supabase ou moedas.
+// Pensado assim de propósito: se um dia isso virar um app próprio, essa pasta inteira já
+// serve de base, sem precisar reescrever a lógica do jogo.
 //
-// Regra: uma peça por linha, uma por coluna, uma por região; peças não podem se tocar,
-// nem na diagonal.
+// Como funciona de verdade (igual ao jogo de referência): a capivara de cada fase já está
+// escondida num lugar fixo desde que a fase foi criada. A pessoa não "coloca" capivara livre —
+// ela precisa DESCOBRIR onde estão, tocando pra revelar. Regra de fundo: uma capivara por
+// linha, uma por coluna, uma por região de cor; capivaras nunca se tocam (nem na diagonal).
 //
-// As 100 fases já vêm prontas e validadas (uma solução única cada) em starBattleLevels.js,
-// geradas offline por scripts/generate-star-battle-levels.mjs — gerar um tabuleiro assim, do
-// jeito que garante solução única, é caro (às vezes precisa de milhares de tentativas pra achar
-// um que não tenha solução ambígua), então isso roda uma vez só, no computador, não no celular
-// de quem está jogando.
+// Toque 1 numa casa vazia: só marca ✕ (nota da pessoa, sem risco nenhum — "aqui não tem").
+// Toque 2 na mesma casa (já marcada): revela de verdade. Se tinha capivara escondida, confirma
+// (conta pro placar, vira permanente). Se não tinha, perde um coração e a casa fica marcada ✕
+// mesmo assim (agora é certeza, não só palpite).
+//
+// As 100 fases já vêm prontas com a posição escondida de cada capivara, geradas offline por
+// scripts/generate-star-battle-levels.mjs com solução única confirmada — gerar assim é caro
+// (às vezes precisa de milhares de tentativas pra achar uma fase sem ambiguidade), então isso
+// roda uma vez só no computador, não no celular de quem está jogando.
 
-export const CELL_EMPTY = 0, CELL_MARK = 1, CELL_PIECE = 2;
-
-export function cycleCell(state) {
-  return (state + 1) % 3;
-}
+export const CELL_EMPTY = 0, CELL_MARK = 1, CELL_CAT = 2;
 
 export function emptyGrid(size) {
   return Array.from({ length: size }, () => Array(size).fill(CELL_EMPTY));
 }
 
-function touches(r1, c1, r2, c2) {
-  return Math.abs(r1 - r2) <= 1 && Math.abs(c1 - c2) <= 1;
+// toque numa casa vazia: só marca, nunca arrisca nada
+export function markCell(grid, r, c) {
+  if (grid[r][c] === CELL_EMPTY) grid[r][c] = CELL_MARK;
 }
 
-// confere se o tabuleiro atual (só olhando onde tem peça) satisfaz todas as regras
-export function checkWin(size, regions, grid) {
-  const pieces = [];
-  for (let r = 0; r < size; r++) {
-    for (let c = 0; c < size; c++) {
-      if (grid[r][c] === CELL_PIECE) pieces.push([r, c]);
-    }
-  }
-  if (pieces.length !== size) return false;
-  const rows = new Set(), cols = new Set(), regionsUsed = new Set();
-  for (const [r, c] of pieces) {
-    if (rows.has(r) || cols.has(c) || regionsUsed.has(regions[r][c])) return false;
-    rows.add(r); cols.add(c); regionsUsed.add(regions[r][c]);
-  }
-  for (let i = 0; i < pieces.length; i++) {
-    for (let j = i + 1; j < pieces.length; j++) {
-      if (touches(pieces[i][0], pieces[i][1], pieces[j][0], pieces[j][1])) return false;
-    }
-  }
-  return true;
+// toque numa casa já marcada: revela de verdade contra a posição escondida da fase
+export function revealCell(solution, grid, r, c) {
+  if (grid[r][c] !== CELL_MARK) return null;
+  const hasCapybara = solution.some(([sr, sc]) => sr === r && sc === c);
+  grid[r][c] = hasCapybara ? CELL_CAT : CELL_MARK;
+  return hasCapybara;
+}
+
+export function countFound(grid) {
+  return grid.flat().filter((s) => s === CELL_CAT).length;
 }
