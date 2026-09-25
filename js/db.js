@@ -411,29 +411,40 @@ export async function addCoinTransaction(coupleId, role, delta, reason) {
 
 // ---------- progresso em jogos (Capibatman etc.) ----------
 
-// soma quanta moeda já veio de um jogo específico (o motivo de cada lançamento começa com o
-// nome do jogo, ex.: "Capibatman: fase 7") — pra mostrar na Home sem precisar de tabela nova
-export async function getGameCoinsEarned(coupleId, gameLabel) {
-  const { data, error } = await supabase.from("coin_ledger").select("delta").eq("couple_id", coupleId).like("reason", `${gameLabel}:%`);
+// soma quanta moeda cada papel já ganhou de um jogo específico (o motivo de cada lançamento
+// começa com o nome do jogo, ex.: "Capibatman: fase 7") — progresso é por pessoa, não do casal
+export async function getGameCoinsEarnedByRole(coupleId, gameLabel) {
+  const { data, error } = await supabase.from("coin_ledger").select("role, delta").eq("couple_id", coupleId).like("reason", `${gameLabel}:%`);
   if (error) throw error;
-  return (data || []).reduce((sum, r) => sum + r.delta, 0);
+  const map = { gabriel: 0, tata: 0 };
+  for (const row of data || []) map[row.role] = (map[row.role] || 0) + row.delta;
+  return map;
 }
 
-export async function getGameProgress(coupleId, gameId) {
+export async function getGameProgress(coupleId, role, gameId) {
   const { data, error } = await supabase
     .from("couple_game_progress")
     .select("current_level")
     .eq("couple_id", coupleId)
+    .eq("role", role)
     .eq("game_id", gameId)
     .maybeSingle();
   if (error) throw error;
   return data?.current_level || 1;
 }
 
-export async function advanceGameProgress(coupleId, gameId, newLevel) {
+export async function getGameProgressBothRoles(coupleId, gameId) {
+  const { data, error } = await supabase.from("couple_game_progress").select("role, current_level").eq("couple_id", coupleId).eq("game_id", gameId);
+  if (error) throw error;
+  const map = { gabriel: 1, tata: 1 };
+  for (const row of data || []) map[row.role] = row.current_level;
+  return map;
+}
+
+export async function advanceGameProgress(coupleId, role, gameId, newLevel) {
   const { error } = await supabase
     .from("couple_game_progress")
-    .upsert({ couple_id: coupleId, game_id: gameId, current_level: newLevel, updated_at: new Date().toISOString() }, { onConflict: "couple_id,game_id" });
+    .upsert({ couple_id: coupleId, role, game_id: gameId, current_level: newLevel, updated_at: new Date().toISOString() }, { onConflict: "couple_id,role,game_id" });
   if (error) throw error;
 }
 
@@ -795,6 +806,7 @@ export function subscribeCoupleChanges(coupleId, onChange, onSettings) {
     .on("postgres_changes", { event: "*", schema: "public", table: "moods", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "weekend_recharge", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "coin_ledger", filter: `couple_id=eq.${coupleId}` }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "couple_game_progress", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "profiles", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "weekly_answers", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "shop_redemptions", filter: `couple_id=eq.${coupleId}` }, onChange)

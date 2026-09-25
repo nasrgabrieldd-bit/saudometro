@@ -138,6 +138,7 @@ function showBootError(e) {
 
 async function boot() {
   watchForAppUpdates();
+  sbgSyncPending().catch(() => {}); // aproveita que abriu o app com internet pra tentar salvar vitórias do jogo que ficaram pendentes offline
   if (!isConfigured) {
     $("#screen-setup").style.display = "flex";
     return;
@@ -1343,24 +1344,21 @@ async function renderFriendsHomeGameCard(members, byId) {
   const el = $("#home-game-card-friends");
   if (!el) return;
   try {
-    const [level, coins] = await Promise.all([
-      friends.getGameProgress(State.friendGroup.id, STAR_BATTLE_GAME_ID),
-      friends.getGameCoinsEarned(State.friendGroup.id, "Capibatman"),
+    const [levels, coins] = await Promise.all([
+      friends.getGameProgressAllMembers(State.friendGroup.id, STAR_BATTLE_GAME_ID),
+      friends.getGameCoinsEarnedByUser(State.friendGroup.id, "Capibatman"),
     ]);
     el.innerHTML = `
       <div class="card" id="home-game-card-friends-inner" style="margin-top:14px; cursor:pointer;">
         <div class="row" style="align-items:center; gap:10px;">
           <img src="icons/capivarinhas.jpg" alt="" style="width:40px; height:40px; border-radius:10px; object-fit:cover; flex:none;" />
-          <div style="flex:1;">
-            <div class="card-title" style="font-size:14px; margin-bottom:2px;">Capibatman</div>
-            <div class="hint-text" style="margin:0;">💰 ${coins} moedas ganhas jogando</div>
-          </div>
+          <div class="card-title" style="font-size:14px; margin-bottom:0;">Capibatman</div>
         </div>
         <div class="row" style="gap:6px; margin-top:10px; flex-wrap:wrap;">
           ${members.map((m) => `
             <div style="flex:1; min-width:64px; text-align:center; background:var(--friends-accent-soft); border-radius:10px; padding:8px 6px;">
-              <div style="font-weight:800; font-size:12px;">${m.user_id === State.userId ? "Você" : escapeHTML(m.display_name)}</div>
-              <div class="hint-text" style="margin:0;">Fase ${level}</div>
+              <div style="font-weight:800; font-size:12px; color:var(--friends-accent-strong);">${m.user_id === State.userId ? "Você" : escapeHTML(m.display_name)}</div>
+              <div class="hint-text" style="margin:0;">Fase ${levels[m.user_id] || 1} · 💰${coins[m.user_id] || 0}</div>
             </div>`).join("")}
         </div>
       </div>
@@ -4247,6 +4245,70 @@ const STAR_BATTLE_PALETTE = ["#ffb3c6", "#ffd679", "#c3b2ef", "#7bd6c4", "#a8cf7
 const STAR_BATTLE_LIVES = 3;
 const coinsForStarBattleLevel = (size) => size;
 
+// offline: a mecânica de jogar já é só lógica local (fases vêm do cache do service worker),
+// só falta guardar/sincronizar o progresso quando não tem rede. Guarda a última fase conhecida
+// pra abrir offline sem travar, e enfileira vitórias que não deram pra salvar na hora — sincroniza
+// sozinho quando a internet volta (por evento "online" ou na próxima vez que abrir o jogo)
+const SBG_LEVEL_CACHE_KEY = "sbgLevelCache";
+const SBG_QUEUE_KEY = "sbgOfflineQueue";
+
+function sbgScopeKey(scope) {
+  return scope === "amigos" ? `amigos:${State.friendGroup?.id}:${State.userId}` : `casal:${State.coupleId}:${State.role}`;
+}
+
+function sbgGetCachedLevel(scope) {
+  try {
+    const map = JSON.parse(localStorage.getItem(SBG_LEVEL_CACHE_KEY) || "{}");
+    return map[sbgScopeKey(scope)] || null;
+  } catch (e) { return null; }
+}
+
+function sbgSetCachedLevel(scope, level) {
+  try {
+    const map = JSON.parse(localStorage.getItem(SBG_LEVEL_CACHE_KEY) || "{}");
+    map[sbgScopeKey(scope)] = level;
+    localStorage.setItem(SBG_LEVEL_CACHE_KEY, JSON.stringify(map));
+  } catch (e) { /* sem storage: só não guarda cache, joga do mesmo jeito */ }
+}
+
+function sbgQueuePendingWin(scope, level, reward) {
+  try {
+    const queue = JSON.parse(localStorage.getItem(SBG_QUEUE_KEY) || "[]");
+    queue.push({
+      scope, level, reward,
+      scopeId: scope === "amigos" ? State.friendGroup?.id : State.coupleId,
+      userId: State.userId, role: State.role,
+    });
+    localStorage.setItem(SBG_QUEUE_KEY, JSON.stringify(queue));
+  } catch (e) { /* sem storage: essa vitória específica não sincroniza depois */ }
+}
+
+// tenta salvar as vitórias que ficaram pendentes offline — usa os IDs guardados no momento da
+// vitória (não o State atual), porque quem sincroniza pode já ter trocado de conta
+async function sbgSyncPending() {
+  let queue;
+  try { queue = JSON.parse(localStorage.getItem(SBG_QUEUE_KEY) || "[]"); } catch (e) { return; }
+  if (!queue.length) return;
+  const stillPending = [];
+  for (const item of queue) {
+    try {
+      if (item.scope === "amigos") {
+        await friends.addCoinBonus(item.scopeId, item.userId, item.reward, `Capibatman: fase ${item.level}`);
+        const serverLevel = await friends.getGameProgress(item.scopeId, item.userId, STAR_BATTLE_GAME_ID);
+        await friends.advanceGameProgress(item.scopeId, item.userId, STAR_BATTLE_GAME_ID, Math.max(serverLevel, item.level + 1));
+      } else {
+        await db.addCoinTransaction(item.scopeId, item.role, item.reward, `Capibatman: fase ${item.level}`);
+        const serverLevel = await db.getGameProgress(item.scopeId, item.role, STAR_BATTLE_GAME_ID);
+        await db.advanceGameProgress(item.scopeId, item.role, STAR_BATTLE_GAME_ID, Math.max(serverLevel, item.level + 1));
+      }
+    } catch (e) {
+      stillPending.push(item); // ainda sem rede ou deu erro: guarda pra tentar de novo depois
+    }
+  }
+  try { localStorage.setItem(SBG_QUEUE_KEY, JSON.stringify(stillPending)); } catch (e) {}
+}
+window.addEventListener("online", () => { sbgSyncPending().catch(() => {}); });
+
 function starBattleBoardHTML(size, regions, grid) {
   let cells = "";
   for (let r = 0; r < size; r++) {
@@ -4275,9 +4337,18 @@ async function renderStarBattleGame(scope) {
   const backFn = isAmigos ? renderFriendsShop : renderShop;
 
   container.innerHTML = `<div class="center-note">Carregando...</div>`;
-  const currentLevel = isAmigos
-    ? await friends.getGameProgress(State.friendGroup.id, STAR_BATTLE_GAME_ID).catch(() => 1)
-    : await db.getGameProgress(State.coupleId, STAR_BATTLE_GAME_ID).catch(() => 1);
+  await sbgSyncPending().catch(() => {}); // aproveita e tenta salvar vitórias antigas que ficaram pendentes
+  let currentLevel;
+  let offline = false;
+  try {
+    currentLevel = isAmigos
+      ? await friends.getGameProgress(State.friendGroup.id, State.userId, STAR_BATTLE_GAME_ID)
+      : await db.getGameProgress(State.coupleId, State.role, STAR_BATTLE_GAME_ID);
+    sbgSetCachedLevel(scope, currentLevel);
+  } catch (e) {
+    currentLevel = sbgGetCachedLevel(scope) || 1;
+    offline = true;
+  }
   const levelData = STAR_BATTLE_LEVELS[Math.min(currentLevel, STAR_BATTLE_LEVELS.length) - 1];
   let grid = emptyGrid(levelData.size);
   let livesLeft = STAR_BATTLE_LIVES;
@@ -4287,6 +4358,7 @@ async function renderStarBattleGame(scope) {
     <button class="btn btn-ghost btn-sm" id="sbg-back" style="margin-bottom:10px;">← Voltar</button>
     <div class="card" style="background:${accentSoft}; text-align:center; padding:14px;">
       <div style="font-family:'Baloo 2',sans-serif; font-weight:800; font-size:16px; color:${accentStrong};"><img src="icons/capivarinhas.jpg" alt="" style="width:30px; height:30px; border-radius:8px; object-fit:cover; vertical-align:-8px;" /> Capibatman · Fase ${currentLevel}</div>
+      ${offline ? `<p class="hint-text" style="margin:4px 0 0;">📴 Sem internet agora, mas dá pra jogar. Assim que voltar, sincroniza sozinho.</p>` : ""}
       <div class="row" style="justify-content:center; gap:14px; margin-top:8px;">
         <span id="sbg-counter" style="font-weight:800; color:${accentStrong};"></span>
         <span id="sbg-hearts"></span>
@@ -4370,12 +4442,18 @@ async function renderStarBattleGame(scope) {
     try {
       if (isAmigos) {
         await friends.addCoinBonus(State.friendGroup.id, State.userId, reward, `Capibatman: fase ${currentLevel}`);
-        await friends.advanceGameProgress(State.friendGroup.id, STAR_BATTLE_GAME_ID, nextLevel);
+        await friends.advanceGameProgress(State.friendGroup.id, State.userId, STAR_BATTLE_GAME_ID, nextLevel);
       } else {
         await earnCoins(State.role, reward, `Capibatman: fase ${currentLevel}`);
-        await db.advanceGameProgress(State.coupleId, STAR_BATTLE_GAME_ID, nextLevel);
+        await db.advanceGameProgress(State.coupleId, State.role, STAR_BATTLE_GAME_ID, nextLevel);
       }
-    } catch (e) { /* progresso não salvou: continua jogável, tenta de novo na próxima fase */ }
+      sbgSetCachedLevel(scope, nextLevel);
+    } catch (e) {
+      // sem rede: guarda a vitória pra sincronizar depois, mas deixa a pessoa continuar jogando
+      // offline (o cache local já avança, então as próximas fases também abrem certinho)
+      sbgQueuePendingWin(scope, currentLevel, reward);
+      sbgSetCachedLevel(scope, nextLevel);
+    }
     $("#sbg-continue").addEventListener("click", () => {
       closeModal();
       renderStarBattleGame(scope);
@@ -4391,27 +4469,24 @@ async function renderHomeGameCard() {
   const el = $("#home-game-card");
   if (!el) return;
   try {
-    const [level, coins] = await Promise.all([
-      db.getGameProgress(State.coupleId, STAR_BATTLE_GAME_ID),
-      db.getGameCoinsEarned(State.coupleId, "Capibatman"),
+    const [levels, coins] = await Promise.all([
+      db.getGameProgressBothRoles(State.coupleId, STAR_BATTLE_GAME_ID),
+      db.getGameCoinsEarnedByRole(State.coupleId, "Capibatman"),
     ]);
     el.innerHTML = `
       <div class="card" id="home-game-card-inner" style="cursor:pointer;">
         <div class="row" style="align-items:center; gap:10px;">
           <img src="icons/capivarinhas.jpg" alt="" style="width:40px; height:40px; border-radius:10px; object-fit:cover; flex:none;" />
-          <div style="flex:1;">
-            <div class="card-title" style="font-size:14px; margin-bottom:2px;">Capibatman</div>
-            <div class="hint-text" style="margin:0;">💰 ${coins} moedas ganhas jogando</div>
-          </div>
+          <div class="card-title" style="font-size:14px; margin-bottom:0;">Capibatman</div>
         </div>
         <div class="row" style="gap:8px; margin-top:10px;">
           <div style="flex:1; text-align:center; background:var(--accent-soft); border-radius:10px; padding:8px;">
-            <div style="font-weight:800; font-size:13px;">${ROLE_LABEL[State.role]}</div>
-            <div class="hint-text" style="margin:0;">Fase ${level}</div>
+            <div style="font-weight:800; font-size:13px; color:var(--accent-strong);">${ROLE_LABEL.gabriel}</div>
+            <div class="hint-text" style="margin:0;">Fase ${levels.gabriel} · 💰${coins.gabriel || 0}</div>
           </div>
           <div style="flex:1; text-align:center; background:var(--accent-soft); border-radius:10px; padding:8px;">
-            <div style="font-weight:800; font-size:13px;">${ROLE_LABEL[otherRole()]}</div>
-            <div class="hint-text" style="margin:0;">Fase ${level}</div>
+            <div style="font-weight:800; font-size:13px; color:var(--accent-strong);">${ROLE_LABEL.tata}</div>
+            <div class="hint-text" style="margin:0;">Fase ${levels.tata} · 💰${coins.tata || 0}</div>
           </div>
         </div>
       </div>
