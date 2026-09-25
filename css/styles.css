@@ -956,3 +956,11 @@ label.field-label:first-child { margin-top: 0; }
 /* Lembrei de você */
 .memory-photo-wrap { border-radius: var(--radius-md); overflow: hidden; background: var(--surface-sunk); aspect-ratio: 4/3; }
 .memory-photo { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Capivarinhas (jogo) */
+.sbg-board { display: grid; gap: 3px; width: 100%; max-width: 380px; }
+.sbg-cell {
+  aspect-ratio: 1; border-radius: 6px; display: flex; align-items: center; justify-content: center;
+  font-size: clamp(14px, 4vw, 22px); cursor: pointer; user-select: none;
+}
+.sbg-x { color: rgba(0,0,0,.4); font-weight: 800; }
