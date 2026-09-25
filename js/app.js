@@ -340,6 +340,7 @@ async function enterApp(profile) {
   // sobrescrever o modal de um aviso anterior antes da pessoa conseguir ver ou reagir a ele
   await maybeShowTour();
   await maybeShowGoogleLinkNudge();
+  await maybeShowConviteNudge();
   await maybeShowChangelog("casal");
 }
 
@@ -5633,6 +5634,71 @@ async function maybeShowGoogleLinkNudge() {
       closeModal();
       resolve();
     });
+  });
+}
+
+const CONVITE_NUDGE_SEEN_KEY = "casalInvitesSeen";
+
+function getSeenConviteIds() {
+  try { return new Set(JSON.parse(localStorage.getItem(CONVITE_NUDGE_SEEN_KEY) || "[]")); } catch (e) { return new Set(); }
+}
+function markConvitesSeen(ids) {
+  try {
+    const seen = getSeenConviteIds();
+    ids.forEach((id) => seen.add(id));
+    localStorage.setItem(CONVITE_NUDGE_SEEN_KEY, JSON.stringify([...seen]));
+  } catch (e) { /* sem storage: só volta a aparecer toda vez */ }
+}
+
+// pop-up ao abrir o app quando o par mandou um convite ainda sem resposta — mesmo aviso que a
+// turma já tem pros rolês (maybeShowInvitePopup), só que aqui já dá pra aceitar/recusar na hora,
+// sem precisar navegar até Recados. Cada convite só aparece uma vez (guardado no localStorage);
+// resolve a Promise quando dispensado, pra encadear com os outros avisos de boas-vindas.
+async function maybeShowConviteNudge() {
+  let all;
+  try { all = await db.listAllInvites(State.coupleId); } catch (e) { return; }
+  const seen = getSeenConviteIds();
+  const pending = (all || []).filter((e) => e.status === "pendente" && e.created_by !== State.role && !seen.has(e.id));
+  if (!pending.length) return;
+
+  return new Promise((resolve) => {
+    openModal(`
+      <h3 class="modal-title">✉️ ${escapeHTML(ROLE_LABEL[otherRole()])} te chamou!</h3>
+      <div class="stack" id="convite-nudge-list">
+        ${pending.map((e) => `
+          <div class="card" style="padding:12px;" data-nudge-id="${e.id}">
+            <div style="font-weight:800;">${escapeHTML(e.title)}</div>
+            <div class="hint-text" style="margin:2px 0 10px;">${escapeHTML(humanDateLong(parseISODate(e.start_date)))}</div>
+            <div class="row" style="gap:8px;">
+              <button class="btn btn-success btn-sm" style="flex:1;" data-nudge-act="accept">Aceitar${earnTag("accept")}</button>
+              <button class="btn btn-danger btn-sm" style="flex:1;" data-nudge-act="decline">Recusar</button>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+      <button class="btn btn-ghost btn-block" style="margin-top:10px;" id="convite-nudge-later">Ver depois em Recados</button>
+    `);
+    const finish = () => { markConvitesSeen(pending.map((e) => e.id)); closeModal(); resolve(); };
+    $("#convite-nudge-list").querySelectorAll("[data-nudge-act]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const card = btn.closest("[data-nudge-id]");
+        const entry = pending.find((e) => e.id === card.dataset.nudgeId);
+        card.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+        try {
+          await respondToConvite(entry, btn.dataset.nudgeAct);
+          updateNotesNavBadge();
+          renderActiveTab();
+        } catch (err) {
+          alert("Não deu: " + (err.message || err));
+          card.querySelectorAll("button").forEach((b) => { b.disabled = false; });
+          return;
+        }
+        markConvitesSeen([entry.id]);
+        card.remove();
+        if (!$("#convite-nudge-list").children.length) { closeModal(); resolve(); }
+      });
+    });
+    $("#convite-nudge-later").addEventListener("click", finish);
   });
 }
 
