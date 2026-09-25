@@ -2043,7 +2043,7 @@ async function renderFriendsShop() {
     <div class="section-title">🎮 Games</div>
     <div class="card" id="btn-open-star-battle-friends" style="cursor:pointer;">
       <div class="row" style="align-items:center; gap:10px;">
-        <span style="font-size:26px;">🦫</span>
+        <img src="icons/capivarinhas.jpg" alt="Capivarinhas" style="width:48px; height:48px; border-radius:12px; object-fit:cover; flex:none;" />
         <div style="flex:1;">
           <div class="card-title" style="font-size:15px; margin-bottom:0;">Capivarinhas</div>
           <div class="hint-text" style="margin:0;">Quebra-cabeça de lógica · ganha moeda pra turma a cada fase</div>
@@ -4405,7 +4405,7 @@ async function renderShop() {
     <div class="section-title">🎮 Games</div>
     <div class="card" id="btn-open-star-battle" style="cursor:pointer;">
       <div class="row" style="align-items:center; gap:10px;">
-        <span style="font-size:26px;">🦫</span>
+        <img src="icons/capivarinhas.jpg" alt="Capivarinhas" style="width:48px; height:48px; border-radius:12px; object-fit:cover; flex:none;" />
         <div style="flex:1;">
           <div class="card-title" style="font-size:15px; margin-bottom:0;">Capivarinhas</div>
           <div class="hint-text" style="margin:0;">Quebra-cabeça de lógica · ganha moeda a cada fase</div>
