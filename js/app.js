@@ -213,16 +213,23 @@ function renderGoogleGate() {
     <h1>Saudômetro</h1>
     <p class="tagline">o encontrômetro do casal (e, se quiser, da turma de amigos também). Entra com sua conta Google pra começar.</p>
     <div class="stack">
-      <button class="btn btn-primary btn-block" id="btn-google-gate">Continuar com o Google</button>
+      <label class="hint-text" style="display:flex; align-items:flex-start; gap:8px; text-align:left; font-size:12.5px; cursor:pointer;">
+        <input type="checkbox" id="age-confirm" style="margin-top:2px; flex:none;" />
+        <span>Confirmo que tenho 18 anos ou mais e li a <a href="privacidade.html" target="_blank" rel="noopener" style="color:inherit;">Política de Privacidade</a> e os <a href="termos.html" target="_blank" rel="noopener" style="color:inherit;">Termos de Uso</a>.</span>
+      </label>
+      <button class="btn btn-primary btn-block" id="btn-google-gate" disabled>Continuar com o Google</button>
       <p class="error-text" id="onboarding-error"></p>
     </div>
-    <p class="hint-text" style="text-align:center; font-size:11.5px; margin:16px 8px 0;"><a href="privacidade.html" target="_blank" rel="noopener" style="color:inherit;">Política de privacidade</a></p>
     <p class="hint-text" id="egg-text" style="text-align:center; font-size:11.5px; font-style:italic; margin:14px 8px 0; display:none;">Um app feito com amor: o Gabriel quis entender melhor a Tata, e criou um jeito de matar a saudade e falar de sentimentos. Que ele ajude você e quem você ama também.</p>
     <p class="hint-text" style="text-align:center; font-size:10.5px; opacity:.55; margin:10px 8px 0;">👆 toque no coração aí em cima</p>
   `;
+  $("#age-confirm").addEventListener("change", () => {
+    $("#btn-google-gate").disabled = !$("#age-confirm").checked;
+  });
   $("#btn-google-gate").addEventListener("click", async () => {
     setBusy("#btn-google-gate", true);
     try {
+      try { localStorage.setItem("ageConfirmedAt", new Date().toISOString()); } catch (e) { /* sem storage: só não guarda o registro local */ }
       await db.signInWithGoogle(); // navega pro Google; a volta cai direto aqui de novo, já logado
     } catch (e) {
       $("#onboarding-error").textContent = "Não deu pra abrir o login do Google: " + (e.message || e);

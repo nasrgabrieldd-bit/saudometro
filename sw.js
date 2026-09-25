@@ -1,12 +1,12 @@
 // bump isso a cada deploy relevante: força limpar cache velho do celular
-const CACHE_VERSION = "v33";
+const CACHE_VERSION = "v34";
 const CACHE_NAME = `saudometro-${CACHE_VERSION}`;
 
 // o "casco" do app: guardado no aparelho pra o app abrir mesmo sem internet
 // (os dados em si vêm do banco, então sem internet o app mostra o aviso de conexão em vez de tela em branco).
 // O teste tests/arquivos.test.mjs garante que esta lista está completa e sem arquivo faltando.
 const SHELL = [
-  "./", "index.html", "manifest.json", "privacidade.html", "icons/icon.png",
+  "./", "index.html", "manifest.json", "privacidade.html", "termos.html", "icons/icon.png",
   "css/fonts.css", "css/styles.css",
   "fonts/baloo2-latin-ext.woff2", "fonts/baloo2-latin.woff2", "fonts/nunito-latin-ext.woff2", "fonts/nunito-latin.woff2",
   "js/app.js", "js/captcha.js", "js/challenges.js", "js/changelog.js", "js/cycle.js", "js/db.js", "js/errors.js", "js/friends.js", "js/friendsPerks.js", "js/icons.js", "js/install.js", "js/moods.js",
