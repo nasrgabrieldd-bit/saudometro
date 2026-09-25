@@ -108,27 +108,37 @@ export async function addCoinBonus(friendGroupId, userId, delta, reason) {
 
 // ---------- progresso em jogos (Capibatman etc.) ----------
 
-export async function getGameCoinsEarned(friendGroupId, gameLabel) {
-  const { data, error } = await supabase.from("friend_coin_ledger").select("delta").eq("friend_group_id", friendGroupId).like("reason", `${gameLabel}:%`);
+// soma quanta moeda cada membro já ganhou de um jogo específico — progresso é por pessoa
+export async function getGameCoinsEarnedByUser(friendGroupId, gameLabel) {
+  const { data, error } = await supabase.from("friend_coin_ledger").select("user_id, delta").eq("friend_group_id", friendGroupId).like("reason", `${gameLabel}:%`);
   if (error) throw error;
-  return (data || []).reduce((sum, r) => sum + r.delta, 0);
+  const map = {};
+  for (const row of data || []) map[row.user_id] = (map[row.user_id] || 0) + row.delta;
+  return map;
 }
 
-export async function getGameProgress(friendGroupId, gameId) {
+export async function getGameProgress(friendGroupId, userId, gameId) {
   const { data, error } = await supabase
     .from("friend_game_progress")
     .select("current_level")
     .eq("friend_group_id", friendGroupId)
+    .eq("user_id", userId)
     .eq("game_id", gameId)
     .maybeSingle();
   if (error) throw error;
   return data?.current_level || 1;
 }
 
-export async function advanceGameProgress(friendGroupId, gameId, newLevel) {
+export async function getGameProgressAllMembers(friendGroupId, gameId) {
+  const { data, error } = await supabase.from("friend_game_progress").select("user_id, current_level").eq("friend_group_id", friendGroupId).eq("game_id", gameId);
+  if (error) throw error;
+  return Object.fromEntries((data || []).map((r) => [r.user_id, r.current_level]));
+}
+
+export async function advanceGameProgress(friendGroupId, userId, gameId, newLevel) {
   const { error } = await supabase
     .from("friend_game_progress")
-    .upsert({ friend_group_id: friendGroupId, game_id: gameId, current_level: newLevel, updated_at: new Date().toISOString() }, { onConflict: "friend_group_id,game_id" });
+    .upsert({ friend_group_id: friendGroupId, user_id: userId, game_id: gameId, current_level: newLevel, updated_at: new Date().toISOString() }, { onConflict: "friend_group_id,user_id,game_id" });
   if (error) throw error;
 }
 
