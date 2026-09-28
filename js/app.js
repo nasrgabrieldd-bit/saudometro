@@ -735,6 +735,7 @@ function createCodeStep(st) {
       await db.addCoinTransaction(couple.id, role, 25, "saldo inicial");
       await enterApp(profile);
     } catch (e) {
+      if (isStaleAnonError(e)) { showStaleAnonError("#onboarding-error"); setBusy("#confirm-create", false); return; }
       $("#onboarding-error").textContent = e.code === "23505"
         ? "Esse código já existe, tenta outro."
         : String(e.message || "").includes("curto")
@@ -839,6 +840,7 @@ function renderJoinStep2(couple, taken, displayNames = {}) {
       }
       await enterApp(profile);
     } catch (e) {
+      if (isStaleAnonError(e)) { showStaleAnonError("#onboarding-error"); setBusy("#confirm-join", false); return; }
       $("#onboarding-error").textContent = "Não deu pra entrar: " + (e.message || e);
       setBusy("#confirm-join", false);
     }
@@ -848,6 +850,20 @@ function renderJoinStep2(couple, taken, displayNames = {}) {
 function setBusy(sel, busy) {
   const btn = $(sel);
   if (btn) btn.disabled = busy;
+}
+
+// quem ainda tem uma sessão anônima salva de antes do Google virar obrigatório esbarra nessa
+// mensagem do servidor ao tentar criar/entrar num casal — em vez de mostrar o código cru,
+// oferece encerrar a sessão velha e refazer o login certo
+function isStaleAnonError(e) {
+  return String(e?.message || e) === "precisa_login_google";
+}
+function showStaleAnonError(errorSel) {
+  $(errorSel).innerHTML = `Essa sessão está desatualizada (de antes do login por Google ser obrigatório).<br><button class="btn btn-primary btn-sm" id="btn-fix-anon-session" style="margin-top:8px;">Entrar com o Google</button>`;
+  $("#btn-fix-anon-session").addEventListener("click", async () => {
+    try { await supabase.auth.signOut(); } catch (e) { /* segue mesmo se der erro, o reload resolve */ }
+    location.reload();
+  });
 }
 
 // ================= MODO AMIGOS: entrada =================
@@ -903,6 +919,7 @@ function friendsCreateStep() {
       const created = await friends.createFriendGroup(groupName, myName, emoji, colorKey);
       await enterFriendsMode(created);
     } catch (e) {
+      if (isStaleAnonError(e)) { showStaleAnonError("#onboarding-error"); setBusy("#friends-confirm-create", false); return; }
       err(e.message === "nome_invalido" ? "Escreva seu nome." : "Não deu pra criar a turma: " + (e.message || e));
       setBusy("#friends-confirm-create", false);
     }
@@ -933,6 +950,7 @@ function friendsJoinStep() {
       const joined = await friends.joinFriendGroup(code, myName);
       await enterFriendsMode(joined);
     } catch (e) {
+      if (isStaleAnonError(e)) { showStaleAnonError("#onboarding-error"); setBusy("#friends-confirm-join", false); return; }
       err(
         e.message === "codigo_invalido" ? "Não achei essa turma. Confere o código." :
         e.message === "grupo_cheio" ? "Essa turma já está cheia." :
@@ -993,6 +1011,7 @@ function friendsModalCreateStep() {
       closeModal();
       await enterFriendsMode(created);
     } catch (e) {
+      if (isStaleAnonError(e)) { showStaleAnonError("#fm-error"); setBusy("#fm-confirm-create", false); return; }
       err(e.message === "nome_invalido" ? "Escreva seu nome." : "Não deu pra criar a turma: " + (e.message || e));
       setBusy("#fm-confirm-create", false);
     }
@@ -1023,6 +1042,7 @@ function friendsModalJoinStep() {
       closeModal();
       await enterFriendsMode(joined);
     } catch (e) {
+      if (isStaleAnonError(e)) { showStaleAnonError("#fm-error"); setBusy("#fm-confirm-join", false); return; }
       err(
         e.message === "codigo_invalido" ? "Não achei essa turma. Confere o código." :
         e.message === "grupo_cheio" ? "Essa turma já está cheia." :
