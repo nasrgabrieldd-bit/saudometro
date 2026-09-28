@@ -1,7 +1,8 @@
 // Edge Function: dispara notificação push pro parceiro sempre que algo relevante muda —
 // humor, convite (enviado E respondido), encontro do calendário, pergunta da semana,
-// desafio do dia, resgate na lojinha, resgate de desejo secreto ou cápsula do tempo.
-// Chamada por Database Webhooks (INSERT e, pra convites, também UPDATE).
+// desafio do dia, resgate na lojinha, resgate de desejo secreto, cápsula do tempo,
+// recadinho fofo ou foto-lembrança (envio E resposta).
+// Chamada por Database Webhooks (INSERT e, pra convites/foto-lembrança, também UPDATE).
 import webpush from "npm:web-push@3.6.7";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -96,6 +97,36 @@ function messageFor(table: string, type: string, record: any, oldRecord: any): M
         title: "Configurações do app mudaram 🎛️",
         body: `${ROLE_LABEL[editor]} personalizou o app de vocês.`,
         path: "?tab=profile",
+      };
+    }
+    return null;
+  }
+
+  if (table === "sweet_notes" && type === "INSERT") {
+    return {
+      targetRole: otherRole(record.role),
+      title: "Novo recadinho 💌",
+      body: `${ROLE_LABEL[record.role]} te mandou um recadinho fofo.`,
+      path: "?tab=notes",
+    };
+  }
+
+  if (table === "memory_photos") {
+    if (type === "INSERT") {
+      return {
+        targetRole: otherRole(record.role),
+        title: "Lembrei de você 📸",
+        body: `${ROLE_LABEL[record.role]} te mandou uma foto de algo que lembrou você hoje.`,
+        path: "?tab=notes",
+      };
+    }
+    // resposta à foto — avisa quem mandou a foto originalmente, não quem respondeu
+    if (type === "UPDATE" && !oldRecord?.reply_text && record.reply_text) {
+      return {
+        targetRole: record.role,
+        title: "Responderam sua lembrança 💬",
+        body: `${ROLE_LABEL[otherRole(record.role)]} respondeu a foto que você mandou.`,
+        path: "?tab=notes",
       };
     }
     return null;
