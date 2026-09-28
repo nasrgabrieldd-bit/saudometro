@@ -169,6 +169,10 @@ html, body {
   font-family: "Nunito", system-ui, sans-serif;
   -webkit-tap-highlight-color: transparent;
   overflow-x: hidden;
+  /* no Android (Chrome), arrastar pra baixo no topo de uma tela recarrega a página inteira
+     (o gesto nativo de "puxar pra atualizar") — isso interrompe o jogo no meio da partida.
+     "contain" mantém o gesto de rolar normal, só desliga esse recarregamento por engano. */
+  overscroll-behavior-y: contain;
 }
 
 body {
