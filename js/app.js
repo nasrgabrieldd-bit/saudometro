@@ -38,6 +38,7 @@ const State = {
   role: null,
   activeTab: "home",
   notesView: "hub",
+  profileView: "hub",
   calendarMonth: startOfMonth(new Date()),
   calendarEncounters: [],
   calendarPlan: null,
@@ -529,6 +530,7 @@ function offerStreakFreeze(missedDayISO) {
 function setActiveTab(tab) {
   State.activeTab = tab;
   if (tab === "notes") State.notesView = "hub";
+  if (tab === "profile") State.profileView = "hub";
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   renderActiveTab();
 }
@@ -3819,6 +3821,18 @@ function wireNotesBack() {
   $("#btn-notes-back")?.addEventListener("click", () => { State.notesView = "hub"; renderNotes(); });
 }
 
+function profileSubHeader(title) {
+  return `
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+      <button class="btn btn-ghost btn-sm" id="btn-profile-back" style="flex:none; padding:9px 12px;">← Voltar</button>
+      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">${title}</h2>
+    </div>
+  `;
+}
+function wireProfileBack() {
+  $("#btn-profile-back")?.addEventListener("click", () => { State.profileView = "hub"; renderProfile(); });
+}
+
 // ================= CONVITES =================
 
 async function renderInvites() {
@@ -4949,22 +4963,30 @@ function openPerkCostModal(perk) {
 // ================= PERFIL =================
 
 async function renderProfile() {
+  const map = {
+    hub: renderProfileHub, code: renderProfileCode, google: renderProfileGoogle,
+    friendsMode: renderProfileFriendsMode, subscription: renderProfileSubscription,
+    streaks: renderProfileStreaks, privacy: renderProfilePrivacy, install: renderProfileInstall,
+    notifications: renderProfileNotifications, wallet: renderProfileWallet,
+  };
+  (map[State.profileView] || renderProfileHub)();
+}
+
+async function renderProfileHub() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const moodSince = toISODate(addDays(new Date(), -60));
-  const [coins, history, couple, loginStreakInfo, moodHistory, googleLinked, myFriendGroups, couplePlan] = await Promise.all([
-    db.getCoinBalances(State.coupleId),
-    db.listCoinHistory(State.coupleId, 12),
-    supabase.from("couples").select("code").eq("id", State.coupleId).single(),
+  const [coins, loginStreakInfo, moodHistory, googleLinked, myFriendGroups, couplePlan, alreadySubscribed] = await Promise.all([
+    coinsOn() ? db.getCoinBalances(State.coupleId) : Promise.resolve({}),
     computeLoginStreak(),
     db.getMoodHistory(State.coupleId, moodSince),
     db.getGoogleLinkStatus(),
     friends.listMyFriendGroups().catch(() => []),
     db.getMyCouplePlan(State.coupleId).catch(() => ({ plan: null, plan_expires_at: null, plan_source: null })),
+    isSubscribed(),
   ]);
   const loginStreak = loginStreakInfo.streak;
   const moodStreak = countMoodStreakFromHistory(moodHistory, State.role);
   const pushPerm = permissionState();
-  const alreadySubscribed = await isSubscribed();
 
   view.innerHTML = `
     <div class="card">
@@ -4987,30 +5009,121 @@ async function renderProfile() {
       <button class="btn btn-secondary btn-block" id="btn-personalize">Personalizar</button>
     </div>
 
-${feat("streaks") ? `    <div class="section-title">Sequências 🔥</div>
-    <div class="card">
-      <div class="row">
-        <span class="pill">🔥 Uso do app: ${loginStreak} dia${loginStreak === 1 ? "" : "s"}</span>
-        <span class="pill">🥰 Humor: ${moodStreak} dia${moodStreak === 1 ? "" : "s"}</span>
-      </div>
-      <p class="hint-text" style="margin-top:10px;">Só passa a contar como sequência a partir de 2 dias seguidos. Abrir o app ou registrar o humor hoje garante o dia de amanhã.</p>
-    </div>` : ""}
+    <div class="section-title">Atalhos</div>
+    <div class="shortcut-grid">
+${feat("streaks") ? `      <button class="shortcut-card" data-view="streaks">
+        <span class="shortcut-icon">${icon("flame", { size: 24 })}</span>
+        <span class="shortcut-title">Sequências</span>
+        <span class="shortcut-sub">🔥 ${loginStreak}d · 🥰 ${moodStreak}d</span>
+      </button>` : ""}
+      <button class="shortcut-card" data-view="code">
+        <span class="shortcut-icon">${icon("key", { size: 24 })}</span>
+        <span class="shortcut-title">Código do casal</span>
+        <span class="shortcut-sub">Ver e copiar</span>
+      </button>
+      <button class="shortcut-card" data-view="google">
+        <span class="shortcut-icon">${icon("lock", { size: 24 })}</span>
+        <span class="shortcut-title">Conta Google</span>
+        <span class="shortcut-sub">${googleLinked ? "✅ Ligada" : "Ligar agora"}</span>
+      </button>
+      <button class="shortcut-card" data-view="friendsMode">
+        <span class="shortcut-icon">${icon("users", { size: 24 })}</span>
+        <span class="shortcut-title">Modo Amigos</span>
+        <span class="shortcut-sub">${!googleLinked ? "Precisa do Google" : myFriendGroups.length ? `${myFriendGroups.length} turma${myFriendGroups.length === 1 ? "" : "s"}` : "Criar ou entrar"}</span>
+      </button>
+      <button class="shortcut-card" data-view="subscription">
+        <span class="shortcut-icon">${icon("credit-card", { size: 24 })}</span>
+        <span class="shortcut-title">Assinatura</span>
+        <span class="shortcut-sub">${planLabel(couplePlan)}</span>
+      </button>
+      <button class="shortcut-card" data-view="privacy">
+        <span class="shortcut-icon">${icon("shield", { size: 24 })}</span>
+        <span class="shortcut-title">Privacidade</span>
+        <span class="shortcut-sub">Seus dados e política</span>
+      </button>
+      <button class="shortcut-card" data-view="install">
+        <span class="shortcut-icon">${icon("smartphone", { size: 24 })}</span>
+        <span class="shortcut-title">Instalar no celular</span>
+        <span class="shortcut-sub">${isInstalled() ? "✅ Instalado" : "Ver passo a passo"}</span>
+      </button>
+      <button class="shortcut-card" data-view="notifications">
+        <span class="shortcut-icon">${icon("bell", { size: 24 })}</span>
+        <span class="shortcut-title">Notificações</span>
+        <span class="shortcut-sub">${pushPerm === "unsupported" ? "Não suportado" : alreadySubscribed ? "✅ Ativadas" : "Ativar agora"}</span>
+      </button>
+${coinsOn() ? `      <button class="shortcut-card" data-view="wallet">
+        <span class="shortcut-icon">${icon("wallet", { size: 24 })}</span>
+        <span class="shortcut-title">Moedas</span>
+        <span class="shortcut-sub">💰 ${(coins.gabriel || 0) + (coins.tata || 0)} no total</span>
+      </button>` : ""}
+    </div>
 
+    <p class="hint-text" style="text-align:center; margin:22px 0 4px; font-size:11px; opacity:0.45;">© 2026 Gabriel Nascimento Santos</p>
+  `;
+
+  // 5 toques rápidos no avatar abrem o modo dono (senha validada no servidor)
+  let avatarTaps = 0, avatarTimer = null;
+  view.querySelector(".avatar")?.addEventListener("click", () => {
+    avatarTaps++;
+    clearTimeout(avatarTimer);
+    avatarTimer = setTimeout(() => { avatarTaps = 0; }, 1500);
+    if (avatarTaps >= 5) { avatarTaps = 0; openAdminGate(); }
+  });
+
+  $("#btn-edit-names")?.addEventListener("click", openNamesEditor);
+  $("#btn-personalize")?.addEventListener("click", openPersonalizeModal);
+  document.querySelectorAll(".shortcut-card").forEach((btn) => {
+    btn.addEventListener("click", () => { State.profileView = btn.dataset.view; renderProfile(); });
+  });
+}
+
+async function renderProfileCode() {
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const couple = await supabase.from("couples").select("code").eq("id", State.coupleId).single();
+  view.innerHTML = `
+    ${profileSubHeader("🔑 Código do casal")}
     <div class="card">
-      <div class="card-title" style="font-size:15px;">Código do casal</div>
       <div class="card-sub">Use em outro celular pra entrar como ${ROLE_LABEL[otherRole()]} (ou reinstalar).</div>
       <div class="onboarding-code" style="font-size:24px; padding:12px;">${escapeHTML(couple.data?.code || "") || "----"}</div>
     </div>
+  `;
+  wireProfileBack();
+}
 
+async function renderProfileGoogle() {
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const googleLinked = await db.getGoogleLinkStatus();
+  view.innerHTML = `
+    ${profileSubHeader("🔐 Conta Google")}
     <div class="card">
-      <div class="card-title" style="font-size:15px;">Recuperar acesso pelo Google</div>
       ${googleLinked
         ? `<p class="card-sub" style="margin-bottom:0;">✅ Sua conta Google já está ligada neste perfil. Se trocar de celular, use "Continuar com o Google" pra entrar direto.</p>`
         : `<div class="card-sub">Ligue sua conta Google a este perfil, como um seguro: se você trocar de celular ou perder o código do casal, ainda consegue entrar.</div>
            <button class="btn btn-secondary btn-block" id="btn-link-google">Ligar minha conta Google</button>`}
     </div>
+  `;
+  wireProfileBack();
+  $("#btn-link-google")?.addEventListener("click", async () => {
+    setBusy("#btn-link-google", true);
+    try {
+      const { error } = await db.linkGoogleIdentity();
+      if (error) throw error;
+      // a página navega pro Google e volta sozinha; nada mais a fazer aqui
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#btn-link-google", false);
+    }
+  });
+}
 
-    <div class="section-title">Modo Amigos 👥</div>
+async function renderProfileFriendsMode() {
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const [googleLinked, myFriendGroups] = await Promise.all([
+    db.getGoogleLinkStatus(),
+    friends.listMyFriendGroups().catch(() => []),
+  ]);
+  view.innerHTML = `
+    ${profileSubHeader("👥 Modo Amigos")}
     <div class="card" style="border-color:var(--friends-accent-soft);">
       ${!googleLinked ? `
         <p class="card-sub" style="margin-bottom:0;">Pra usar com amigos, primeiro liga sua conta Google aqui em cima, depois volta nessa tela.</p>
@@ -5035,8 +5148,20 @@ ${feat("streaks") ? `    <div class="section-title">Sequências 🔥</div>
         `}
       `}
     </div>
+  `;
+  wireProfileBack();
+  view.querySelectorAll("[data-switch-friends]").forEach((btn) => btn.addEventListener("click", async () => {
+    const g = myFriendGroups.find((x) => x.id === btn.dataset.switchFriends);
+    if (g) await enterFriendsMode(g);
+  }));
+  $("#btn-new-friend-group")?.addEventListener("click", openFriendsGroupModal);
+}
 
-    <div class="section-title">Assinatura 💳</div>
+async function renderProfileSubscription() {
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const couplePlan = await db.getMyCouplePlan(State.coupleId).catch(() => ({ plan: null, plan_expires_at: null, plan_source: null }));
+  view.innerHTML = `
+    ${profileSubHeader("💳 Assinatura")}
     <div class="card">
       <div class="card-sub" style="margin-bottom:8px;">Plano atual: <strong>${planLabel(couplePlan)}</strong>${couplePlan.plan_source && couplePlan.plan_source !== "legado" && couplePlan.plan_expires_at ? ` · renova em ${humanDateShort(parseISODate(couplePlan.plan_expires_at.slice(0, 10)))}` : ""}</div>
       ${couplePlan.plan_source === "legado" ? `
@@ -5050,23 +5175,77 @@ ${feat("streaks") ? `    <div class="section-title">Sequências 🔥</div>
         <p class="hint-text" style="margin-top:8px;">Um pagamento cobre vocês dois. Você vai ser levado(a) pro checkout do Mercado Pago.</p>
       `}
     </div>
+  `;
+  wireProfileBack();
+  view.querySelectorAll("[data-subscribe]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      try {
+        const url = await db.createSubscriptionCheckout("casal", btn.dataset.subscribe);
+        window.location.href = url;
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        btn.disabled = false;
+      }
+    });
+  });
+}
 
-    <div class="section-title">Privacidade 🔒</div>
+async function renderProfileStreaks() {
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const moodSince = toISODate(addDays(new Date(), -60));
+  const [loginStreakInfo, moodHistory] = await Promise.all([
+    computeLoginStreak(),
+    db.getMoodHistory(State.coupleId, moodSince),
+  ]);
+  const loginStreak = loginStreakInfo.streak;
+  const moodStreak = countMoodStreakFromHistory(moodHistory, State.role);
+  view.innerHTML = `
+    ${profileSubHeader("🔥 Sequências")}
+    <div class="card">
+      <div class="row">
+        <span class="pill">🔥 Uso do app: ${loginStreak} dia${loginStreak === 1 ? "" : "s"}</span>
+        <span class="pill">🥰 Humor: ${moodStreak} dia${moodStreak === 1 ? "" : "s"}</span>
+      </div>
+      <p class="hint-text" style="margin-top:10px;">Só passa a contar como sequência a partir de 2 dias seguidos. Abrir o app ou registrar o humor hoje garante o dia de amanhã.</p>
+    </div>
+  `;
+  wireProfileBack();
+}
+
+async function renderProfilePrivacy() {
+  view.innerHTML = `
+    ${profileSubHeader("🔒 Privacidade")}
     <div class="card">
       <div class="card-sub">Seus dados são seus. Você pode baixar tudo que registrou aqui e ler como cuidamos deles.</div>
       <button class="btn btn-secondary btn-block" id="btn-export-data">Baixar meus dados</button>
       <p class="hint-text" style="text-align:center; margin:10px 0 0;"><a href="privacidade.html" target="_blank" rel="noopener" style="color:var(--accent-strong);">Política de privacidade</a></p>
     </div>
+  `;
+  wireProfileBack();
+  $("#btn-export-data")?.addEventListener("click", openMyDataModal);
+}
 
-    <div class="section-title">Instalar no celular 📲</div>
+async function renderProfileInstall() {
+  view.innerHTML = `
+    ${profileSubHeader("📲 Instalar no celular")}
     <div class="card">
       ${isInstalled()
         ? `<p class="card-sub" style="margin-bottom:0;">✅ O Saudômetro já está instalado neste aparelho.</p>`
         : `<div class="card-sub">Coloque o Saudômetro na tela inicial: abre em tela cheia, mais rápido, e no iPhone é o que libera as notificações.</div>
            <button class="btn btn-secondary btn-block" id="btn-install-guide">Ver o passo a passo</button>`}
     </div>
+  `;
+  wireProfileBack();
+  $("#btn-install-guide")?.addEventListener("click", openInstallGuide);
+}
 
-    <div class="section-title">Notificações 🔔</div>
+async function renderProfileNotifications() {
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const pushPerm = permissionState();
+  const alreadySubscribed = await isSubscribed();
+  view.innerHTML = `
+    ${profileSubHeader("🔔 Notificações")}
     <div class="card">
       ${needsHomeScreenFirst() ? `
         <p class="card-sub">No iPhone, notificação só funciona depois de adicionar o Saudômetro à tela de início.</p>
@@ -5083,83 +5262,9 @@ ${feat("streaks") ? `    <div class="section-title">Sequências 🔥</div>
         ${pushPerm === "denied" ? `<p class="error-text" style="margin-top:8px;">Você bloqueou notificações antes. Precisa liberar de novo nas configurações do navegador/celular.</p>` : ""}
       `}
     </div>
-
-${coinsOn() ? `    <div class="section-title">Moedas 💰</div>
-    <div class="card">
-      <div class="row">
-        <span class="pill pill-coin">${ROLE_EMOJI.gabriel} ${ROLE_LABEL.gabriel}: ${coins.gabriel || 0}</span>
-        <span class="pill pill-coin">${ROLE_EMOJI.tata} ${ROLE_LABEL.tata}: ${coins.tata || 0}</span>
-      </div>
-      <div class="stack" style="margin-top:12px; font-size:13px; color:var(--text-muted);">
-        ${coinRulesHTML()}
-        <div>🎁 Todo resgate na lojinha fica <strong style="color:var(--text);">pendente</strong> até alguém marcar como cumprido, só aí quem cumpriu ganha a moeda de recompensa. Se o outro te resgatou algo, um aviso aparece quando você abrir o app.</div>
-        <div>🕰️ A cápsula do tempo é de graça, não gasta nem dá moeda, é só pra guardar um recado pro futuro.</div>
-        ${luckyOn() ? `<div>🍀 De vez em quando (1 em cada 10), uma recompensa vem em dobro, é o "dia da sorte".</div>` : ""}
-        <div>Todo mundo começa com 25 moedas. Recusar nunca fica bloqueado por falta de moeda. É só um joguinho por cima, ninguém é obrigado a nada.</div>
-      </div>
-    </div>
-
-    <div class="section-title">Histórico de moedas</div>
-    <div class="card">
-      ${history.length ? `<div class="stack">${history.map((h) => `
-        <div class="entry-item">
-          <div class="entry-icon">${h.delta > 0 ? "➕" : "➖"}</div>
-          <div class="entry-body">
-            <div class="entry-title">${ROLE_LABEL[h.role]} ${h.delta > 0 ? "ganhou" : "gastou"} ${Math.abs(h.delta)}</div>
-            <div class="entry-meta">${h.reason}</div>
-          </div>
-        </div>
-      `).join("")}</div>` : `<div class="empty-state"><span class="emoji">💰</span>Nada ainda.</div>`}
-    </div>
-
-` : ""}
-
-    <p class="hint-text" style="text-align:center; margin:22px 0 4px; font-size:11px; opacity:0.45;">© 2026 Gabriel Nascimento Santos</p>
   `;
-
-  // 5 toques rápidos no avatar abrem o modo dono (senha validada no servidor)
-  let avatarTaps = 0, avatarTimer = null;
-  view.querySelector(".avatar")?.addEventListener("click", () => {
-    avatarTaps++;
-    clearTimeout(avatarTimer);
-    avatarTimer = setTimeout(() => { avatarTaps = 0; }, 1500);
-    if (avatarTaps >= 5) { avatarTaps = 0; openAdminGate(); }
-  });
-
-  $("#btn-edit-names")?.addEventListener("click", openNamesEditor);
-  $("#btn-personalize")?.addEventListener("click", openPersonalizeModal);
-  $("#btn-export-data")?.addEventListener("click", openMyDataModal);
-  view.querySelectorAll("[data-subscribe]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      btn.disabled = true;
-      try {
-        const url = await db.createSubscriptionCheckout("casal", btn.dataset.subscribe);
-        window.location.href = url;
-      } catch (e) {
-        alert("Não deu: " + (e.message || e));
-        btn.disabled = false;
-      }
-    });
-  });
-  $("#btn-link-google")?.addEventListener("click", async () => {
-    setBusy("#btn-link-google", true);
-    try {
-      const { error } = await db.linkGoogleIdentity();
-      if (error) throw error;
-      // a página navega pro Google e volta sozinha; nada mais a fazer aqui
-    } catch (e) {
-      alert("Não deu: " + (e.message || e));
-      setBusy("#btn-link-google", false);
-    }
-  });
-  view.querySelectorAll("[data-switch-friends]").forEach((btn) => btn.addEventListener("click", async () => {
-    const g = myFriendGroups.find((x) => x.id === btn.dataset.switchFriends);
-    if (g) await enterFriendsMode(g);
-  }));
-  $("#btn-new-friend-group")?.addEventListener("click", openFriendsGroupModal);
-  $("#btn-install-guide")?.addEventListener("click", openInstallGuide);
+  wireProfileBack();
   $("#btn-install-guide-2")?.addEventListener("click", openInstallGuide);
-
   $("#btn-enable-push")?.addEventListener("click", () => {
     openModal(`
       <h3 class="modal-title">🔔 Ativar notificações</h3>
@@ -5188,6 +5293,44 @@ ${coinsOn() ? `    <div class="section-title">Moedas 💰</div>
       setBusy("#btn-disable-push", false);
     }
   });
+}
+
+async function renderProfileWallet() {
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const [coins, history] = await Promise.all([
+    db.getCoinBalances(State.coupleId),
+    db.listCoinHistory(State.coupleId, 12),
+  ]);
+  view.innerHTML = `
+    ${profileSubHeader("💰 Moedas")}
+    <div class="card">
+      <div class="row">
+        <span class="pill pill-coin">${ROLE_EMOJI.gabriel} ${ROLE_LABEL.gabriel}: ${coins.gabriel || 0}</span>
+        <span class="pill pill-coin">${ROLE_EMOJI.tata} ${ROLE_LABEL.tata}: ${coins.tata || 0}</span>
+      </div>
+      <div class="stack" style="margin-top:12px; font-size:13px; color:var(--text-muted);">
+        ${coinRulesHTML()}
+        <div>🎁 Todo resgate na lojinha fica <strong style="color:var(--text);">pendente</strong> até alguém marcar como cumprido, só aí quem cumpriu ganha a moeda de recompensa. Se o outro te resgatou algo, um aviso aparece quando você abrir o app.</div>
+        <div>🕰️ A cápsula do tempo é de graça, não gasta nem dá moeda, é só pra guardar um recado pro futuro.</div>
+        ${luckyOn() ? `<div>🍀 De vez em quando (1 em cada 10), uma recompensa vem em dobro, é o "dia da sorte".</div>` : ""}
+        <div>Todo mundo começa com 25 moedas. Recusar nunca fica bloqueado por falta de moeda. É só um joguinho por cima, ninguém é obrigado a nada.</div>
+      </div>
+    </div>
+
+    <div class="section-title">Histórico de moedas</div>
+    <div class="card">
+      ${history.length ? `<div class="stack">${history.map((h) => `
+        <div class="entry-item">
+          <div class="entry-icon">${h.delta > 0 ? "➕" : "➖"}</div>
+          <div class="entry-body">
+            <div class="entry-title">${ROLE_LABEL[h.role]} ${h.delta > 0 ? "ganhou" : "gastou"} ${Math.abs(h.delta)}</div>
+            <div class="entry-meta">${h.reason}</div>
+          </div>
+        </div>
+      `).join("")}</div>` : `<div class="empty-state"><span class="emoji">💰</span>Nada ainda.</div>`}
+    </div>
+  `;
+  wireProfileBack();
 }
 
 // ================= CICLO MENSTRUAL (opcional, aba Calendário) =================
