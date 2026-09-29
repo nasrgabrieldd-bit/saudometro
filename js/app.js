@@ -64,11 +64,15 @@ const view = $("#view-container");
 
 // ---------------- modal ----------------
 
-function openModal(html) {
+// onClose (opcional): o que roda ao fechar pelo X ou tocando fora. Sem isso, é só closeModal.
+// Passar onClose evita empilhar dois handlers de clique no mesmo botão (um genérico e um que
+// precisa marcar "visto" antes de fechar) — só um roda, sempre o certo.
+function openModal(html, onClose) {
   $("#modal-sheet").innerHTML = `<button class="modal-close" id="modal-close-btn">✕</button>${html}`;
   $("#modal-root").classList.add("open");
-  $("#modal-close-btn").addEventListener("click", closeModal);
-  $("#modal-overlay").onclick = closeModal;
+  const close = onClose || closeModal;
+  $("#modal-close-btn").addEventListener("click", close);
+  $("#modal-overlay").onclick = close;
 }
 function closeModal() {
   $("#modal-root").classList.remove("open");
@@ -7258,17 +7262,17 @@ function showNextConviteAccepted(queue, resolve) {
   if (!queue.length) return resolve();
   const entry = queue[0];
   const iCreated = entry.created_by === State.role;
-  openModal(`
-    <div style="text-align:center; font-size:40px;">🎉</div>
-    <h3 class="modal-title" style="text-align:center;">${iCreated ? `${escapeHTML(ROLE_LABEL[otherRole()])} aceitou seu convite!` : "Encontro confirmado!"}</h3>
-    <p class="card-sub" style="text-align:center;">${escapeHTML(entry.title) || defaultTitle(entry)} · ${escapeHTML(humanDateLong(parseISODate(entry.start_date)))}</p>
-    <button class="btn btn-primary btn-block" style="margin-top:14px;" id="btn-convite-accepted-ok">Que bom! 💗</button>
-  `);
   const finish = () => {
     markAcceptedConvitesSeen([entry.id]);
     closeModal();
     showNextConviteAccepted(queue.slice(1), resolve);
   };
+  openModal(`
+    <div style="text-align:center; font-size:40px;">🎉</div>
+    <h3 class="modal-title" style="text-align:center;">${iCreated ? `${escapeHTML(ROLE_LABEL[otherRole()])} aceitou seu convite!` : "Encontro confirmado!"}</h3>
+    <p class="card-sub" style="text-align:center;">${escapeHTML(entry.title) || defaultTitle(entry)} · ${escapeHTML(humanDateLong(parseISODate(entry.start_date)))}</p>
+    <button class="btn btn-primary btn-block" style="margin-top:14px;" id="btn-convite-accepted-ok">Que bom! 💗</button>
+  `, finish); // fechar pelo X ou tocando fora também marca como visto (senão travava a fila de avisos seguintes)
   $("#btn-convite-accepted-ok").addEventListener("click", finish);
 }
 
@@ -7339,6 +7343,11 @@ function showNextChangelogEntry(queue, mode, resolve) {
   const entry = queue[0];
   const accentVar = mode === "amigos" ? "--friends-accent" : "--accent-btn";
   const onAccentVar = mode === "amigos" ? "--on-friends-accent" : "--on-accent-btn";
+  // fechar pelo X ou tocando fora também conta como "visto" — senão a mesma novidade
+  // voltava a aparecer toda vez que o app abria, só quem reagia é que fazia ela sumir de vez.
+  // passa pro openModal como onClose (em vez de amarrar depois) pra não empilhar dois
+  // handlers de clique no mesmo botão — só esse roda.
+  const dismiss = () => { markChangelogSeen(entry.id); closeModal(); resolve(); };
   openModal(`
     <p class="hint-text" style="text-align:center; font-weight:800; letter-spacing:.04em; text-transform:uppercase; margin:0 0 8px;">Novidade</p>
     <div style="text-align:center;">${entry.image
@@ -7350,12 +7359,7 @@ function showNextChangelogEntry(queue, mode, resolve) {
     <div class="row" style="gap:8px; justify-content:center; margin-top:6px;">
       ${CHANGELOG_REACTIONS.map((r) => `<button class="btn btn-sm" style="flex:none; font-size:20px; padding:8px 14px; background:var(${accentVar}); color:var(${onAccentVar});" data-changelog-react="${r}">${r}</button>`).join("")}
     </div>
-  `);
-  // fechar pelo X ou tocando fora também conta como "visto" — senão a mesma novidade
-  // voltava a aparecer toda vez que o app abria, só quem reagia é que fazia ela sumir de vez.
-  const dismiss = () => { markChangelogSeen(entry.id); closeModal(); resolve(); };
-  $("#modal-close-btn").addEventListener("click", dismiss);
-  $("#modal-overlay").onclick = dismiss;
+  `, dismiss);
   $("#modal-sheet").querySelectorAll("[data-changelog-react]").forEach((btn) => {
     btn.addEventListener("click", () => {
       markChangelogSeen(entry.id);
