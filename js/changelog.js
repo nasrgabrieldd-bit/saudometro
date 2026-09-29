@@ -173,6 +173,13 @@ export const CHANGELOG = [
     title: "Dia de dizer eu te amo",
     text: "A cada 45 dias, o app sugere uma surpresa pra fazer pelo outro — uma simples e uma mais elaborada. Aparece sozinho, não precisa configurar nada.",
   },
+  {
+    id: "jogar-a-dois-salas-2026-09",
+    tag: "casal",
+    emoji: "🎮",
+    title: "Jogar a dois: salas de Cartas e STOP",
+    text: "O que já tinha pra turma agora existe pro casal também: na Lojinha, crie uma sala de Cartas ou STOP e chame seu par com um código. Mesmo esquema — lobby, pronto, host, reconexão. O jogo em si vem nas próximas etapas.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";

@@ -56,6 +56,7 @@ const State = {
   friendsCalendarEvents: [],
   friendsSelectedDay: null,
   roomView: null,
+  roomCtx: null, // "casal" ou "amigos" — de onde a sala de minigame foi aberta
 };
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -331,6 +332,7 @@ async function enterApp(profile) {
     State.coupleId,
     (p) => {
       if (p?.table === "reactions" && p.new?.role === State.role) return; // já está na tela
+      if (State.roomView) return; // dentro de uma sala de jogo: a tela é da sala, não re-renderiza a aba por baixo dela
       renderActiveTab();
       updateNotesNavBadge();
     },
@@ -2580,7 +2582,7 @@ async function renderFriendsShop() {
     ` : ""}
   `;
   $("#btn-open-star-battle-friends").addEventListener("click", () => renderStarBattleGame("amigos"));
-  $("#btn-open-game-hub").addEventListener("click", () => renderGameHub());
+  $("#btn-open-game-hub").addEventListener("click", () => renderGameHub("amigos"));
   $("#friends-new-perk-btn").addEventListener("click", openNewCustomPerkModal);
   view.querySelectorAll("[data-redeem]").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -2678,6 +2680,36 @@ function roomAvatarColors(userId) {
   return ROOM_AVATAR_PALETTE[hash % ROOM_AVATAR_PALETTE.length];
 }
 
+// a mesma tela de salas serve o Casal (2 pessoas) e a Turma — essas funções decidem, a partir
+// de State.roomCtx ("casal" | "amigos"), onde renderizar, quem é o "dono" da sala e a cor certa
+function roomOwner() {
+  return State.roomCtx === "casal"
+    ? { type: "couple", id: State.coupleId }
+    : { type: "friend_group", id: State.friendGroup.id };
+}
+function roomViewEl() {
+  return State.roomCtx === "casal" ? view : $("#friends-view");
+}
+function roomBtnStyle() {
+  return State.roomCtx === "casal" ? "background:var(--accent-btn); color:var(--on-accent-btn);" : "background:var(--friends-accent); color:var(--on-friends-accent);";
+}
+function roomAccentStrong() {
+  return State.roomCtx === "casal" ? "var(--accent-strong)" : "var(--friends-accent-strong)";
+}
+async function roomMembers() {
+  if (State.roomCtx === "casal") {
+    const me = { user_id: State.userId, display_name: myDisplayName() };
+    const members = [me];
+    if (State.partner?.id) members.push({ user_id: State.partner.id, display_name: partnerDisplayName() });
+    return members;
+  }
+  return friends.listGroupMembers(State.friendGroup.id);
+}
+function roomBack() {
+  if (State.roomCtx === "casal") { State.shopView = "hub"; renderShop(); }
+  else setFriendsTab("shop");
+}
+
 let roomChannelUnsub = null;
 let roomPresenceChannel = null;
 // sai de qualquer sala que esteja "aberta" na tela (troca de aba, troca de turma, etc.) —
@@ -2688,25 +2720,26 @@ function closeRoomChannels() {
   State.roomView = null;
 }
 
-async function renderGameHub() {
-  const view = $("#friends-view");
+async function renderGameHub(ctx) {
+  if (ctx) State.roomCtx = ctx;
+  const view = roomViewEl();
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   try {
-    const active = await gameRooms.findMyActiveRoom(State.friendGroup.id, State.userId);
+    const active = await gameRooms.findMyActiveRoom(roomOwner(), State.userId);
     if (active) {
       view.innerHTML = `
         <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
           <button class="btn btn-ghost btn-sm" id="btn-gamehub-back" style="flex:none; padding:9px 12px;">← Voltar</button>
-          <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">🎮 Jogar com amigos</h2>
+          <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">🎮 Jogar ${State.roomCtx === "casal" ? "a dois" : "com amigos"}</h2>
         </div>
         <div class="card" style="text-align:center; padding:24px 16px;">
           <div style="font-size:30px;">${active.game_type === "cartas" ? "🃏" : "🔤"}</div>
           <div class="card-title" style="margin-top:8px;">Você tem uma partida em andamento</div>
           <p class="card-sub">Sala ${escapeHTML(active.code)} · ${active.game_type === "cartas" ? "Cartas" : "STOP"}</p>
-          <button class="btn btn-block" style="margin-top:10px; background:var(--friends-accent); color:var(--on-friends-accent);" id="btn-rejoin-room">Voltar pra sala</button>
+          <button class="btn btn-block" style="margin-top:10px; ${roomBtnStyle()}" id="btn-rejoin-room">Voltar pra sala</button>
         </div>
       `;
-      $("#btn-gamehub-back").addEventListener("click", () => setFriendsTab("shop"));
+      $("#btn-gamehub-back").addEventListener("click", () => roomBack());
       $("#btn-rejoin-room").addEventListener("click", () => enterRoomLobby(active.id));
       return;
     }
@@ -2715,14 +2748,14 @@ async function renderGameHub() {
   view.innerHTML = `
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
       <button class="btn btn-ghost btn-sm" id="btn-gamehub-back" style="flex:none; padding:9px 12px;">← Voltar</button>
-      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">🎮 Jogar com amigos</h2>
+      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">🎮 Jogar ${State.roomCtx === "casal" ? "a dois" : "com amigos"}</h2>
     </div>
     <div class="rm-hub">
       <div class="rm-gamecard cards" data-game="cartas">
         <div class="ic">${ROOM_GAME_ICON.cartas}</div>
         <div style="flex:1;">
           <div class="t">Cartas</div>
-          <div class="s">2 a 8 jogadores · fique sem cartas antes dos seus amigos</div>
+          <div class="s">2 a 8 jogadores · fique sem cartas antes dos outros</div>
         </div>
       </div>
       <div class="rm-gamecard stop" data-game="stop">
@@ -2735,7 +2768,7 @@ async function renderGameHub() {
     </div>
     <p class="hint-text" style="margin-top:10px;">Toque num jogo: criar sala ou entrar com código.</p>
   `;
-  $("#btn-gamehub-back").addEventListener("click", () => setFriendsTab("shop"));
+  $("#btn-gamehub-back").addEventListener("click", () => roomBack());
   view.querySelectorAll("[data-game]").forEach((card) => {
     card.addEventListener("click", () => openGameChoiceModal(card.dataset.game));
   });
@@ -2745,13 +2778,13 @@ function openGameChoiceModal(gameType) {
   const label = gameType === "cartas" ? "Cartas" : "STOP";
   openModal(`
     <h3 class="modal-title">${gameType === "cartas" ? "🃏" : "🔤"} ${label}</h3>
-    <button class="btn btn-block" style="background:var(--friends-accent); color:var(--on-friends-accent);" id="btn-create-room">➕ Criar sala</button>
+    <button class="btn btn-block" style="${roomBtnStyle()}" id="btn-create-room">➕ Criar sala</button>
     <button class="btn btn-secondary btn-block" style="margin-top:8px;" id="btn-join-room">🔑 Entrar com código</button>
   `);
   $("#btn-create-room").addEventListener("click", async () => {
     setBusy("#btn-create-room", true);
     try {
-      const room = await gameRooms.createRoom(State.friendGroup.id, gameType);
+      const room = await gameRooms.createRoom(roomOwner(), gameType);
       closeModal();
       await enterRoomLobby(room.id);
     } catch (e) {
@@ -2766,7 +2799,7 @@ function openGameChoiceModal(gameType) {
 }
 
 function renderRoomJoin(gameType) {
-  const view = $("#friends-view");
+  const view = roomViewEl();
   const label = gameType === "cartas" ? "Cartas" : "STOP";
   view.innerHTML = `
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
@@ -2800,7 +2833,7 @@ function renderRoomJoin(gameType) {
 
 async function enterRoomLobby(roomId) {
   State.roomView = { roomId };
-  const view = $("#friends-view");
+  const view = roomViewEl();
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   try {
     const room = await gameRooms.getRoom(roomId);
@@ -2814,10 +2847,10 @@ async function enterRoomLobby(roomId) {
 }
 
 async function renderRoomLobbyScreen(room) {
-  const view = $("#friends-view");
+  const view = roomViewEl();
   const [players, members] = await Promise.all([
     gameRooms.listRoomPlayers(room.id),
-    friends.listGroupMembers(State.friendGroup.id),
+    roomMembers(),
   ]);
   const byId = Object.fromEntries(members.map((m) => [m.user_id, m]));
   const isHost = room.host_user_id === State.userId;
@@ -2827,9 +2860,9 @@ async function renderRoomLobbyScreen(room) {
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
       <div>
         <div class="hint-text" style="margin:0; text-transform:uppercase; font-weight:800; letter-spacing:.03em;">Sala</div>
-        <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0; color:var(--friends-accent-strong);">${room.game_type === "cartas" ? "🃏 Cartas" : "🔤 STOP"}</h2>
+        <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0; color:${roomAccentStrong()};">${room.game_type === "cartas" ? "🃏 Cartas" : "🔤 STOP"}</h2>
       </div>
-      <button class="btn btn-ghost btn-sm" id="btn-leave-room" style="color:var(--friends-accent-strong); font-weight:800;">SAIR ✕</button>
+      <button class="btn btn-ghost btn-sm" id="btn-leave-room" style="color:${roomAccentStrong()}; font-weight:800;">SAIR ✕</button>
     </div>
     <div class="rm-code-box">
       <div class="rm-code-chip"><div class="rm-code">${escapeHTML(room.code)}</div></div>
@@ -2883,14 +2916,13 @@ async function renderRoomLobbyScreen(room) {
       if (State.roomView?.roomId === room.id) await renderRoomLobbyScreen(fresh);
     } catch (e) { /* sala pode ter sido fechada; o botão SAIR ainda funciona */ }
   });
-  const presence = gameRooms.trackPresence(room.id, State.userId, State.profile?.display_name || "Você");
-  roomPresenceChannel = presence;
-  gameRooms.subscribePresence(presence, (onlineIds) => {
+  const presence = gameRooms.trackPresence(room.id, State.userId, (State.roomCtx === "casal" ? myDisplayName() : State.profile?.display_name) || "Você", (onlineIds) => {
     view.querySelectorAll("[data-presence]").forEach((el) => {
       el.classList.toggle("on", onlineIds.has(el.dataset.presence));
       el.classList.toggle("away", !onlineIds.has(el.dataset.presence));
     });
   });
+  roomPresenceChannel = presence;
 }
 
 function roomPlayerRowHTML(p, byId, room) {
@@ -2913,14 +2945,14 @@ function roomPlayerRowHTML(p, byId, room) {
 }
 
 function renderRoomPlaying(room) {
-  const view = $("#friends-view");
+  const view = roomViewEl();
   State.roomView = { roomId: room.id };
   view.innerHTML = `
     <div class="card" style="text-align:center; padding:40px 20px;">
       <div style="font-size:40px;">🚧</div>
       <div class="card-title" style="margin-top:10px;">A partida começou!</div>
       <p class="card-sub">O jogo em si (as regras de ${room.game_type === "cartas" ? "Cartas" : "STOP"}) entra na próxima etapa. Por enquanto, essa tela só confirma que o sistema de sala funciona de ponta a ponta.</p>
-      <button class="btn btn-block" style="margin-top:10px; background:var(--friends-accent); color:var(--on-friends-accent);" id="btn-leave-playing">Sair da sala</button>
+      <button class="btn btn-block" style="margin-top:10px; ${roomBtnStyle()}" id="btn-leave-playing">Sair da sala</button>
     </div>
   `;
   $("#btn-leave-playing").addEventListener("click", async () => {
@@ -6000,9 +6032,19 @@ async function renderShopGames() {
         </div>
       </div>
     </div>
+    <div class="card" id="btn-open-game-hub-casal" style="cursor:pointer;">
+      <div class="row" style="align-items:center; gap:10px;">
+        <div class="rm-ic cards" style="width:48px; height:48px;">${ROOM_GAME_ICON.cartas}</div>
+        <div style="flex:1;">
+          <div class="card-title" style="font-size:15px; margin-bottom:0;">Jogar a dois</div>
+          <div class="hint-text" style="margin:0;">Cartas e Stop · crie uma sala e chame seu par</div>
+        </div>
+      </div>
+    </div>
   `;
   wireShopBack();
   $("#btn-open-star-battle").addEventListener("click", () => renderStarBattleGame("casal"));
+  $("#btn-open-game-hub-casal").addEventListener("click", () => renderGameHub("casal"));
 }
 
 async function renderShopPerks() {
