@@ -97,6 +97,13 @@ export const CHANGELOG = [
     text: "Na Home da turma tem uma seção nova pra guardar ideias de rolê (com link e foto) e avaliar com estrelas — o ranking é pela média de todo mundo que votou.",
   },
   {
+    id: "turma-meta-roles-2026-09",
+    tag: "amigos",
+    emoji: "🎯",
+    title: "Meta de rolês do mês",
+    text: "Na Home da turma, um card novo mostra quantos rolês já rolaram esse mês com barra de progresso, e dá pra ajustar a meta com os botões + e −.",
+  },
+  {
     id: "turma-datas-especiais-2026-09",
     tag: "amigos",
     emoji: "💝",

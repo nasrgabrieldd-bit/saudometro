@@ -265,6 +265,28 @@ export async function markGroupRedemptionFulfilled(id) {
 
 // ---------- rolês (agenda de encontros da turma) ----------
 
+// ---------- meta de rolês do mês ----------
+
+export async function ensureMonthPlan(friendGroupId, month, defaultTarget = 2) {
+  const { data, error } = await supabase.from("friend_month_plans").select("*").eq("friend_group_id", friendGroupId).eq("month", month).maybeSingle();
+  if (error) throw error;
+  if (data) return data;
+  const inserted = await supabase
+    .from("friend_month_plans")
+    .insert({ friend_group_id: friendGroupId, month, target: defaultTarget })
+    .select()
+    .single();
+  if (inserted.error) throw inserted.error;
+  return inserted.data;
+}
+
+export async function setMonthTarget(friendGroupId, month, target) {
+  const { error } = await supabase
+    .from("friend_month_plans")
+    .upsert({ friend_group_id: friendGroupId, month, target }, { onConflict: "friend_group_id,month" });
+  if (error) throw error;
+}
+
 export async function listUpcomingEvents(friendGroupId, fromDateISO, limit = 20) {
   const { data, error } = await supabase
     .from("friend_events")
