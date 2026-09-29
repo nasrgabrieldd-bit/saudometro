@@ -57,6 +57,16 @@ test("canPlay: cor, valor, símbolo de ação e curinga", () => {
   assert.equal(canPlay({ color: "azul", kind: "reverse" }, topSkip, "verde"), false);
 });
 
+test("canPlay: curinga+4 só é jogável se a mão não tiver carta da cor ativa (regra oficial)", () => {
+  const top = { color: "vermelho", value: 7, kind: "number" };
+  const wild4 = { kind: "wild4" };
+  const handComCorAtiva = [{ color: "vermelho", value: 3, kind: "number" }, { color: "azul", value: 1, kind: "number" }];
+  const handSemCorAtiva = [{ color: "azul", value: 1, kind: "number" }, { color: "verde", kind: "skip" }];
+  assert.equal(canPlay(wild4, top, "vermelho", handComCorAtiva), false);
+  assert.equal(canPlay(wild4, top, "vermelho", handSemCorAtiva), true);
+  assert.equal(canPlay(wild4, top, "vermelho", []), true); // sem mais nenhuma carta na mão, pode jogar
+});
+
 test("nextSeatIndex: avança e recua com wraparound nos dois sentidos", () => {
   assert.equal(nextSeatIndex(4, 0, 1, 1), 1);
   assert.equal(nextSeatIndex(4, 3, 1, 1), 0); // dá a volta pra frente

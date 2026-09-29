@@ -3079,6 +3079,8 @@ async function renderCardMatchScreen(matchId) {
 
   const myTurn = match.current_turn_user_id === State.userId;
   const opponents = players.filter((p) => p.user_id !== State.userId);
+  const myRow = players.find((p) => p.user_id === State.userId);
+  const iNeedToCallUno = myRow?.hand_count === 1 && !myRow?.uno_called;
 
   view.innerHTML = `
     <div class="cg-table">
@@ -3088,11 +3090,13 @@ async function renderCardMatchScreen(matchId) {
           const [c1, c2] = roomAvatarColors(p.user_id);
           const initial = (byId[p.user_id]?.display_name || "?").trim()[0]?.toUpperCase() || "?";
           const isTurn = match.current_turn_user_id === p.user_id;
+          const canCatch = p.hand_count === 1 && !p.uno_called;
           return `
             <div class="cg-opp ${isTurn ? "turn" : ""}">
               <div class="av" style="--av1:${c1}; --av2:${c2};">${initial}</div>
               <span class="nm">${escapeHTML(byId[p.user_id]?.display_name || "alguém")} · ${p.hand_count}</span>
               <div class="stack ${p.hand_count <= 2 ? "warn" : ""}">${Array.from({ length: Math.min(p.hand_count, 6) }).map(() => `<span class="mini"></span>`).join("")}</div>
+              ${canCatch ? `<button class="btn btn-sm" data-catch-uno="${p.user_id}" style="margin-top:4px; padding:3px 8px; font-size:10px; background:#ffe0dc; color:#c0392b;">🚩 Flagrar!</button>` : ""}
             </div>
           `;
         }).join("")}
@@ -3107,9 +3111,14 @@ async function renderCardMatchScreen(matchId) {
       <p class="cg-last-move">${cardMoveText(match.last_move, byId)}</p>
       <div class="cg-you">
         ${myTurn ? `<span class="cg-turn-pill">Sua vez${match.has_drawn_this_turn ? " · já comprou" : ""}</span>` : `<span class="cg-turn-pill" style="opacity:.5;">Vez de ${escapeHTML(byId[match.current_turn_user_id]?.display_name || "alguém")}</span>`}
+        ${myRow?.hand_count === 1 ? (
+          iNeedToCallUno
+            ? `<button class="btn btn-block" id="btn-call-uno" style="margin:6px 0; background:linear-gradient(135deg, #ffd15c, #e0433d); color:#fff; font-family:'Baloo 2',sans-serif; font-weight:800; letter-spacing:.04em;">🃏 UNO!</button>`
+            : `<span class="hint-text" style="margin:6px 0;">✅ UNO chamado</span>`
+        ) : ""}
         <div class="cg-hand">
           ${hand.map((card, i) => {
-            const playable = myTurn && cardGame.canPlay(card, match.discard_top, match.active_color);
+            const playable = myTurn && cardGame.canPlay(card, match.discard_top, match.active_color, hand);
             return cardFaceHTML(card, playable ? "playable" : (myTurn ? "dim" : ""), `data-hand-index="${i}"`);
           }).join("")}
         </div>
@@ -3134,7 +3143,7 @@ async function renderCardMatchScreen(matchId) {
       if (!myTurn) return;
       const idx = Number(el.dataset.handIndex);
       const card = hand[idx];
-      if (!cardGame.canPlay(card, match.discard_top, match.active_color)) return;
+      if (!cardGame.canPlay(card, match.discard_top, match.active_color, hand)) return;
       let chosenColor = null;
       if (card.kind === "wild" || card.kind === "wild4") {
         chosenColor = await openColorChoiceModal();
@@ -3148,6 +3157,17 @@ async function renderCardMatchScreen(matchId) {
   });
   $("#btn-cardmatch-pass")?.addEventListener("click", async () => {
     try { await gameRooms.passTurn(matchId); } catch (e) { alert("Não deu: " + (e.message || e)); }
+  });
+  $("#btn-call-uno")?.addEventListener("click", async () => {
+    try { await gameRooms.callUno(matchId); await renderCardMatchScreen(matchId); } catch (e) { alert("Não deu: " + (e.message || e)); }
+  });
+  view.querySelectorAll("[data-catch-uno]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      try {
+        const { caught } = await gameRooms.catchUno(matchId, btn.dataset.catchUno);
+        if (!caught) alert("Essa pessoa já tinha chamado UNO — sem penalidade.");
+      } catch (e) { alert("Não deu: " + (e.message || e)); }
+    });
   });
 
   subscribeCardMatchScreen(matchId);

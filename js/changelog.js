@@ -201,6 +201,13 @@ export const CHANGELOG = [
     title: "Dá pra contestar resposta do STOP",
     text: "Achou que alguém colou uma resposta que não vale? Na tela de resultado, toque no 🚩 ao lado da resposta pra abrir uma votação de 10 segundos. Se a maioria da turma achar que é inválida, ela some do placar. Quem respondeu não vota na própria palavra.",
   },
+  {
+    id: "cartas-regras-oficiais-uno-2026-09",
+    tag: "geral",
+    emoji: "🃏",
+    title: "Cartas mais fiel ao Uno de verdade",
+    text: "Duas regras oficiais que faltavam: curinga+4 só pode ser jogado se você não tiver carta da cor atual na mão, e chegou o clássico \"UNO!\" — chame quando ficar com 1 carta, ou os outros podem te flagrar e você compra 2 de penalidade.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
