@@ -2155,8 +2155,14 @@ function rsvpButtonHTML(eventId, status, label, mine) {
 const FRIEND_EVENT_CATEGORIES = {
   amigos: { emoji: "👥", label: "Rolê" },
   trabalho: { emoji: "💼", label: "Trabalho" },
+  comemorativa: { emoji: "💝", label: "Data especial" },
   outro: { emoji: "📌", label: "Outro" },
 };
+
+function friendSpecialYearsLabel(ev) {
+  const n = ev.origYear ? parseISODate(ev.start_date).getFullYear() - ev.origYear : 0;
+  return n > 0 ? ` · faz ${n} ano${n === 1 ? "" : "s"} 🎉` : "";
+}
 
 function friendsEntriesOnDay(dateISO) {
   return (State.friendsCalendarEvents || []).filter((e) => e.start_date === dateISO);
@@ -2180,7 +2186,7 @@ function friendEventDetailItemHTML(ev, byId) {
         <div class="entry-icon">${cat.emoji}</div>
         <div class="entry-body">
           <div class="entry-title">${escapeHTML(ev.title)}</div>
-          <div class="entry-meta">${cat.label}${ev.start_time ? ` · ${ev.start_time.slice(0, 5)}` : ""}</div>
+          <div class="entry-meta">${cat.label}${ev.start_time ? ` · ${ev.start_time.slice(0, 5)}` : ""}${ev.category === "comemorativa" ? friendSpecialYearsLabel(ev) : ""}</div>
           ${ev.details ? `<div class="hint-text" style="margin-top:4px;">${escapeHTML(ev.details)}</div>` : ""}
           ${isLimited ? `<div class="hint-text" style="margin-top:4px;">Chamados: ${escapeHTML(invitedNames)}</div>` : ""}
         </div>
@@ -2283,10 +2289,19 @@ async function renderFriendsRoles() {
   const month = State.friendsCalendarMonth;
   const monthStart = toISODate(startOfMonth(month));
   const monthEnd = toISODate(startOfMonth(addMonths(month, 1)));
-  const [members, events] = await Promise.all([
+  const [members, events, yearlyEvents] = await Promise.all([
     friends.listGroupMembers(State.friendGroup.id),
     friends.listEventsForMonth(State.friendGroup.id, monthStart, monthEnd),
+    friends.listYearlyEvents(State.friendGroup.id).catch(() => []),
   ]);
+  const [viewYear, viewMonth] = monthKey(month).split("-").map(Number);
+  events.forEach((e) => { if (e.yearly) e.origYear = parseISODate(e.start_date).getFullYear(); });
+  for (const y of yearlyEvents) {
+    const orig = parseISODate(y.start_date);
+    if (orig.getMonth() + 1 !== viewMonth || orig.getFullYear() >= viewYear) continue;
+    const day = Math.min(orig.getDate(), daysInMonth(new Date(viewYear, viewMonth - 1, 1)));
+    events.push({ ...y, start_date: toISODate(new Date(viewYear, viewMonth - 1, day)), origYear: orig.getFullYear() });
+  }
   State.friendsCalendarEvents = events;
   const byId = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
 
@@ -2300,7 +2315,7 @@ async function renderFriendsRoles() {
       <div class="weekday-row"><span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span></div>
       <div class="day-grid" id="friends-day-grid"></div>
       <div class="legend">
-        <span>👥 rolê</span><span>💼 trabalho</span><span>📌 outro</span>
+        <span>👥 rolê</span><span>💼 trabalho</span><span>💝 data especial</span><span>📌 outro</span>
       </div>
     </div>
     <div id="friends-day-detail"></div>
@@ -2372,6 +2387,10 @@ function openNewEventModal(dateISO, byId) {
       <input type="date" id="fe-date" min="${todayISO()}" value="${date}" />
       <label class="field-label">Hora (opcional)</label>
       <input type="time" id="fe-time" />
+      <div class="row" id="fe-yearly-wrap" style="align-items:center; display:none;">
+        <label for="fe-yearly" style="flex:1; margin:0;">Repete todo ano (tipo aniversário)</label>
+        <input type="checkbox" id="fe-yearly" />
+      </div>
       <label class="field-label">Detalhes (opcional)</label>
       <textarea id="fe-details" maxlength="200" rows="2" placeholder="endereço, o que levar..."></textarea>
       <label class="field-label">Quem você quer chamar?</label>
@@ -2402,6 +2421,7 @@ function openNewEventModal(dateISO, byId) {
         b.className = `btn ${b.dataset.category === category ? "" : "btn-ghost"} btn-sm`;
         b.style.cssText = `flex:1; ${b.dataset.category === category ? "background:var(--friends-accent-soft); color:var(--friends-accent-strong);" : ""}`;
       });
+      $("#fe-yearly-wrap").style.display = category === "comemorativa" ? "flex" : "none";
     });
   });
   $("#fe-confirm").addEventListener("click", async () => {
@@ -2417,7 +2437,8 @@ function openNewEventModal(dateISO, byId) {
     try {
       // todo mundo marcado = mesma coisa que não restringir (lista vazia/nula)
       const invitedIds = invited.size === allUserIds.length ? null : [...invited];
-      const created = await friends.createEvent(State.friendGroup.id, State.userId, title, fdate, time || null, category, details, invitedIds);
+      const yearly = category === "comemorativa" && $("#fe-yearly").checked;
+      const created = await friends.createEvent(State.friendGroup.id, State.userId, title, fdate, time || null, category, details, invitedIds, yearly);
       await friends.setMyRsvp(created.id, State.userId, "sim").catch(() => {});
       closeModal();
       State.friendsSelectedDay = fdate;
