@@ -55,6 +55,22 @@ export const PERKS = [
     cost: 40,
     fulfillReward: 10,
   },
+  {
+    id: "nao_dormir_brigados",
+    emoji: "🤝",
+    title: "Não dormir brigados",
+    desc: "Os dois se comprometem a conversar antes de dormir pra tentar resolver a bronca. Só vale pra desentendimento leve.",
+    cost: 15,
+    fulfillReward: 4,
+  },
+  {
+    id: "tempo_de_respiro",
+    emoji: "🌬️",
+    title: "Tempo de respiro",
+    desc: "Avisa que está chateado(a) e precisa de um tempo — não é abandono, é só uma pausa. Dá pra retomar a conversa depois.",
+    cost: 10,
+    fulfillReward: 3,
+  },
 ];
 
 export const PERK_BY_ID = Object.fromEntries(PERKS.map((p) => [p.id, p]));
