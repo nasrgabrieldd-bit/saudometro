@@ -39,6 +39,28 @@ export const MOODS = [
 
 export const MOOD_BY_ID = Object.fromEntries(MOODS.map((m) => [m.id, m]));
 
+// "como você está com [parceiro] hoje?" usa uma lista própria — os humores mais gerais/engraçados
+// (comida, trabalho etc.) fazem sentido pro seu dia, mas não pra descrever o sentimento com o par.
+// Os 22 humores originais continuam valendo aqui também (instrução: não mexer nos que já tinha).
+const GENERAL_ONLY_MOOD_IDS = new Set([
+  "zoeira", "fominha", "cafeina", "gelada", "risada", "de_boa",
+  "curiosa", "orgulhosa", "grogue", "determinada", "nostalgica", "fofuxa", "melosa", "modo_trabalho",
+]);
+export const PARTNER_MOODS = [
+  ...MOODS.filter((m) => !GENERAL_ONLY_MOOD_IDS.has(m.id)),
+  { id: "grudenta", emoji: "🐨", label: "Grudenta(o) com você" },
+  { id: "sintonia", emoji: "🎶", label: "Em sintonia com você" },
+  { id: "borboletas", emoji: "🦋", label: "Com borboletas no estômago" },
+  { id: "sortuda_com_voce", emoji: "🍀", label: "Sortuda(o) por ter você" },
+  { id: "aconchegada", emoji: "🛋️", label: "Aconchegada(o) com você" },
+  { id: "orgulhosa_nos", emoji: "🥹", label: "Orgulhosa(o) de nós" },
+  { id: "protegida", emoji: "🛡️", label: "Protegida(o) com você" },
+  { id: "derretida", emoji: "🫠", label: "Derretida(o) por você" },
+  { id: "cumplice", emoji: "🤝", label: "Cúmplice com você" },
+  { id: "apaixonada_de_novo", emoji: "💘", label: "Apaixonada(o) de novo" },
+];
+export const PARTNER_MOOD_BY_ID = Object.fromEntries(PARTNER_MOODS.map((m) => [m.id, m]));
+
 export const TALK_OPTIONS = [
   { id: "sim", emoji: "💬", label: "Quero conversar" },
   { id: "talvez", emoji: "🤏", label: "Só rapidinho" },
