@@ -8,7 +8,7 @@ import * as friends from "./friends.js";
 import { unseenChangelogFor, markChangelogSeen } from "./changelog.js";
 import { FRIEND_PERKS, FRIEND_PERK_BY_ID, FRIEND_PERK_CATEGORIES } from "./friendsPerks.js";
 import * as db from "./db.js";
-import { MOODS, MOOD_BY_ID, TALK_OPTIONS, TALK_BY_ID } from "./moods.js";
+import { MOODS, MOOD_BY_ID, PARTNER_MOODS, PARTNER_MOOD_BY_ID, TALK_OPTIONS, TALK_BY_ID } from "./moods.js";
 import { weekIndexSince, questionForWeek } from "./questions.js";
 import { dayIndexSince, challengeForDay } from "./challenges.js";
 import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush, needsHomeScreenFirst } from "./push.js";
@@ -3542,7 +3542,7 @@ async function renderMood() {
 
       <div class="section-title">Como você está com ${ROLE_LABEL[otherRole()]} hoje?</div>
       <div class="mood-grid" id="mood-grid-partner">
-        ${MOODS.map((m) => `
+        ${PARTNER_MOODS.map((m) => `
           <button class="mood-btn ${mine?.mood_partner === m.id ? "selected" : ""}" data-mood="${m.id}">
             <span class="emoji">${m.emoji}</span><span class="label">${gen(m.label, genderOf(State.role))}</span>
           </button>
@@ -3577,9 +3577,9 @@ async function renderMood() {
         </div>
         ${theirs.mood_partner ? `
           <div class="partner-mood-card" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
-            <span class="emoji-big">${MOOD_BY_ID[theirs.mood_partner]?.emoji || "❔"}</span>
+            <span class="emoji-big">${PARTNER_MOOD_BY_ID[theirs.mood_partner]?.emoji || "❔"}</span>
             <div>
-              <div class="card-title" style="font-size:15px;">Com você: ${gen(MOOD_BY_ID[theirs.mood_partner]?.label || theirs.mood_partner, genderOf(otherRole()))}</div>
+              <div class="card-title" style="font-size:15px;">Com você: ${gen(PARTNER_MOOD_BY_ID[theirs.mood_partner]?.label || theirs.mood_partner, genderOf(otherRole()))}</div>
             </div>
           </div>
         ` : ""}
@@ -3700,7 +3700,7 @@ function openMoodHistoryModal(history, role) {
           <div class="entry-title">${label}</div><div class="entry-meta">sem registro nesse dia</div></div></div>`;
       }
       const mood = MOOD_BY_ID[m.mood];
-      const withMood = m.mood_partner ? MOOD_BY_ID[m.mood_partner] : null;
+      const withMood = m.mood_partner ? PARTNER_MOOD_BY_ID[m.mood_partner] : null;
       const talk = TALK_BY_ID[m.wants_to_talk];
       return `
         <div class="entry-item">
