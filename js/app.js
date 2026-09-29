@@ -1403,19 +1403,42 @@ async function renderFriendsHome() {
   const view = $("#friends-view");
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const today = todayISO();
-  const [members, todaysMoods, moodHistory, balance, nextEvents] = await Promise.all([
+  const mk = monthKey(new Date());
+  const monthStart = toISODate(startOfMonth(new Date()));
+  const monthEnd = toISODate(startOfMonth(addMonths(new Date(), 1)));
+  const [members, todaysMoods, moodHistory, balance, nextEvents, monthPlan, monthEvents] = await Promise.all([
     friends.listGroupMembers(State.friendGroup.id),
     friends.getMoodsForDay(State.friendGroup.id, today).catch(() => []),
     friends.getMoodHistory(State.friendGroup.id, toISODate(addDays(new Date(), -6))).catch(() => []),
     friends.getGroupCoinBalance(State.friendGroup.id).catch(() => 0),
     friends.listUpcomingEvents(State.friendGroup.id, today, 1).catch(() => []),
+    friends.ensureMonthPlan(State.friendGroup.id, mk, 2).catch(() => ({ target: 2 })),
+    friends.listEventsForMonth(State.friendGroup.id, monthStart, monthEnd).catch(() => []),
   ]);
   const moodByUser = Object.fromEntries(todaysMoods.map((m) => [m.user_id, m.mood]));
   const myMood = moodByUser[State.userId];
   const byId = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
+  const roleEvents = monthEvents.filter((e) => e.category === "amigos");
+  const roleHappened = roleEvents.filter((e) => e.start_date <= today).length;
+  const roleTarget = monthPlan.target || 2;
 
   view.innerHTML = `
     ${nextEvents[0] ? nextRoleHeroHTML(nextEvents[0], byId) : emptyRoleHeroHTML()}
+
+    <div class="card" style="margin-top:14px;">
+      <div class="row" style="align-items:center;">
+        <div style="flex:1;">
+          <div class="card-title" style="font-size:15px;">Meta de rolês do mês</div>
+          <div class="card-sub" style="margin-bottom:0;">${roleHappened}/${roleTarget} já rolaram · ${roleEvents.length} marcado${roleEvents.length === 1 ? "" : "s"} no total</div>
+        </div>
+        <span style="display:flex; align-items:center; gap:6px; flex:none;">
+          <button type="button" class="btn btn-ghost btn-sm" id="friends-goal-minus" style="padding:4px 10px;">−</button>
+          <strong style="min-width:18px; text-align:center;">${roleTarget}</strong>
+          <button type="button" class="btn btn-ghost btn-sm" id="friends-goal-plus" style="padding:4px 10px;">+</button>
+        </span>
+      </div>
+      <div class="progress-track" style="margin-top:8px;"><div class="progress-fill" style="width:${Math.min(100, Math.round((roleHappened / Math.max(1, roleTarget)) * 100))}%"></div></div>
+    </div>
 
     <div id="home-game-card-friends" style="margin-top:14px;"></div>
 
@@ -1470,6 +1493,14 @@ async function renderFriendsHome() {
   $("#friends-home-role-card")?.addEventListener("click", () => setFriendsTab("roles"));
   $("#friends-home-ideas-card")?.addEventListener("click", () => setFriendsTab("together-ideas"));
   $("#friends-home-capsule-card")?.addEventListener("click", () => setFriendsTab("capsule"));
+  $("#friends-goal-minus")?.addEventListener("click", async () => {
+    const newTarget = Math.max(1, roleTarget - 1);
+    try { await friends.setMonthTarget(State.friendGroup.id, mk, newTarget); await renderFriendsHome(); } catch (e) { alert("Não deu: " + (e.message || e)); }
+  });
+  $("#friends-goal-plus")?.addEventListener("click", async () => {
+    const newTarget = Math.min(30, roleTarget + 1);
+    try { await friends.setMonthTarget(State.friendGroup.id, mk, newTarget); await renderFriendsHome(); } catch (e) { alert("Não deu: " + (e.message || e)); }
+  });
   renderFriendsHomeGameCard(members, byId);
 }
 
