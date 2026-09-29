@@ -18,6 +18,7 @@ import { planLabel } from "./plans.js";
 import { emptyGrid, markCell, revealCell, countFound, CELL_EMPTY, CELL_MARK, CELL_CAT } from "./games/starBattle.js";
 import { STAR_BATTLE_LEVELS } from "./games/starBattleLevels.js";
 import * as cardGame from "./games/cardGame.js";
+import * as stopGame from "./games/stopGame.js";
 import { cycleInfo, cycleRingSVG, cycleLegendHTML, cycleTilesHTML, cycleHelpHTML, cyclePhaseName, cycleTip, cyclePhaseOnDate, averageCycleLength, CYCLE_COLORS, CYCLE_DISCLAIMER } from "./cycle.js";
 import { pickSaudadeNudge } from "./nudges.js";
 import { nameOf, genderOf, emojiOf, gen, genMixed, cleanName, setPeopleSettings, defaultEmojis, legacyPeople, feat, goalTarget, HOME_WIDGETS, homeOrder, homeWidgetOn, togetherSince, coinRule, luckyOn, perkHidden, COIN_DEFAULTS } from "./people.js";
@@ -2718,13 +2719,17 @@ function roomBack() {
 let roomChannelUnsub = null;
 let roomPresenceChannel = null;
 let cardMatchChannelUnsub = null;
-// sai de qualquer sala (e partida de cartas, se tiver uma aberta) que esteja "aberta" na tela
-// (troca de aba, troca de turma, etc.) — não sai da sala em si (isso é leaveRoom), só para de
-// ouvir as mudanças dela em tempo real
+let stopMatchChannelUnsub = null;
+let stopTimerHandle = null;
+// sai de qualquer sala (e partida de cartas/stop, se tiver uma aberta) que esteja "aberta" na
+// tela (troca de aba, troca de turma, etc.) — não sai da sala em si (isso é leaveRoom), só para
+// de ouvir as mudanças dela em tempo real
 function closeRoomChannels() {
   if (roomChannelUnsub) { roomChannelUnsub(); roomChannelUnsub = null; }
   if (roomPresenceChannel) { gameRooms.stopPresence(roomPresenceChannel); roomPresenceChannel = null; }
   if (cardMatchChannelUnsub) { cardMatchChannelUnsub(); cardMatchChannelUnsub = null; }
+  if (stopMatchChannelUnsub) { stopMatchChannelUnsub(); stopMatchChannelUnsub = null; }
+  if (stopTimerHandle) { clearInterval(stopTimerHandle); stopTimerHandle = null; }
   State.roomView = null;
 }
 
@@ -2954,21 +2959,7 @@ function roomPlayerRowHTML(p, byId, room) {
 
 function renderRoomPlaying(room) {
   if (room.game_type === "cartas") { renderCardMatch(room); return; }
-  const view = roomViewEl();
-  State.roomView = { roomId: room.id };
-  view.innerHTML = `
-    <div class="card" style="text-align:center; padding:40px 20px;">
-      <div style="font-size:40px;">🚧</div>
-      <div class="card-title" style="margin-top:10px;">A partida começou!</div>
-      <p class="card-sub">O jogo em si (as regras de STOP) entra na próxima etapa. Por enquanto, essa tela só confirma que o sistema de sala funciona de ponta a ponta.</p>
-      <button class="btn btn-block" style="margin-top:10px; ${roomBtnStyle()}" id="btn-leave-playing">Sair da sala</button>
-    </div>
-  `;
-  $("#btn-leave-playing").addEventListener("click", async () => {
-    try { await gameRooms.leaveRoom(room.id); } catch (e) { /* ignora, já saindo de qualquer jeito */ }
-    closeRoomChannels();
-    renderGameHub();
-  });
+  if (room.game_type === "stop") { renderStopMatch(room); return; }
 }
 
 // ================= JOGO DE CARTAS (Fase 2: motor de regras) =================
@@ -3163,6 +3154,224 @@ function subscribeCardMatchScreen(matchId) {
       if (State.roomView?.roomId == null) return;
       await gameRooms.skipDepartedTurn(matchId).catch(() => {});
       if (State.roomView?.roomId != null) await renderCardMatchScreen(matchId);
+    } catch (e) { /* partida pode ter sido encerrada; a tela de fim/saída ainda funciona */ }
+  });
+}
+
+// ================= JOGO DE STOP/ADEDONHA (Fase 3: motor de regras) =================
+
+async function renderStopMatch(room) {
+  const view = roomViewEl();
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  State.roomView = { roomId: room.id };
+  let matchId;
+  try {
+    ({ match_id: matchId } = await gameRooms.startStopMatch(room.id));
+  } catch (e) {
+    view.innerHTML = `<div class="card" style="text-align:center; padding:24px;"><p class="error-text">Não deu: ${escapeHTML(e.message || String(e))}</p><button class="btn btn-block" style="margin-top:10px; ${roomBtnStyle()}" id="btn-stopmatch-back">Voltar</button></div>`;
+    $("#btn-stopmatch-back").addEventListener("click", () => { closeRoomChannels(); renderGameHub(); });
+    return;
+  }
+  await renderStopMatchScreen(matchId);
+}
+
+async function renderStopMatchScreen(matchId) {
+  const match = await gameRooms.getStopMatch(matchId);
+  subscribeStopMatchScreen(matchId, match);
+  if (match.status === "finished") { await renderStopFinished(matchId, match); return; }
+  if (match.phase === "results") { await renderStopResults(matchId, match); return; }
+  await renderStopAnswering(matchId, match);
+}
+
+async function renderStopAnswering(matchId, match) {
+  const view = roomViewEl();
+  if (stopTimerHandle) { clearInterval(stopTimerHandle); stopTimerHandle = null; }
+
+  const mine = await gameRooms.listStopAnswers(matchId, match.round_number).catch(() => []);
+  const draft = Object.fromEntries(mine.filter((a) => a.user_id === State.userId).map((a) => [a.category, a.answer]));
+
+  view.innerHTML = `
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+      <div class="hint-text" style="margin:0; text-transform:uppercase; font-weight:800; letter-spacing:.03em;">Rodada ${match.round_number}/${match.total_rounds}</div>
+      <span id="btn-stopmatch-exit" style="cursor:pointer; font-weight:800; color:${roomAccentStrong()};">SAIR ✕</span>
+    </div>
+    <div class="sg-hexwrap"><div class="sg-hex"><span class="letter">${escapeHTML(match.current_letter)}</span></div></div>
+    <p style="text-align:center; font-weight:800; color:var(--muted); font-size:12px; margin:2px 0 10px;">A LETRA É... ${escapeHTML(match.current_letter)}</p>
+    <div class="sg-progress-row"><span id="sg-progress-count">0/${stopGame.CATEGORIES.length} preenchidos</span><span id="sg-countdown">⏱️ --:--</span></div>
+    <div class="sg-catlist">
+      ${stopGame.CATEGORIES.map((c) => `
+        <div class="sg-cat">
+          <div class="lbl">${escapeHTML(c.label)}</div>
+          <input type="text" data-stop-field="${c.key}" value="${escapeHTML(draft[c.key] || "")}" placeholder="..." style="border:none; background:none; font-weight:800; font-size:14px; width:100%; color:var(--text); padding:0;" />
+        </div>
+      `).join("")}
+    </div>
+    <div class="sg-stopbtn" id="btn-stop-now">STOP!</div>
+  `;
+
+  $("#btn-stopmatch-exit").addEventListener("click", async () => {
+    if (!confirm("Sair da sala? A partida continua pros outros.")) return;
+    try { await gameRooms.leaveRoom(match.room_id); } catch (e) { /* já pode ter saído */ }
+    closeRoomChannels();
+    renderGameHub();
+  });
+
+  const currentAnswers = () => {
+    const out = {};
+    view.querySelectorAll("[data-stop-field]").forEach((el) => { out[el.dataset.stopField] = el.value; });
+    return out;
+  };
+  const updateProgress = () => {
+    const filled = Object.values(currentAnswers()).filter((v) => v.trim()).length;
+    const el = $("#sg-progress-count");
+    if (el) el.textContent = `${filled}/${stopGame.CATEGORIES.length} preenchidos`;
+  };
+  updateProgress();
+  view.querySelectorAll("[data-stop-field]").forEach((el) => {
+    el.addEventListener("input", updateProgress);
+    el.addEventListener("blur", () => {
+      gameRooms.submitStopAnswers(matchId, { [el.dataset.stopField]: el.value }).catch(() => {});
+    });
+  });
+
+  const endRound = async (force) => {
+    if (stopTimerHandle) { clearInterval(stopTimerHandle); stopTimerHandle = null; }
+    try {
+      await gameRooms.submitStopAnswers(matchId, currentAnswers());
+      await gameRooms.finishRound(matchId, force);
+    } catch (e) { /* a partida pode já ter fechado a rodada por outro caminho */ }
+  };
+  $("#btn-stop-now").addEventListener("click", () => endRound(true));
+
+  const tick = () => {
+    const msLeft = new Date(match.round_ends_at).getTime() - Date.now();
+    const el = $("#sg-countdown");
+    if (msLeft <= 0) {
+      if (el) el.textContent = "⏱️ 00:00";
+      endRound(false);
+      return;
+    }
+    const secs = Math.ceil(msLeft / 1000);
+    if (el) el.textContent = `⏱️ ${String(Math.floor(secs / 60)).padStart(2, "0")}:${String(secs % 60).padStart(2, "0")}`;
+  };
+  tick();
+  stopTimerHandle = setInterval(tick, 1000);
+}
+
+async function renderStopResults(matchId, match) {
+  const view = roomViewEl();
+  if (stopTimerHandle) { clearInterval(stopTimerHandle); stopTimerHandle = null; }
+
+  const [answers, members] = await Promise.all([
+    gameRooms.listStopAnswers(matchId, match.round_number).catch(() => []),
+    roomMembers(),
+  ]);
+  const byId = Object.fromEntries(members.map((m) => [m.user_id, m]));
+  const byCategory = {};
+  for (const c of stopGame.CATEGORIES) byCategory[c.key] = answers.filter((a) => a.category === c.key);
+  const pointsByCategory = Object.fromEntries(stopGame.CATEGORIES.map((c) => [c.key, stopGame.scoreCategory(byCategory[c.key], match.current_letter)]));
+
+  view.innerHTML = `
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+      <div>
+        <div class="hint-text" style="margin:0; text-transform:uppercase; font-weight:800; letter-spacing:.03em;">Rodada ${match.round_number}/${match.total_rounds} · Letra ${escapeHTML(match.current_letter)}</div>
+        <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0; color:${roomAccentStrong()};">Resultado</h2>
+      </div>
+    </div>
+    ${stopGame.CATEGORIES.map((c) => `
+      <div class="sg-result-cat">
+        <div class="lbl">${escapeHTML(c.label)}</div>
+        ${byCategory[c.key].length
+          ? byCategory[c.key].map((a) => {
+              const pts = pointsByCategory[c.key].get(a.user_id) || 0;
+              const who = a.user_id === State.userId ? "Você" : escapeHTML(byId[a.user_id]?.display_name || "alguém");
+              return `<div class="sg-answer-row"><span class="who">${who}</span><span class="ans">${escapeHTML(a.answer) || "—"}</span><span class="pts ${pts >= 10 ? "ok" : pts > 0 ? "rep" : ""}">${pts > 0 ? "+" + pts : "0"}</span></div>`;
+            }).join("")
+          : `<p class="hint-text" style="margin:0;">Ninguém respondeu.</p>`}
+      </div>
+    `).join("")}
+    <button class="btn btn-block" style="margin-top:14px; ${roomBtnStyle()}" id="btn-stop-next-round">PRÓXIMA RODADA</button>
+  `;
+  $("#btn-stop-next-round").addEventListener("click", async (e) => {
+    setBusy("#btn-stop-next-round", true);
+    try { await gameRooms.advanceStopRound(matchId); await renderStopMatchScreen(matchId); }
+    catch (err) { alert("Não deu: " + (err.message || err)); setBusy("#btn-stop-next-round", false); }
+  });
+}
+
+async function renderStopFinished(matchId, match) {
+  const view = roomViewEl();
+  if (stopTimerHandle) { clearInterval(stopTimerHandle); stopTimerHandle = null; }
+
+  const [answers, members] = await Promise.all([
+    gameRooms.listStopAnswers(matchId).catch(() => []),
+    roomMembers(),
+  ]);
+  const byId = Object.fromEntries(members.map((m) => [m.user_id, m]));
+  const byRound = {};
+  for (const a of answers) {
+    byRound[a.round_number] = byRound[a.round_number] || {};
+    byRound[a.round_number][a.category] = byRound[a.round_number][a.category] || [];
+    byRound[a.round_number][a.category].push(a);
+  }
+  const total = new Map();
+  for (const [roundNum, answersByCategory] of Object.entries(byRound)) {
+    const letter = match.used_letters?.[Number(roundNum) - 1] || match.current_letter;
+    const roundScores = stopGame.scoreRound(answersByCategory, letter);
+    for (const [userId, pts] of roundScores) total.set(userId, (total.get(userId) || 0) + pts);
+  }
+  const ranking = members.map((m) => ({ ...m, points: total.get(m.user_id) || 0 })).sort((a, b) => b.points - a.points);
+  const winner = ranking[0];
+
+  view.innerHTML = `
+    <div class="card" style="text-align:center; padding:32px 20px;">
+      <div style="font-size:40px;">🏆</div>
+      <div class="card-title" style="margin-top:10px;">${winner?.user_id === State.userId ? "Você venceu!" : `${escapeHTML(winner?.display_name || "alguém")} venceu!`}</div>
+      <div class="stack" style="margin-top:14px; text-align:left;">
+        ${ranking.map((r, i) => `
+          <div class="entry-item">
+            <div class="entry-icon">${i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "🎮"}</div>
+            <div class="entry-body">
+              <div class="entry-title">${r.user_id === State.userId ? "Você" : escapeHTML(r.display_name || "alguém")}</div>
+              <div class="entry-meta">${r.points} pontos</div>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+      <button class="btn btn-block" style="margin-top:14px; ${roomBtnStyle()}" id="btn-stopmatch-rematch">🔄 Jogar de novo</button>
+      <button class="btn btn-ghost btn-block" style="margin-top:8px;" id="btn-stopmatch-leave">Sair da sala</button>
+    </div>
+  `;
+  $("#btn-stopmatch-rematch").addEventListener("click", async () => {
+    try {
+      const { match_id: newId } = await gameRooms.startStopMatch(match.room_id);
+      await renderStopMatchScreen(newId);
+    } catch (e) { alert("Não deu: " + (e.message || e)); }
+  });
+  $("#btn-stopmatch-leave").addEventListener("click", async () => {
+    try { await gameRooms.leaveRoom(match.room_id); } catch (e) { /* já pode ter saído */ }
+    closeRoomChannels();
+    renderGameHub();
+  });
+}
+
+// evita re-renderizar (e perder o que a pessoa tá digitando) toda vez que o tempo real dispara —
+// só re-renderiza de verdade quando fase/rodada/status realmente mudou
+function subscribeStopMatchScreen(matchId, initialMatch) {
+  if (stopMatchChannelUnsub) { stopMatchChannelUnsub(); stopMatchChannelUnsub = null; }
+  let sig = `${initialMatch.status}|${initialMatch.phase}|${initialMatch.round_number}`;
+  stopMatchChannelUnsub = gameRooms.subscribeStopMatch(matchId, async () => {
+    try {
+      if (State.roomView?.roomId == null) return;
+      const fresh = await gameRooms.getStopMatch(matchId);
+      const freshSig = `${fresh.status}|${fresh.phase}|${fresh.round_number}`;
+      if (freshSig === sig) return;
+      sig = freshSig;
+      if (State.roomView?.roomId != null) {
+        if (fresh.status === "finished") await renderStopFinished(matchId, fresh);
+        else if (fresh.phase === "results") await renderStopResults(matchId, fresh);
+        else await renderStopAnswering(matchId, fresh);
+      }
     } catch (e) { /* partida pode ter sido encerrada; a tela de fim/saída ainda funciona */ }
   });
 }

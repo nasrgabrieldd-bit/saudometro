@@ -161,3 +161,59 @@ export function subscribeCardMatch(matchId, onChange) {
     .subscribe();
   return () => supabase.removeChannel(channel);
 }
+
+// ================= Stop/Adedonha (Fase 3: motor de regras) =================
+// startStopMatch serve tanto pra começar quanto pra revanche (idempotente, mesma lógica de
+// startCardMatch: se já tem partida "playing" pra essa sala, devolve ela).
+
+export async function startStopMatch(roomId) {
+  const { data, error } = await supabase.rpc("start_stop_match", { p_room_id: roomId });
+  if (error) throw error;
+  return data; // { match_id }
+}
+
+export async function getStopMatch(matchId) {
+  const { data, error } = await supabase.from("stop_matches").select("*").eq("id", matchId).single();
+  if (error) throw error;
+  return data;
+}
+
+// answersObj = { nome: "...", animal: "...", ... } — pode chamar de novo quantas vezes quiser
+// enquanto a rodada ainda estiver na fase de resposta (grava por cima, campo a campo)
+export async function submitStopAnswers(matchId, answersObj) {
+  const { error } = await supabase.rpc("submit_stop_answers", { p_match_id: matchId, p_answers: answersObj });
+  if (error) throw error;
+}
+
+// force=true é o botão STOP (fecha a rodada na hora); sem force, só fecha de verdade se já
+// passou do horário — o servidor revalida, não confia no relógio do cliente que chamou
+export async function finishRound(matchId, force = false) {
+  const { error } = await supabase.rpc("finish_round", { p_match_id: matchId, p_force: force });
+  if (error) throw error;
+}
+
+export async function advanceStopRound(matchId) {
+  const { data, error } = await supabase.rpc("advance_stop_round", { p_match_id: matchId });
+  if (error) throw error;
+  return data; // { finished }
+}
+
+// RLS só devolve a própria resposta enquanto a rodada não "virou passado" — nada especial pra
+// fazer aqui além de pedir tudo, o banco já filtra sozinho. roundNumber omitido = todas as
+// rodadas já reveladas (pra somar o placar final).
+export async function listStopAnswers(matchId, roundNumber = null) {
+  let q = supabase.from("stop_answers").select("*").eq("match_id", matchId);
+  if (roundNumber != null) q = q.eq("round_number", roundNumber);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data;
+}
+
+export function subscribeStopMatch(matchId, onChange) {
+  const channel = supabase
+    .channel(`stop-match-${matchId}`)
+    .on("postgres_changes", { event: "*", schema: "public", table: "stop_matches", filter: `id=eq.${matchId}` }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "stop_answers", filter: `match_id=eq.${matchId}` }, onChange)
+    .subscribe();
+  return () => supabase.removeChannel(channel);
+}
