@@ -40,6 +40,7 @@ const State = {
   notesView: "hub",
   profileView: "hub",
   shopView: "hub",
+  homeMonth: startOfMonth(new Date()),
   calendarMonth: startOfMonth(new Date()),
   calendarEncounters: [],
   calendarPlan: null,
@@ -351,6 +352,7 @@ async function enterApp(profile) {
   await maybeShowTour();
   await maybeShowGoogleLinkNudge();
   await maybeShowConviteNudge();
+  await maybeShowConviteAcceptedNudge();
   await maybeShowChangelog("casal");
 }
 
@@ -533,6 +535,7 @@ function setActiveTab(tab) {
   if (tab === "notes") State.notesView = "hub";
   if (tab === "profile") State.profileView = "hub";
   if (tab === "shop") State.shopView = "hub";
+  if (tab === "home") State.homeMonth = startOfMonth(new Date());
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   renderActiveTab();
 }
@@ -2605,7 +2608,8 @@ function checklistCardHTML(done) {
 
 async function renderHome() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
-  const mk = monthKey(new Date());
+  const mk = monthKey(State.homeMonth);
+  const isCurrentMonth = mk === monthKey(new Date());
   const [plan, encounters, stats, recentMoods] = await Promise.all([
     db.ensureMonthPlan(State.coupleId, mk, goalTarget()),
     db.listEncountersForMonth(State.coupleId, mk),
@@ -2624,8 +2628,8 @@ async function renderHome() {
   }
 
   const target = plan.base_target + plan.carry_in;
-  const planejados = encounters.filter((e) => e.kind === "planejado");
-  const happened = planejados.filter((e) => e.status === "aconteceu").length;
+  const countableEncounters = encounters.filter(isCountableEncounter);
+  const happened = countableEncounters.filter((e) => e.status === "aconteceu").length;
   const pct = Math.min(100, Math.round((happened / Math.max(1, target)) * 100));
 
   const today = new Date();
@@ -2675,14 +2679,18 @@ async function renderHome() {
       <p class="hint-text">Toca aqui pra ${stats?.last_kiss_at ? "atualizar" : "registrar"} a hora do último beijo</p>
     </div>` : "";
   html.goal = feat("goal") ? `    <div class="card">
-      <div class="card-title">${monthLabel(mk)}</div>
-      <div class="card-sub">Meta desse mês: <strong>${target} encontro${target === 1 ? "" : "s"}</strong>${plan.carry_in > 0 ? ` (${plan.carry_in} vindo${plan.carry_in > 1 ? "s" : ""} do mês passado)` : ""}</div>
+      <div class="row" style="align-items:center; gap:6px;">
+        <button class="btn btn-ghost btn-sm" id="btn-home-month-prev" style="flex:none; padding:6px 10px;">${icon("chevron-left", { size: 16 })}</button>
+        <div class="card-title" style="flex:1; text-align:center; margin-bottom:0;">${monthLabel(mk)}</div>
+        <button class="btn btn-ghost btn-sm" id="btn-home-month-next" style="flex:none; padding:6px 10px;">${icon("chevron-right", { size: 16 })}</button>
+      </div>
+      <div class="card-sub" style="margin-top:6px;">Meta desse mês: <strong>${target} encontro${target === 1 ? "" : "s"}</strong>${plan.carry_in > 0 ? ` (${plan.carry_in} vindo${plan.carry_in > 1 ? "s" : ""} do mês passado)` : ""}</div>
       <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
       <div class="row" style="margin-top:10px; align-items:center;">
         <div class="progress-dots">${progressDots(happened, target)}</div>
         <div style="text-align:right; flex:0 0 auto;"><span class="pill pill-success">${happened}/${target}</span></div>
       </div>
-      ${planejados.length < target ? `<button class="btn btn-secondary btn-block" style="margin-top:14px;" id="btn-goto-define">Definir encontros do mês</button>` : ""}
+      ${isCurrentMonth && countableEncounters.length < target ? `<button class="btn btn-secondary btn-block" style="margin-top:14px;" id="btn-goto-define">Definir encontros do mês</button>` : ""}
     </div>` : "";
   html.next = feat("next") ? (upcoming ? `    <div class="card card-hero">
       <div class="card-hero-eyebrow">Próximo encontro</div>
@@ -2752,6 +2760,8 @@ ${(() => {
   renderHomeGameCard();
 
   $("#btn-goto-define")?.addEventListener("click", () => setActiveTab("calendar"));
+  $("#btn-home-month-prev")?.addEventListener("click", () => { State.homeMonth = addMonths(State.homeMonth, -1); renderHome(); });
+  $("#btn-home-month-next")?.addEventListener("click", () => { State.homeMonth = addMonths(State.homeMonth, 1); renderHome(); });
   $("#today-mood-card")?.addEventListener("click", () => setActiveTab("mood"));
   $("#together-card")?.addEventListener("click", openTogetherModal);
   $("#special-card")?.addEventListener("click", () => setActiveTab("calendar"));
@@ -2929,6 +2939,13 @@ async function findNextUpcoming(today) {
   return candidates[0] || null;
 }
 
+// conta pra meta do mês: encontro combinado (qualquer status) ou convite já aceito (confirmado
+// ou já marcado aconteceu/não rolou) — convite ainda pendente ou recusado não conta, e evento/data
+// especial nunca conta, é só uma marcação no calendário, não um "encontro de verdade".
+function isCountableEncounter(e) {
+  return e.kind === "planejado" || (e.kind === "convite" && e.status !== "pendente" && e.status !== "recusado");
+}
+
 const EVENT_CATEGORIES = {
   comemorativa: { emoji: "💝", label: "Data especial" },
   casal: { emoji: "💞", label: "Casal" },
@@ -3101,8 +3118,9 @@ async function renderCalendar() {
   State.calendarWeekend = weekend;
 
   const target = plan.base_target + plan.carry_in;
-  const planejadosCount = encounters.filter((e) => e.kind === "planejado").length;
-  const happened = encounters.filter((e) => e.kind === "planejado" && e.status === "aconteceu").length;
+  const countable = encounters.filter(isCountableEncounter);
+  const planejadosCount = countable.length;
+  const happened = countable.filter((e) => e.status === "aconteceu").length;
 
   view.innerHTML = `
     <div class="month-nav">
@@ -6085,6 +6103,49 @@ async function maybeShowConviteNudge() {
     });
     $("#convite-nudge-later").addEventListener("click", finish);
   });
+}
+
+const CONVITE_ACCEPTED_SEEN_KEY = "conviteAcceptedSeen";
+function getSeenAcceptedConviteIds() {
+  try { return new Set(JSON.parse(localStorage.getItem(CONVITE_ACCEPTED_SEEN_KEY) || "[]")); } catch (e) { return new Set(); }
+}
+function markAcceptedConvitesSeen(ids) {
+  try {
+    const seen = getSeenAcceptedConviteIds();
+    ids.forEach((id) => seen.add(id));
+    localStorage.setItem(CONVITE_ACCEPTED_SEEN_KEY, JSON.stringify([...seen]));
+  } catch (e) { /* sem storage: só volta a aparecer toda vez */ }
+}
+
+// pop-up de comemoração quando um convite vira encontro confirmado — pros dois lados verem ao
+// abrir o app depois, não só quem estava olhando bem na hora do aceite (que hoje só o push avisa
+// quem mandou, e nem isso pra quem tava com o app fechado). Cada convite só comemora uma vez por
+// pessoa (guardado no localStorage, então é por aparelho).
+async function maybeShowConviteAcceptedNudge() {
+  let all;
+  try { all = await db.listAllInvites(State.coupleId); } catch (e) { return; }
+  const seen = getSeenAcceptedConviteIds();
+  const queue = (all || []).filter((e) => e.status === "confirmado" && !seen.has(e.id));
+  if (!queue.length) return;
+  return new Promise((resolve) => showNextConviteAccepted(queue, resolve));
+}
+
+function showNextConviteAccepted(queue, resolve) {
+  if (!queue.length) return resolve();
+  const entry = queue[0];
+  const iCreated = entry.created_by === State.role;
+  openModal(`
+    <div style="text-align:center; font-size:40px;">🎉</div>
+    <h3 class="modal-title" style="text-align:center;">${iCreated ? `${escapeHTML(ROLE_LABEL[otherRole()])} aceitou seu convite!` : "Encontro confirmado!"}</h3>
+    <p class="card-sub" style="text-align:center;">${escapeHTML(entry.title) || defaultTitle(entry)} · ${escapeHTML(humanDateLong(parseISODate(entry.start_date)))}</p>
+    <button class="btn btn-primary btn-block" style="margin-top:14px;" id="btn-convite-accepted-ok">Que bom! 💗</button>
+  `);
+  const finish = () => {
+    markAcceptedConvitesSeen([entry.id]);
+    closeModal();
+    showNextConviteAccepted(queue.slice(1), resolve);
+  };
+  $("#btn-convite-accepted-ok").addEventListener("click", finish);
 }
 
 // mostra as novidades ainda não vistas, uma de cada vez — a pessoa reage com um emoji pra

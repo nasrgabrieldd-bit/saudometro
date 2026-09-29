@@ -218,13 +218,15 @@ export async function ensureMonthPlan(coupleId, mk, baseTarget = 2) {
   return inserted.data;
 }
 
+// conta encontros combinados E convites aceitos que realmente aconteceram (pra meta do mês
+// e pro que sobra pro mês seguinte). Data especial/evento nunca entra aqui.
 export async function countHappenedPlanejados(coupleId, mk) {
   const { count, error } = await supabase
     .from("encounters")
     .select("id", { count: "exact", head: true })
     .eq("couple_id", coupleId)
     .eq("month", mk)
-    .eq("kind", "planejado")
+    .in("kind", ["planejado", "convite"])
     .eq("status", "aconteceu");
   if (error) throw error;
   return count || 0;
