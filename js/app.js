@@ -12,7 +12,7 @@ import * as db from "./db.js";
 import { MOODS, MOOD_BY_ID, PARTNER_MOODS, PARTNER_MOOD_BY_ID, TALK_OPTIONS, TALK_BY_ID } from "./moods.js";
 import { weekIndexSince, questionForWeek } from "./questions.js";
 import { dayIndexSince, challengeForDay, friendChallengeForDay } from "./challenges.js";
-import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush, needsHomeScreenFirst } from "./push.js";
+import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush, subscribeToFriendPush, unsubscribeFromFriendPush, needsHomeScreenFirst } from "./push.js";
 import { PERKS, PERK_BY_ID, customToPerk, suggestedReward } from "./perks.js";
 import { planLabel } from "./plans.js";
 import { emptyGrid, markCell, revealCell, countFound, CELL_EMPTY, CELL_MARK, CELL_CAT } from "./games/starBattle.js";
@@ -1259,6 +1259,7 @@ function renderFriendsActiveTab() {
     "friends-install": renderFriendsInstall,
     "friends-privacy": renderFriendsPrivacy,
     "friends-wallet": renderFriendsWallet,
+    "friends-notifications": renderFriendsNotifications,
     capsule: renderFriendsCapsule,
     challenge: renderFriendsChallenge,
   };
@@ -2962,10 +2963,11 @@ async function afterLeavingFriendGroup() {
 async function renderFriendsGroup() {
   const view = $("#friends-view");
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
-  const [members, kickVotes, myPlan] = await Promise.all([
+  const [members, kickVotes, myPlan, pushSubscribed] = await Promise.all([
     friends.listGroupMembers(State.friendGroup.id).catch(() => []),
     friends.listActiveKickVotes(State.friendGroup.id).catch(() => []),
     db.getMyUserPlan(State.userId).catch(() => ({ plan: null, plan_expires_at: null, plan_source: null })),
+    isSubscribed(),
   ]);
   const byId = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
   const votedTargets = new Set(kickVotes.map((v) => v.target_user_id));
@@ -3010,6 +3012,11 @@ async function renderFriendsGroup() {
         <span class="shortcut-icon">${icon("wallet", { size: 24 })}</span>
         <span class="shortcut-title">Moedas</span>
         <span class="shortcut-sub">Ver histórico</span>
+      </button>
+      <button class="shortcut-card" data-friends-settings="notifications">
+        <span class="shortcut-icon">${icon("bell", { size: 24 })}</span>
+        <span class="shortcut-title">Notificações</span>
+        <span class="shortcut-sub">${permissionState() === "unsupported" ? "Não suportado" : pushSubscribed ? "✅ Ativadas" : "Ativar agora"}</span>
       </button>
     </div>
 
@@ -3189,6 +3196,62 @@ async function renderFriendsWallet() {
     </div>
   `;
   wireFriendsSettingsBack();
+}
+
+async function renderFriendsNotifications() {
+  const view = $("#friends-view");
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const pushPerm = permissionState();
+  const alreadySubscribed = await isSubscribed();
+  view.innerHTML = `
+    ${friendsSettingsHeader("🔔 Notificações")}
+    <div class="card">
+      ${needsHomeScreenFirst() ? `
+        <p class="card-sub">No iPhone, notificação só funciona depois de adicionar o Saudômetro à tela de início.</p>
+        <p class="hint-text">Toca no ícone de compartilhar do Safari (⬆️) → "Adicionar à Tela de Início" → abre o app por esse ícone novo, aí sim ativa as notificações por aqui.</p>
+        <button class="btn btn-secondary btn-block" id="btn-install-guide-2">Ver o passo a passo</button>
+      ` : pushPerm === "unsupported" ? `
+        <p class="hint-text">Esse navegador não suporta notificações. Tenta pelo Chrome ou pelo app já adicionado à tela inicial.</p>
+      ` : alreadySubscribed ? `
+        <p class="card-sub" style="margin-bottom:0;">✅ Ativadas nesse dispositivo. Você recebe aviso quando a turma marcar um rolê, adicionar uma ideia de fazer juntos, ou selar uma cápsula do tempo.</p>
+        <button class="btn btn-ghost btn-block" style="margin-top:12px;" id="btn-disable-push">Desativar nesse dispositivo</button>
+      ` : `
+        <p class="card-sub">Receba um aviso no celular quando a turma marcar um rolê, adicionar uma ideia de fazer juntos, ou selar uma cápsula do tempo.</p>
+        <button class="btn btn-block" style="background:var(--friends-accent); color:var(--on-friends-accent);" id="btn-enable-push">🔔 Ativar notificações</button>
+        ${pushPerm === "denied" ? `<p class="error-text" style="margin-top:8px;">Você bloqueou notificações antes. Precisa liberar de novo nas configurações do navegador/celular.</p>` : ""}
+      `}
+    </div>
+  `;
+  wireFriendsSettingsBack();
+  $("#btn-install-guide-2")?.addEventListener("click", openInstallGuide);
+  $("#btn-enable-push")?.addEventListener("click", () => {
+    openModal(`
+      <h3 class="modal-title">🔔 Ativar notificações</h3>
+      <p class="card-sub">O seu celular vai pedir uma permissão agora, é só aceitar (geralmente aparece "Permitir"). Depois disso, você recebe aviso das novidades da turma.</p>
+      <button class="btn btn-block" style="margin-top:16px; background:var(--friends-accent); color:var(--on-friends-accent);" id="btn-confirm-push">Continuar</button>
+    `);
+    $("#btn-confirm-push").addEventListener("click", async () => {
+      setBusy("#btn-confirm-push", true);
+      try {
+        await subscribeToFriendPush(State.userId);
+        closeModal();
+        await renderFriendsNotifications();
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        closeModal();
+      }
+    });
+  });
+  $("#btn-disable-push")?.addEventListener("click", async () => {
+    setBusy("#btn-disable-push", true);
+    try {
+      await unsubscribeFromFriendPush();
+      await renderFriendsNotifications();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#btn-disable-push", false);
+    }
+  });
 }
 
 function friendCapsuleItemHTML(c, byId) {
