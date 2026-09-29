@@ -5100,6 +5100,10 @@ async function renderProfileHub() {
       </div>
     </div>
 
+${googleLinked && myFriendGroups.length ? `    <button class="btn btn-block" id="btn-quick-friends" style="background:var(--friends-accent); color:var(--on-friends-accent);">
+      👥 ${myFriendGroups.length === 1 ? `Ir pra turma "${escapeHTML(myFriendGroups[0].name)}"` : "Ir pro Modo Amigos"}
+    </button>` : ""}
+
     <div class="card">
       <div class="row" style="align-items:center; gap:10px;">
         <span class="icon-badge">${icon("settings", { size: 20 })}</span>
@@ -5172,6 +5176,10 @@ ${coinsOn() ? `      <button class="shortcut-card" data-view="wallet">
 
   $("#btn-edit-names")?.addEventListener("click", openNamesEditor);
   $("#btn-personalize")?.addEventListener("click", openPersonalizeModal);
+  $("#btn-quick-friends")?.addEventListener("click", async () => {
+    if (myFriendGroups.length === 1) await enterFriendsMode(myFriendGroups[0]);
+    else { State.profileView = "friendsMode"; renderProfile(); }
+  });
   document.querySelectorAll(".shortcut-card").forEach((btn) => {
     btn.addEventListener("click", () => { State.profileView = btn.dataset.view; renderProfile(); });
   });
