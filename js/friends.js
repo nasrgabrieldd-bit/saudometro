@@ -152,10 +152,13 @@ export async function getMoodHistory(friendGroupId, sinceISO) {
   return data || [];
 }
 
-export async function setMyMood(friendGroupId, dayISO, userId, mood) {
+export async function setMyMood(friendGroupId, dayISO, userId, mood, { wantsToTalk, note } = {}) {
+  const row = { friend_group_id: friendGroupId, day: dayISO, user_id: userId, mood };
+  if (wantsToTalk !== undefined) row.wants_to_talk = wantsToTalk;
+  if (note !== undefined) row.note = note;
   const { error } = await supabase
     .from("friend_moods")
-    .upsert({ friend_group_id: friendGroupId, day: dayISO, user_id: userId, mood }, { onConflict: "friend_group_id,day,user_id" });
+    .upsert(row, { onConflict: "friend_group_id,day,user_id" });
   if (error) throw error;
 }
 

@@ -627,6 +627,10 @@ button, input, textarea, select {
 .history-day { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 10px; color: var(--text-faint); }
 .history-day .dot { font-size: 18px; }
 
+/* dentro da turma, humor/quer-conversar usam a cor de destaque da turma, não a do casal */
+#screen-friends .mood-btn.selected { border-color: var(--friends-accent); background: var(--friends-accent-soft); }
+#screen-friends .talk-option.selected { border-color: var(--friends-accent); background: var(--friends-accent-soft); }
+
 /* faixa de humor da Home (casal e turma) — card colorido por dia, mais chamativo que os pontinhos da aba Humor */
 .moodstrip-grid { display: flex; gap: 6px; justify-content: space-between; margin-top: 8px; }
 .moodstrip-cell {

@@ -97,6 +97,13 @@ export const CHANGELOG = [
     text: "Na Home da turma tem uma seção nova pra guardar ideias de rolê (com link e foto) e avaliar com estrelas — o ranking é pela média de todo mundo que votou.",
   },
   {
+    id: "turma-quer-conversar-2026-09",
+    tag: "amigos",
+    emoji: "💬",
+    title: "\"Quer conversar\" no humor da turma",
+    text: "Além do emoji de humor, agora dá pra dizer se quer conversar e deixar um recadinho livre pra turma ver. O casal já tinha isso, agora a turma também.",
+  },
+  {
     id: "turma-capsula-2026-09",
     tag: "amigos",
     emoji: "🕰️",

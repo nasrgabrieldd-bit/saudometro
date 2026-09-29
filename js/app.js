@@ -1695,32 +1695,35 @@ async function renderFriendsMood() {
     friends.listGroupMembers(State.friendGroup.id),
     friends.getMoodsForDay(State.friendGroup.id, today).catch(() => []),
   ]);
-  const moodByUser = Object.fromEntries(todaysMoods.map((m) => [m.user_id, m.mood]));
-  const myMood = moodByUser[State.userId];
+  const moodEntryByUser = Object.fromEntries(todaysMoods.map((m) => [m.user_id, m]));
+  const myEntry = moodEntryByUser[State.userId];
 
   view.innerHTML = `
     <div class="section-title">Humor de hoje</div>
     <div class="card">
       <div class="stack">
         ${members.map((m) => {
-          const mood = moodByUser[m.user_id];
-          const info = mood ? MOOD_BY_ID[mood] : null;
-          const needsCare = mood && m.user_id !== State.userId && NEEDS_CARE_MOODS.has(mood);
+          const entry = moodEntryByUser[m.user_id];
+          const info = entry ? MOOD_BY_ID[entry.mood] : null;
+          const needsCare = entry && m.user_id !== State.userId && NEEDS_CARE_MOODS.has(entry.mood);
+          const talk = entry?.wants_to_talk ? TALK_BY_ID[entry.wants_to_talk] : null;
           return `
             <div class="entry-item">
               <div class="entry-icon">${info ? info.emoji : "🤔"}</div>
               <div class="entry-body">
                 <div class="entry-title">${m.user_id === State.userId ? "Você" : escapeHTML(m.display_name)}</div>
                 <div class="entry-meta">${info ? escapeHTML(gen(info.label, "homem")) : "ainda não registrou"}</div>
+                ${talk && talk.id !== "talvez" ? `<div class="entry-meta">${talk.emoji} ${talk.label}</div>` : ""}
+                ${entry?.note ? `<div class="entry-meta" style="margin-top:2px; color:var(--text);">"${escapeHTML(entry.note)}"</div>` : ""}
               </div>
               ${needsCare ? `<button class="btn btn-ghost btn-sm" data-nudge="${m.user_id}" data-nudge-name="${escapeHTML(m.display_name)}">👋 Mandar um alô</button>` : ""}
             </div>`;
         }).join("")}
       </div>
     </div>
-    <button class="btn btn-block" style="margin-top:14px; background:var(--friends-accent); color:var(--on-friends-accent);" id="friends-set-mood-btn">${myMood ? "Mudar meu humor de hoje" : "Contar como você tá hoje"}</button>
+    <button class="btn btn-block" style="margin-top:14px; background:var(--friends-accent); color:var(--on-friends-accent);" id="friends-set-mood-btn">${myEntry ? "Mudar meu humor de hoje" : "Contar como você tá hoje"}</button>
   `;
-  $("#friends-set-mood-btn").addEventListener("click", () => openFriendsMoodPicker(myMood));
+  $("#friends-set-mood-btn").addEventListener("click", () => openFriendsMoodPicker(myEntry));
   view.querySelectorAll("[data-nudge]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       btn.disabled = true;
@@ -1735,25 +1738,49 @@ async function renderFriendsMood() {
   });
 }
 
-function openFriendsMoodPicker(current) {
+function openFriendsMoodPicker(currentEntry) {
+  let selectedMood = currentEntry?.mood || null;
+  let selectedTalk = currentEntry?.wants_to_talk || "talvez";
   openModal(`
     <h3 class="modal-title">🙂 Como você tá hoje?</h3>
-    <div class="mood-grid">
-      ${FRIENDS_MOODS.map((m) => `<button class="mood-btn" ${m.id === current ? `style="border-color:var(--friends-accent); background:var(--friends-accent-soft);"` : ""} data-mood="${m.id}"><span class="emoji">${m.emoji}</span><span class="label">${escapeHTML(gen(m.label, "homem"))}</span></button>`).join("")}
+    <div class="mood-grid" id="fmp-mood-grid">
+      ${FRIENDS_MOODS.map((m) => `<button class="mood-btn ${m.id === selectedMood ? "selected" : ""}" data-mood="${m.id}"><span class="emoji">${m.emoji}</span><span class="label">${escapeHTML(gen(m.label, "homem"))}</span></button>`).join("")}
     </div>
+    <div class="section-title">Quer conversar?</div>
+    <div class="talk-options" id="fmp-talk-options">
+      ${TALK_OPTIONS.map((t) => `<div class="talk-option ${t.id === selectedTalk ? "selected" : ""}" data-talk="${t.id}"><span>${t.emoji}</span><span>${t.label}</span></div>`).join("")}
+    </div>
+    <label class="field-label">Recado pra turma (opcional)</label>
+    <textarea id="fmp-note" rows="2" maxlength="200" placeholder="quer contar mais alguma coisa?">${escapeHTML(currentEntry?.note || "")}</textarea>
+    <button class="btn btn-block" style="margin-top:14px; background:var(--friends-accent); color:var(--on-friends-accent);" id="fmp-save">Salvar</button>
   `);
-  $("#modal-sheet").querySelectorAll("[data-mood]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      btn.disabled = true;
-      try {
-        await friends.setMyMood(State.friendGroup.id, todayISO(), State.userId, btn.dataset.mood);
-        closeModal();
-        await renderFriendsMood();
-      } catch (e) {
-        alert("Não deu: " + (e.message || e));
-        btn.disabled = false;
-      }
+  $("#fmp-mood-grid").querySelectorAll("[data-mood]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      selectedMood = btn.dataset.mood;
+      $("#fmp-mood-grid").querySelectorAll(".mood-btn").forEach((b) => b.classList.remove("selected"));
+      btn.classList.add("selected");
     });
+  });
+  $("#fmp-talk-options").querySelectorAll("[data-talk]").forEach((el) => {
+    el.addEventListener("click", () => {
+      selectedTalk = el.dataset.talk;
+      $("#fmp-talk-options").querySelectorAll(".talk-option").forEach((b) => b.classList.remove("selected"));
+      el.classList.add("selected");
+    });
+  });
+  $("#fmp-save").addEventListener("click", async () => {
+    if (!selectedMood) { alert("Escolhe um humor primeiro :)"); return; }
+    setBusy("#fmp-save", true);
+    try {
+      await friends.setMyMood(State.friendGroup.id, todayISO(), State.userId, selectedMood, {
+        wantsToTalk: selectedTalk, note: $("#fmp-note").value.trim(),
+      });
+      closeModal();
+      await renderFriendsMood();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#fmp-save", false);
+    }
   });
 }
 
