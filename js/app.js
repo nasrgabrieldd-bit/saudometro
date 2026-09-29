@@ -5,6 +5,7 @@ import { initErrorReporting, isAccessDenied } from "./errors.js";
 import { installGuideHTML, isInstalled, canPromptInstall, promptInstall, shouldShowInstallHint, dismissInstallHint } from "./install.js";
 import { supabase, isConfigured } from "./supabaseClient.js";
 import * as friends from "./friends.js";
+import * as gameRooms from "./gameRooms.js";
 import { unseenChangelogFor, markChangelogSeen } from "./changelog.js";
 import { FRIEND_PERKS, FRIEND_PERK_BY_ID, FRIEND_PERK_CATEGORIES } from "./friendsPerks.js";
 import * as db from "./db.js";
@@ -54,6 +55,7 @@ const State = {
   friendsCalendarMonth: startOfMonth(new Date()),
   friendsCalendarEvents: [],
   friendsSelectedDay: null,
+  roomView: null,
 };
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -324,6 +326,7 @@ async function enterApp(profile) {
 
   if (State.unsubscribe) State.unsubscribe();
   if (State.friendsGameUnsubscribe) { State.friendsGameUnsubscribe(); State.friendsGameUnsubscribe = null; } // saindo da turma (se estava nela): para de ouvir o progresso de jogo dela
+  closeRoomChannels();
   State.unsubscribe = db.subscribeCoupleChanges(
     State.coupleId,
     (p) => {
@@ -1165,6 +1168,7 @@ async function enterFriendsMode(group) {
   }).catch(() => {});
   $("#friends-switch-btn")?.addEventListener("click", async () => {
     if (State.friendsGameUnsubscribe) { State.friendsGameUnsubscribe(); State.friendsGameUnsubscribe = null; }
+    closeRoomChannels();
     $("#screen-friends").style.display = "none";
     State.profile = await db.getMyProfile(State.userId).catch(() => null);
     State.friendGroups = await friends.listMyFriendGroups().catch(() => []);
@@ -1176,10 +1180,12 @@ async function enterFriendsMode(group) {
   setFriendsTab("home");
   updateFriendsStreakBadge();
   maybeShowFriendDateIdeaNudge().then(() => maybeShowChangelog("amigos"));
-  State.friendsGameUnsubscribe = friends.subscribeFriendGameChanges(group.id, () => renderFriendsActiveTab());
+  // dentro de uma sala de jogo, a tela é da sala: não re-renderiza a aba por baixo dela
+  State.friendsGameUnsubscribe = friends.subscribeFriendGameChanges(group.id, () => { if (!State.roomView) renderFriendsActiveTab(); });
 }
 
 function setFriendsTab(tab) {
+  closeRoomChannels();
   State.friendsTab = tab;
   document.querySelectorAll("[data-friends-tab]").forEach((b) => {
     b.style.color = b.dataset.friendsTab === tab ? "var(--friends-accent-strong)" : "";
@@ -2535,6 +2541,15 @@ async function renderFriendsShop() {
         </div>
       </div>
     </div>
+    <div class="card" id="btn-open-game-hub" style="cursor:pointer;">
+      <div class="row" style="align-items:center; gap:10px;">
+        <div class="rm-ic cards" style="width:48px; height:48px;">${ROOM_GAME_ICON.cartas}</div>
+        <div style="flex:1;">
+          <div class="card-title" style="font-size:15px; margin-bottom:0;">Jogar com amigos</div>
+          <div class="hint-text" style="margin:0;">Cartas e Stop · crie uma sala e chame a turma</div>
+        </div>
+      </div>
+    </div>
 
     ${Object.entries(FRIEND_PERK_CATEGORIES).map(([catId, cat]) => `
       <div class="section-title">${cat.emoji} ${cat.label}</div>
@@ -2564,6 +2579,7 @@ async function renderFriendsShop() {
     ` : ""}
   `;
   $("#btn-open-star-battle-friends").addEventListener("click", () => renderStarBattleGame("amigos"));
+  $("#btn-open-game-hub").addEventListener("click", () => renderGameHub());
   $("#friends-new-perk-btn").addEventListener("click", openNewCustomPerkModal);
   view.querySelectorAll("[data-redeem]").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -2642,6 +2658,277 @@ function openNewCustomPerkModal() {
   });
 }
 
+// ================= JOGAR COM AMIGOS (salas multiplayer: Cartas + Stop) =================
+// Fase 1: só o esqueleto de sala/lobby/presença/reconexão — o motor de regras de cada jogo
+// (Fase 2/3) ainda não existe; ao iniciar a partida, mostra uma tela "🚧 em breve" por ora.
+
+const ROOM_GAME_ICON = {
+  cartas: `<svg viewBox="0 0 24 24" fill="none"><rect x="2" y="5" width="14" height="18" rx="3" transform="rotate(-8 9 14)" fill="#ffffff" fill-opacity=".35"/><rect x="6" y="3" width="14" height="18" rx="3" fill="#ffffff"/><circle cx="13" cy="12" r="4.2" fill="#6f8bff"/><path d="M13 8.6v6.8M9.8 12h6.4" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round"/></svg>`,
+  stop: `<svg viewBox="0 0 24 24" fill="none"><path d="M12 2 21 7.5V16.5L12 22 3 16.5V7.5Z" fill="#ffffff"/><text x="12" y="16.5" font-family="'Baloo 2',sans-serif" font-weight="800" font-size="12.5" fill="#e0791f" text-anchor="middle">S</text></svg>`,
+};
+
+const ROOM_AVATAR_PALETTE = [
+  ["#ff9fc0", "#bd2b55"], ["#8fe0c9", "#1f8a6c"], ["#ffcf8f", "#e0791f"], ["#b8a6ff", "#6a4fd9"],
+  ["#8fc7ee", "#2f6fa0"], ["#ffb3c6", "#c9436a"], ["#a8cf7d", "#4f7a2e"], ["#f4c9e0", "#a33d7a"],
+];
+function roomAvatarColors(userId) {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) hash = (hash * 31 + userId.charCodeAt(i)) >>> 0;
+  return ROOM_AVATAR_PALETTE[hash % ROOM_AVATAR_PALETTE.length];
+}
+
+let roomChannelUnsub = null;
+let roomPresenceChannel = null;
+// sai de qualquer sala que esteja "aberta" na tela (troca de aba, troca de turma, etc.) —
+// não sai da sala em si (isso é leaveRoom), só para de ouvir as mudanças dela em tempo real
+function closeRoomChannels() {
+  if (roomChannelUnsub) { roomChannelUnsub(); roomChannelUnsub = null; }
+  if (roomPresenceChannel) { gameRooms.stopPresence(roomPresenceChannel); roomPresenceChannel = null; }
+  State.roomView = null;
+}
+
+async function renderGameHub() {
+  const view = $("#friends-view");
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  try {
+    const active = await gameRooms.findMyActiveRoom(State.friendGroup.id, State.userId);
+    if (active) {
+      view.innerHTML = `
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+          <button class="btn btn-ghost btn-sm" id="btn-gamehub-back" style="flex:none; padding:9px 12px;">← Voltar</button>
+          <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">🎮 Jogar com amigos</h2>
+        </div>
+        <div class="card" style="text-align:center; padding:24px 16px;">
+          <div style="font-size:30px;">${active.game_type === "cartas" ? "🃏" : "🔤"}</div>
+          <div class="card-title" style="margin-top:8px;">Você tem uma partida em andamento</div>
+          <p class="card-sub">Sala ${escapeHTML(active.code)} · ${active.game_type === "cartas" ? "Cartas" : "STOP"}</p>
+          <button class="btn btn-block" style="margin-top:10px; background:var(--friends-accent); color:var(--on-friends-accent);" id="btn-rejoin-room">Voltar pra sala</button>
+        </div>
+      `;
+      $("#btn-gamehub-back").addEventListener("click", () => setFriendsTab("shop"));
+      $("#btn-rejoin-room").addEventListener("click", () => enterRoomLobby(active.id));
+      return;
+    }
+  } catch (e) { /* sem sala ativa: segue pro hub normal */ }
+
+  view.innerHTML = `
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+      <button class="btn btn-ghost btn-sm" id="btn-gamehub-back" style="flex:none; padding:9px 12px;">← Voltar</button>
+      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">🎮 Jogar com amigos</h2>
+    </div>
+    <div class="rm-hub">
+      <div class="rm-gamecard cards" data-game="cartas">
+        <div class="ic">${ROOM_GAME_ICON.cartas}</div>
+        <div style="flex:1;">
+          <div class="t">Cartas</div>
+          <div class="s">2 a 8 jogadores · fique sem cartas antes dos seus amigos</div>
+        </div>
+      </div>
+      <div class="rm-gamecard stop" data-game="stop">
+        <div class="ic">${ROOM_GAME_ICON.stop}</div>
+        <div style="flex:1;">
+          <div class="t">STOP</div>
+          <div class="s">2 a 8 jogadores · uma letra, pouco tempo, muitas respostas</div>
+        </div>
+      </div>
+    </div>
+    <p class="hint-text" style="margin-top:10px;">Toque num jogo: criar sala ou entrar com código.</p>
+  `;
+  $("#btn-gamehub-back").addEventListener("click", () => setFriendsTab("shop"));
+  view.querySelectorAll("[data-game]").forEach((card) => {
+    card.addEventListener("click", () => openGameChoiceModal(card.dataset.game));
+  });
+}
+
+function openGameChoiceModal(gameType) {
+  const label = gameType === "cartas" ? "Cartas" : "STOP";
+  openModal(`
+    <h3 class="modal-title">${gameType === "cartas" ? "🃏" : "🔤"} ${label}</h3>
+    <button class="btn btn-block" style="background:var(--friends-accent); color:var(--on-friends-accent);" id="btn-create-room">➕ Criar sala</button>
+    <button class="btn btn-secondary btn-block" style="margin-top:8px;" id="btn-join-room">🔑 Entrar com código</button>
+  `);
+  $("#btn-create-room").addEventListener("click", async () => {
+    setBusy("#btn-create-room", true);
+    try {
+      const room = await gameRooms.createRoom(State.friendGroup.id, gameType);
+      closeModal();
+      await enterRoomLobby(room.id);
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#btn-create-room", false);
+    }
+  });
+  $("#btn-join-room").addEventListener("click", () => {
+    closeModal();
+    renderRoomJoin(gameType);
+  });
+}
+
+function renderRoomJoin(gameType) {
+  const view = $("#friends-view");
+  const label = gameType === "cartas" ? "Cartas" : "STOP";
+  view.innerHTML = `
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+      <button class="btn btn-ghost btn-sm" id="btn-join-back" style="flex:none; padding:9px 12px;">← Voltar</button>
+      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">${gameType === "cartas" ? "🃏" : "🔤"} ${label}</h2>
+    </div>
+    <div class="rm-join-box">
+      <p class="field-label" style="margin-bottom:6px;">Digite o código da sala</p>
+      <input class="rm-join-input" id="rm-join-code" maxlength="5" placeholder="A7K9Q" />
+      <div class="rm-start-btn" id="btn-confirm-join" style="margin:14px 0 0;">ENTRAR</div>
+      <p class="error-text" id="rm-join-err" style="text-align:center; margin-top:10px;"></p>
+    </div>
+  `;
+  $("#btn-join-back").addEventListener("click", () => renderGameHub());
+  $("#btn-confirm-join").addEventListener("click", async () => {
+    const code = $("#rm-join-code").value.trim();
+    if (!code) { $("#rm-join-err").textContent = "Digita o código da sala."; return; }
+    try {
+      const result = await gameRooms.joinRoom(code);
+      if (result.error) {
+        const msg = { sala_nao_encontrada: "Essa sala não existe ou já foi encerrada.", partida_ja_iniciada: "Essa partida já começou.", sala_cheia: "Essa sala já está cheia." }[result.error] || result.error;
+        $("#rm-join-err").textContent = msg;
+        return;
+      }
+      await enterRoomLobby(result.id);
+    } catch (e) {
+      $("#rm-join-err").textContent = "Não deu: " + (e.message || e);
+    }
+  });
+}
+
+async function enterRoomLobby(roomId) {
+  State.roomView = { roomId };
+  const view = $("#friends-view");
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  try {
+    const room = await gameRooms.getRoom(roomId);
+    if (room.status !== "waiting") { renderRoomPlaying(room); return; }
+    await renderRoomLobbyScreen(room);
+  } catch (e) {
+    alert("Não deu: " + (e.message || e));
+    closeRoomChannels();
+    renderGameHub();
+  }
+}
+
+async function renderRoomLobbyScreen(room) {
+  const view = $("#friends-view");
+  const [players, members] = await Promise.all([
+    gameRooms.listRoomPlayers(room.id),
+    friends.listGroupMembers(State.friendGroup.id),
+  ]);
+  const byId = Object.fromEntries(members.map((m) => [m.user_id, m]));
+  const isHost = room.host_user_id === State.userId;
+  const allReady = players.length >= 2 && players.every((p) => p.ready);
+
+  view.innerHTML = `
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+      <div>
+        <div class="hint-text" style="margin:0; text-transform:uppercase; font-weight:800; letter-spacing:.03em;">Sala</div>
+        <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0; color:var(--friends-accent-strong);">${room.game_type === "cartas" ? "🃏 Cartas" : "🔤 STOP"}</h2>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="btn-leave-room" style="color:var(--friends-accent-strong); font-weight:800;">SAIR ✕</button>
+    </div>
+    <div class="rm-code-box">
+      <div class="rm-code-chip"><div class="rm-code">${escapeHTML(room.code)}</div></div>
+      <div class="rm-code-actions">
+        <button id="btn-copy-code">📋 Copiar</button>
+        <button id="btn-share-code">↗️ Compartilhar</button>
+      </div>
+    </div>
+    <div class="rm-players">
+      ${players.map((p) => roomPlayerRowHTML(p, byId, room)).join("")}
+    </div>
+    <div class="rm-progress">${players.filter((p) => p.ready).length}/${players.length} prontos</div>
+    ${isHost
+      ? `<div class="rm-start-btn ${allReady ? "" : "disabled"}" id="btn-start-match">INICIAR PARTIDA</div>
+         ${!allReady ? `<div class="rm-leave">Espera todo mundo ficar pronto (mínimo 2 jogadores)</div>` : ""}`
+      : `<div class="rm-start-btn disabled">INICIAR PARTIDA</div>
+         <div class="rm-leave">Só o host (👑 ${escapeHTML(byId[room.host_user_id]?.display_name || "alguém")}) pode iniciar</div>`}
+  `;
+
+  $("#btn-leave-room").addEventListener("click", async () => {
+    if (!confirm("Sair dessa sala?")) return;
+    try { await gameRooms.leaveRoom(room.id); } catch (e) { /* já pode ter sido fechada */ }
+    closeRoomChannels();
+    renderGameHub();
+  });
+  $("#btn-copy-code")?.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(room.code); } catch (e) { /* sem clipboard: sem problema, o código já tá visível */ }
+  });
+  $("#btn-share-code")?.addEventListener("click", async () => {
+    const text = `Bora jogar ${room.game_type === "cartas" ? "Cartas" : "STOP"}? Código da sala: ${room.code}`;
+    if (navigator.share) { try { await navigator.share({ text }); } catch (e) { /* cancelou o compartilhamento */ } }
+    else { try { await navigator.clipboard.writeText(text); } catch (e) { /* sem clipboard nem share: só ignora */ } }
+  });
+  $("#btn-start-match")?.addEventListener("click", async () => {
+    if (!allReady) return;
+    try { await gameRooms.startMatch(room.id); } catch (e) { alert("Não deu: " + (e.message || e)); }
+  });
+  view.querySelectorAll("[data-toggle-ready]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      try { await gameRooms.setReady(room.id, btn.dataset.toggleReady !== "true"); } catch (e) { alert("Não deu: " + (e.message || e)); }
+    });
+  });
+
+  // tempo real: sala/jogadores mudam -> re-renderiza o lobby (ou a tela de jogo, se começou)
+  closeRoomChannels();
+  State.roomView = { roomId: room.id };
+  roomChannelUnsub = gameRooms.subscribeRoomChanges(room.id, async () => {
+    try {
+      const fresh = await gameRooms.getRoom(room.id);
+      if (fresh.status !== "waiting") { renderRoomPlaying(fresh); return; }
+      if (State.roomView?.roomId === room.id) await renderRoomLobbyScreen(fresh);
+    } catch (e) { /* sala pode ter sido fechada; o botão SAIR ainda funciona */ }
+  });
+  const presence = gameRooms.trackPresence(room.id, State.userId, State.profile?.display_name || "Você");
+  roomPresenceChannel = presence;
+  gameRooms.subscribePresence(presence, (onlineIds) => {
+    view.querySelectorAll("[data-presence]").forEach((el) => {
+      el.classList.toggle("on", onlineIds.has(el.dataset.presence));
+      el.classList.toggle("away", !onlineIds.has(el.dataset.presence));
+    });
+  });
+}
+
+function roomPlayerRowHTML(p, byId, room) {
+  const member = byId[p.user_id];
+  const isMe = p.user_id === State.userId;
+  const name = isMe ? "Você" : escapeHTML(member?.display_name || "alguém");
+  const [c1, c2] = roomAvatarColors(p.user_id);
+  const initial = (member?.display_name || "?").trim()[0]?.toUpperCase() || "?";
+  const isHost = room.host_user_id === p.user_id;
+  return `
+    <div class="rm-player ${isMe ? "me" : ""}">
+      <div class="av" style="--av1:${c1}; --av2:${c2};">${initial}<span class="dot on" data-presence="${p.user_id}"></span></div>
+      <div class="name">${name}</div>
+      ${isHost ? `<span class="crown">👑</span>` : ""}
+      ${isMe
+        ? `<span class="status ${p.ready ? "ready" : "wait"}" data-toggle-ready="${p.ready}" style="cursor:pointer;">${p.ready ? "✅ Pronto" : "⏳ Toque p/ ficar pronto"}</span>`
+        : `<span class="status ${p.ready ? "ready" : "wait"}">${p.ready ? "✅ Pronto" : "⏳ Aguardando"}</span>`}
+    </div>
+  `;
+}
+
+function renderRoomPlaying(room) {
+  const view = $("#friends-view");
+  State.roomView = { roomId: room.id };
+  view.innerHTML = `
+    <div class="card" style="text-align:center; padding:40px 20px;">
+      <div style="font-size:40px;">🚧</div>
+      <div class="card-title" style="margin-top:10px;">A partida começou!</div>
+      <p class="card-sub">O jogo em si (as regras de ${room.game_type === "cartas" ? "Cartas" : "STOP"}) entra na próxima etapa. Por enquanto, essa tela só confirma que o sistema de sala funciona de ponta a ponta.</p>
+      <button class="btn btn-block" style="margin-top:10px; background:var(--friends-accent); color:var(--on-friends-accent);" id="btn-leave-playing">Sair da sala</button>
+    </div>
+  `;
+  $("#btn-leave-playing").addEventListener("click", async () => {
+    try { await gameRooms.leaveRoom(room.id); } catch (e) { /* ignora, já saindo de qualquer jeito */ }
+    closeRoomChannels();
+    renderGameHub();
+  });
+}
+
 function kickVoteRowHTML(v, byId) {
   const ballots = v.friend_kick_ballots || [];
   const mine = ballots.find((b) => b.user_id === State.userId);
@@ -2663,6 +2950,7 @@ function kickVoteRowHTML(v, byId) {
 // lugar certo (casal, outra turma, ou a tela de escolher conta, se sobrar mais de uma opção)
 async function afterLeavingFriendGroup() {
   if (State.friendsGameUnsubscribe) { State.friendsGameUnsubscribe(); State.friendsGameUnsubscribe = null; }
+  closeRoomChannels();
   $("#screen-friends").style.display = "none";
   State.profile = await db.getMyProfile(State.userId).catch(() => null);
   State.friendGroups = await friends.listMyFriendGroups().catch(() => []);
