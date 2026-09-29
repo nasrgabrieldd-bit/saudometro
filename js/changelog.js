@@ -96,6 +96,13 @@ export const CHANGELOG = [
     title: "Fazer juntos, agora na turma também",
     text: "Na Home da turma tem uma seção nova pra guardar ideias de rolê (com link e foto) e avaliar com estrelas — o ranking é pela média de todo mundo que votou.",
   },
+  {
+    id: "dia-eu-te-amo-2026-09",
+    tag: "casal",
+    emoji: "💘",
+    title: "Dia de dizer eu te amo",
+    text: "A cada 45 dias, o app sugere uma surpresa pra fazer pelo outro — uma simples e uma mais elaborada. Aparece sozinho, não precisa configurar nada.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
