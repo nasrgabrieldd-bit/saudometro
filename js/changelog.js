@@ -97,6 +97,13 @@ export const CHANGELOG = [
     text: "Na Home da turma tem uma seção nova pra guardar ideias de rolê (com link e foto) e avaliar com estrelas — o ranking é pela média de todo mundo que votou.",
   },
   {
+    id: "turma-config-pessoal-2026-09",
+    tag: "amigos",
+    emoji: "⚙️",
+    title: "Configurações pessoais na Turma",
+    text: "Na aba Turma, uma seção nova \"Você\": instalar o app no celular, política de privacidade e o histórico de moedas do cofre da turma. Antes só existia isso pro modo casal.",
+  },
+  {
     id: "tela-larga-computador-2026-09",
     tag: "geral",
     emoji: "💻",

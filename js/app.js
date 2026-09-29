@@ -1250,6 +1250,9 @@ function renderFriendsActiveTab() {
     shop: renderFriendsShop,
     group: renderFriendsGroup,
     "together-ideas": renderFriendsTogetherIdeas,
+    "friends-install": renderFriendsInstall,
+    "friends-privacy": renderFriendsPrivacy,
+    "friends-wallet": renderFriendsWallet,
   };
   Promise.resolve((map[State.friendsTab] || renderFriendsHome)()).catch((e) => {
     if (db.isNetworkError(e)) { renderOfflineFallback($("#friends-view"), "amigos"); return; }
@@ -2609,6 +2612,25 @@ async function renderFriendsGroup() {
         <p class="hint-text" style="margin-top:8px;">É individual: só o seu benefício, mas vale em qualquer turma sua.</p>
       `}
     </div>
+    <div class="section-title">Você</div>
+    <div class="shortcut-grid">
+      <button class="shortcut-card" data-friends-settings="install">
+        <span class="shortcut-icon">${icon("smartphone", { size: 24 })}</span>
+        <span class="shortcut-title">Instalar no celular</span>
+        <span class="shortcut-sub">${isInstalled() ? "✅ Instalado" : "Ver passo a passo"}</span>
+      </button>
+      <button class="shortcut-card" data-friends-settings="privacy">
+        <span class="shortcut-icon">${icon("shield", { size: 24 })}</span>
+        <span class="shortcut-title">Privacidade</span>
+        <span class="shortcut-sub">Seus dados e política</span>
+      </button>
+      <button class="shortcut-card" data-friends-settings="wallet">
+        <span class="shortcut-icon">${icon("wallet", { size: 24 })}</span>
+        <span class="shortcut-title">Moedas</span>
+        <span class="shortcut-sub">Ver histórico</span>
+      </button>
+    </div>
+
     <div class="card" style="margin-top:14px; border-color:var(--friends-accent-soft);">
       <p class="field-label" style="color:var(--friends-accent-strong);">Código da turma</p>
       <p style="font-family:'Baloo 2'; font-size:22px; letter-spacing:0.04em;">${escapeHTML(State.friendGroup.code || "")}</p>
@@ -2639,6 +2661,9 @@ async function renderFriendsGroup() {
     </div>
   `;
   $("#friends-edit-group-btn").addEventListener("click", openEditGroupModal);
+  view.querySelectorAll("[data-friends-settings]").forEach((btn) => {
+    btn.addEventListener("click", () => setFriendsTab(`friends-${btn.dataset.friendsSettings}`));
+  });
   view.querySelectorAll("[data-subscribe-friend]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       btn.disabled = true;
@@ -2712,6 +2737,76 @@ async function renderFriendsGroup() {
       }
     });
   });
+}
+
+// cabeçalho padrão das telas de configuração pessoal dentro da Turma (Instalar/Privacidade/Moedas)
+function friendsSettingsHeader(title) {
+  return `
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+      <button class="btn btn-ghost btn-sm" id="btn-friends-settings-back" style="flex:none; padding:9px 12px;">← Voltar</button>
+      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">${title}</h2>
+    </div>
+  `;
+}
+function wireFriendsSettingsBack() {
+  $("#btn-friends-settings-back").addEventListener("click", () => setFriendsTab("group"));
+}
+
+async function renderFriendsInstall() {
+  const view = $("#friends-view");
+  view.innerHTML = `
+    ${friendsSettingsHeader("📲 Instalar no celular")}
+    <div class="card">
+      ${isInstalled()
+        ? `<p class="card-sub" style="margin-bottom:0;">✅ O Saudômetro já está instalado neste aparelho.</p>`
+        : `<div class="card-sub">Coloque o Saudômetro na tela inicial: abre em tela cheia, mais rápido, e no iPhone é o que libera as notificações.</div>
+           <button class="btn btn-block" style="background:var(--friends-accent); color:var(--on-friends-accent);" id="btn-install-guide">Ver o passo a passo</button>`}
+    </div>
+  `;
+  wireFriendsSettingsBack();
+  $("#btn-install-guide")?.addEventListener("click", openInstallGuide);
+}
+
+async function renderFriendsPrivacy() {
+  const view = $("#friends-view");
+  view.innerHTML = `
+    ${friendsSettingsHeader("🔒 Privacidade")}
+    <div class="card">
+      <div class="card-sub">Seus dados são seus. Você pode ler como cuidamos deles na nossa política.</div>
+      <p class="hint-text" style="text-align:center; margin:10px 0 0;"><a href="privacidade.html" target="_blank" rel="noopener" style="color:var(--friends-accent-strong);">Política de privacidade</a></p>
+    </div>
+  `;
+  wireFriendsSettingsBack();
+}
+
+async function renderFriendsWallet() {
+  const view = $("#friends-view");
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const [members, balance, history] = await Promise.all([
+    friends.listGroupMembers(State.friendGroup.id).catch(() => []),
+    friends.getGroupCoinBalance(State.friendGroup.id).catch(() => 0),
+    friends.listCoinHistory(State.friendGroup.id, 30).catch(() => []),
+  ]);
+  const byId = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
+  view.innerHTML = `
+    ${friendsSettingsHeader("💰 Moedas")}
+    <div class="card">
+      <div class="row"><span class="pill" style="background:var(--friends-accent-soft); color:var(--friends-accent-strong);">💰 cofre da turma: ${balance}</span></div>
+    </div>
+    <div class="section-title">Histórico</div>
+    <div class="card">
+      ${history.length ? `<div class="stack">${history.map((h) => `
+        <div class="entry-item">
+          <div class="entry-icon">${h.delta > 0 ? "➕" : "➖"}</div>
+          <div class="entry-body">
+            <div class="entry-title">${h.user_id === State.userId ? "Você" : escapeHTML(byId[h.user_id] || "alguém")} ${h.delta > 0 ? "ganhou" : "gastou"} ${Math.abs(h.delta)}</div>
+            <div class="entry-meta">${escapeHTML(h.reason || "")}</div>
+          </div>
+        </div>
+      `).join("")}</div>` : `<div class="empty-state"><span class="emoji">💰</span>Nada ainda.</div>`}
+    </div>
+  `;
+  wireFriendsSettingsBack();
 }
 
 function openEditGroupModal() {
