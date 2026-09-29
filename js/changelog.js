@@ -180,6 +180,13 @@ export const CHANGELOG = [
     title: "Jogar a dois: salas de Cartas e STOP",
     text: "O que já tinha pra turma agora existe pro casal também: na Lojinha, crie uma sala de Cartas ou STOP e chame seu par com um código. Mesmo esquema — lobby, pronto, host, reconexão. O jogo em si vem nas próximas etapas.",
   },
+  {
+    id: "jogo-cartas-de-verdade-2026-09",
+    tag: "geral",
+    emoji: "🃏",
+    title: "Cartas já tem jogo de verdade",
+    text: "O jogo de Cartas na sala multiplayer saiu do \"em breve\": baralho de descarte por cor, bloqueio, inversão, +2, curinga e curinga+4, tudo validado direitinho. Fique sem cartas antes dos outros pra vencer. Funciona no Casal e na Turma, até 8 jogadores.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";

@@ -98,3 +98,66 @@ export function presentUserIds(channel) {
 export function stopPresence(channel) {
   supabase.removeChannel(channel);
 }
+
+// ================= Cartas (Fase 2: motor de regras) =================
+// Chama startCardMatch tanto pra começar quanto pra revanche (é idempotente: se já tem uma
+// partida "playing" pra essa sala, devolve ela; se a anterior terminou, cria uma nova).
+
+export async function startCardMatch(roomId) {
+  const { data, error } = await supabase.rpc("start_card_match", { p_room_id: roomId });
+  if (error) throw error;
+  return data; // { match_id }
+}
+
+export async function getCardMatch(matchId) {
+  const { data, error } = await supabase.from("card_matches").select("*").eq("id", matchId).single();
+  if (error) throw error;
+  return data;
+}
+
+export async function listCardMatchPlayers(matchId) {
+  const { data, error } = await supabase.from("card_match_players").select("*").eq("match_id", matchId).order("seat_order");
+  if (error) throw error;
+  return data;
+}
+
+// RLS só devolve a própria linha (card_hands: user_id = auth.uid()) — mesmo pedindo tudo,
+// ninguém mais consegue ler a mão de outro jogador por aqui
+export async function getMyHand(matchId, userId) {
+  const { data, error } = await supabase.from("card_hands").select("cards").eq("match_id", matchId).eq("user_id", userId).maybeSingle();
+  if (error) throw error;
+  return data?.cards || [];
+}
+
+export async function playCard(matchId, cardIndex, chosenColor = null) {
+  const { data, error } = await supabase.rpc("play_card", { p_match_id: matchId, p_card_index: cardIndex, p_chosen_color: chosenColor });
+  if (error) throw error;
+  return data; // { ok, winner }
+}
+
+export async function drawCard(matchId) {
+  const { data, error } = await supabase.rpc("draw_card", { p_match_id: matchId });
+  if (error) throw error;
+  return data; // { card }
+}
+
+export async function passTurn(matchId) {
+  const { error } = await supabase.rpc("pass_turn", { p_match_id: matchId });
+  if (error) throw error;
+}
+
+// chamado depois de detectar (via subscribeRoomChanges, quando um jogador sai) que a pessoa
+// da vez pode ter saído da sala — sem efeito nenhum se não for o caso
+export async function skipDepartedTurn(matchId) {
+  const { error } = await supabase.rpc("skip_departed_turn", { p_match_id: matchId });
+  if (error) throw error;
+}
+
+export function subscribeCardMatch(matchId, onChange) {
+  const channel = supabase
+    .channel(`card-match-${matchId}`)
+    .on("postgres_changes", { event: "*", schema: "public", table: "card_matches", filter: `id=eq.${matchId}` }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "card_match_players", filter: `match_id=eq.${matchId}` }, onChange)
+    .subscribe();
+  return () => supabase.removeChannel(channel);
+}
