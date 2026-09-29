@@ -290,14 +290,21 @@ export async function listEventsForMonth(friendGroupId, monthStartISO, monthEndI
   return data || [];
 }
 
-export async function createEvent(friendGroupId, userId, title, startDateISO, startTime, category, details, invitedUserIds) {
+export async function createEvent(friendGroupId, userId, title, startDateISO, startTime, category, details, invitedUserIds, yearly) {
   const { data, error } = await supabase
     .from("friend_events")
-    .insert({ friend_group_id: friendGroupId, title, start_date: startDateISO, start_time: startTime || null, category: category || "amigos", details: details || "", invited_user_ids: invitedUserIds && invitedUserIds.length ? invitedUserIds : null, created_by: userId })
+    .insert({ friend_group_id: friendGroupId, title, start_date: startDateISO, start_time: startTime || null, category: category || "amigos", details: details || "", invited_user_ids: invitedUserIds && invitedUserIds.length ? invitedUserIds : null, created_by: userId, yearly: !!yearly })
     .select()
     .single();
   if (error) throw error;
   return data;
+}
+
+// datas especiais que se repetem todo ano (aniversário da turma etc.)
+export async function listYearlyEvents(friendGroupId) {
+  const { data, error } = await supabase.from("friend_events").select("*").eq("friend_group_id", friendGroupId).eq("yearly", true);
+  if (error) throw error;
+  return data || [];
 }
 
 export async function deleteEvent(id) {

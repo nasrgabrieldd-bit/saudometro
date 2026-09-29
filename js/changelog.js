@@ -97,6 +97,13 @@ export const CHANGELOG = [
     text: "Na Home da turma tem uma seção nova pra guardar ideias de rolê (com link e foto) e avaliar com estrelas — o ranking é pela média de todo mundo que votou.",
   },
   {
+    id: "turma-datas-especiais-2026-09",
+    tag: "amigos",
+    emoji: "💝",
+    title: "Datas especiais recorrentes na Turma",
+    text: "Nos Rolês, dá pra marcar uma \"Data especial\" que repete todo ano (tipo aniversário da turma) — e o app conta sozinho \"faz X anos\" quando ela voltar.",
+  },
+  {
     id: "turma-quer-conversar-2026-09",
     tag: "amigos",
     emoji: "💬",
