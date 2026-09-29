@@ -97,6 +97,13 @@ export const CHANGELOG = [
     text: "Na Home da turma tem uma seção nova pra guardar ideias de rolê (com link e foto) e avaliar com estrelas — o ranking é pela média de todo mundo que votou.",
   },
   {
+    id: "turma-notificacoes-push-2026-09",
+    tag: "amigos",
+    emoji: "🔔",
+    title: "Notificações push chegaram na Turma",
+    text: "Em Turma → Você, ative pra receber aviso quando a turma marcar um rolê, adicionar uma ideia de fazer juntos, ou selar uma cápsula do tempo. Era só pro casal antes.",
+  },
+  {
     id: "jogar-com-amigos-salas-2026-09",
     tag: "amigos",
     emoji: "🎮",
