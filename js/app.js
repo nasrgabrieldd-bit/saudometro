@@ -1253,6 +1253,7 @@ function renderFriendsActiveTab() {
     "friends-install": renderFriendsInstall,
     "friends-privacy": renderFriendsPrivacy,
     "friends-wallet": renderFriendsWallet,
+    capsule: renderFriendsCapsule,
   };
   Promise.resolve((map[State.friendsTab] || renderFriendsHome)()).catch((e) => {
     if (db.isNetworkError(e)) { renderOfflineFallback($("#friends-view"), "amigos"); return; }
@@ -1444,6 +1445,11 @@ async function renderFriendsHome() {
       <p class="card-sub" style="margin-bottom:0;">Ideias de coisas pra turma fazer, com link e foto. Avaliem com estrelas e o ranking se forma sozinho.</p>
     </div>
 
+    <div class="card" style="margin-top:14px; cursor:pointer;" id="friends-home-capsule-card">
+      <div class="card-title" style="font-size:15px;">🕰️ Cápsula do tempo</div>
+      <p class="card-sub" style="margin-bottom:0;">Sele uma mensagem que só abre numa data futura — a turma toda abre junto.</p>
+    </div>
+
     <div class="card" style="margin-top:14px; position:relative; padding-top:26px;">
       <span style="position:absolute; top:-14px; left:16px; background:var(--friends-accent-strong); color:var(--on-friends-accent); font-size:11.5px; font-weight:800; padding:6px 12px; border-radius:999px;">Desafio da semana</span>
       <p class="card-sub" style="margin-bottom:0;">Em breve: um desafio novo toda semana pra turma participar junto.</p>
@@ -1463,6 +1469,7 @@ async function renderFriendsHome() {
   $("#friends-home-mood-card")?.addEventListener("click", () => setFriendsTab("mood"));
   $("#friends-home-role-card")?.addEventListener("click", () => setFriendsTab("roles"));
   $("#friends-home-ideas-card")?.addEventListener("click", () => setFriendsTab("together-ideas"));
+  $("#friends-home-capsule-card")?.addEventListener("click", () => setFriendsTab("capsule"));
   renderFriendsHomeGameCard(members, byId);
 }
 
@@ -2807,6 +2814,67 @@ async function renderFriendsWallet() {
     </div>
   `;
   wireFriendsSettingsBack();
+}
+
+function friendCapsuleItemHTML(c, byId) {
+  const mine = c.from_user_id === State.userId;
+  const opensToday = c.open_on <= todayISO();
+  const canRead = mine || opensToday;
+  const timing = opensToday ? `Aberta em ${humanDateShort(parseISODate(c.open_on))}` : `Abre ${daysUntilLabel(parseISODate(c.open_on))}`;
+  const fromName = mine ? "Você" : escapeHTML(byId[c.from_user_id] || "alguém");
+  return `
+    <div class="entry-item">
+      <div class="entry-icon">${canRead ? "🔓" : "🔒"}</div>
+      <div class="entry-body">
+        <div class="entry-title">De ${fromName} pra turma</div>
+        <div class="entry-meta">${timing}</div>
+        ${canRead
+          ? `<div class="entry-meta" style="margin-top:6px; color:var(--text);">"${escapeHTML(c.message)}"</div>`
+          : `<div class="entry-meta" style="margin-top:6px; filter:blur(4px); user-select:none;">${"• ".repeat(18)}</div>`}
+      </div>
+    </div>
+  `;
+}
+
+async function renderFriendsCapsule() {
+  const view = $("#friends-view");
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const [members, capsules] = await Promise.all([
+    friends.listGroupMembers(State.friendGroup.id).catch(() => []),
+    friends.listTimeCapsules(State.friendGroup.id),
+  ]);
+  const byId = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
+  view.innerHTML = `
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+      <button class="btn btn-ghost btn-sm" id="btn-friends-capsule-back" style="flex:none; padding:9px 12px;">← Voltar</button>
+      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">🕰️ Cápsula do tempo</h2>
+    </div>
+    <div class="card">
+      <div class="card-sub">Escreva algo agora, só pode ser aberta na data que você escolher — a turma toda abre junto.</div>
+      <textarea id="capsule-text" rows="3" placeholder="daqui uns anos, quero que a turma lembre que..."></textarea>
+      <label class="field-label">Abrir em</label>
+      <input type="date" id="capsule-date" min="${toISODate(addDays(new Date(), 1))}" value="${toISODate(addDays(new Date(), 30))}" />
+      <button class="btn btn-block" style="margin-top:12px; background:var(--friends-accent); color:var(--on-friends-accent);" id="btn-seal-capsule">Selar cápsula 💌</button>
+    </div>
+    <div class="card">
+      ${capsules.length ? `<div class="stack">${capsules.map((c) => friendCapsuleItemHTML(c, byId)).join("")}</div>` : `<div class="empty-state"><span class="emoji">🕰️</span>Nenhuma cápsula ainda.</div>`}
+    </div>
+  `;
+  $("#btn-friends-capsule-back").addEventListener("click", () => setFriendsTab("home"));
+  $("#btn-seal-capsule")?.addEventListener("click", async () => {
+    const message = $("#capsule-text").value.trim();
+    const openOn = $("#capsule-date").value;
+    if (!message) { alert("Escreve alguma coisa primeiro :)"); return; }
+    if (!openOn) { alert("Escolhe uma data pra abrir :)"); return; }
+    setBusy("#btn-seal-capsule", true);
+    try {
+      await friends.createTimeCapsule(State.friendGroup.id, State.userId, message, openOn);
+      await renderFriendsCapsule();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#btn-seal-capsule", false);
+    }
+  });
 }
 
 function openEditGroupModal() {

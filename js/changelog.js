@@ -97,6 +97,13 @@ export const CHANGELOG = [
     text: "Na Home da turma tem uma seção nova pra guardar ideias de rolê (com link e foto) e avaliar com estrelas — o ranking é pela média de todo mundo que votou.",
   },
   {
+    id: "turma-capsula-2026-09",
+    tag: "amigos",
+    emoji: "🕰️",
+    title: "Cápsula do tempo, agora coletiva",
+    text: "Na Home da turma, sele uma mensagem que só abre numa data futura — e quando abrir, a turma toda vê junto. O casal já tinha isso, agora a turma também.",
+  },
+  {
     id: "turma-config-pessoal-2026-09",
     tag: "amigos",
     emoji: "⚙️",
