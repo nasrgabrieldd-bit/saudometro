@@ -214,6 +214,37 @@ export function subscribeStopMatch(matchId, onChange) {
     .channel(`stop-match-${matchId}`)
     .on("postgres_changes", { event: "*", schema: "public", table: "stop_matches", filter: `id=eq.${matchId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "stop_answers", filter: `match_id=eq.${matchId}` }, onChange)
+    // contestação/voto não tem match_id direto (só via join) — sem filter, qualquer evento
+    // nessas duas tabelas dispara um refetch geral, mesmo padrão de "nudge" já usado aqui
+    .on("postgres_changes", { event: "*", schema: "public", table: "stop_contests" }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "stop_contest_ballots" }, onChange)
     .subscribe();
   return () => supabase.removeChannel(channel);
+}
+
+// ================= Contestar resposta do STOP (Fase 4: refino) =================
+
+export async function proposeStopContest(matchId, roundNumber, category, targetUserId) {
+  const { data, error } = await supabase.rpc("propose_stop_contest", {
+    p_match_id: matchId, p_round_number: roundNumber, p_category: category, p_target_user_id: targetUserId,
+  });
+  if (error) throw error;
+  return data; // contest id
+}
+
+export async function castStopContestBallot(contestId, vote) {
+  const { data, error } = await supabase.rpc("cast_stop_contest_ballot", { p_contest_id: contestId, p_vote: vote });
+  if (error) throw error;
+  return data; // { resolved, invalid, yes?, eligible? }
+}
+
+export async function finishStopContest(contestId) {
+  const { error } = await supabase.rpc("finish_stop_contest", { p_contest_id: contestId });
+  if (error) throw error;
+}
+
+export async function listStopContests(matchId, roundNumber) {
+  const { data, error } = await supabase.from("stop_contests").select("*, stop_contest_ballots(*)").eq("match_id", matchId).eq("round_number", roundNumber);
+  if (error) throw error;
+  return data;
 }

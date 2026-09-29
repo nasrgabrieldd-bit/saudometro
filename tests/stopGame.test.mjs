@@ -50,6 +50,19 @@ test("scoreCategory: única válida = 10, repetida válida = 5 cada, inválida/v
   assert.equal(points.get("e"), 0);
 });
 
+test("scoreCategory: resposta contestada e invalidada pela turma vale 0, mesmo sendo única", () => {
+  const answers = [
+    { user_id: "a", answer: "Morcego" }, // única, válida, mas foi contestada
+    { user_id: "b", answer: "Macaco" }, // única normal
+  ];
+  const withoutContest = scoreCategory(answers, "M");
+  assert.equal(withoutContest.get("a"), 10);
+
+  const withContest = scoreCategory([{ ...answers[0], invalidated: true }, answers[1]], "M");
+  assert.equal(withContest.get("a"), 0);
+  assert.equal(withContest.get("b"), 10); // a invalidação de "a" não vira repetida pra "b"
+});
+
 test("scoreRound: soma os pontos de todas as categorias por jogador", () => {
   const answersByCategory = {
     animal: [{ user_id: "a", answer: "Macaco" }, { user_id: "b", answer: "Morcego" }],
