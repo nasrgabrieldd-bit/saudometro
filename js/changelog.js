@@ -97,6 +97,13 @@ export const CHANGELOG = [
     text: "Na Home da turma tem uma seção nova pra guardar ideias de rolê (com link e foto) e avaliar com estrelas — o ranking é pela média de todo mundo que votou.",
   },
   {
+    id: "tela-larga-computador-2026-09",
+    tag: "geral",
+    emoji: "💻",
+    title: "Melhor no computador",
+    text: "Abrindo pelo navegador do computador, o app agora usa uma coluna mais larga em vez de ficar espremido bem fininho no meio da tela.",
+  },
+  {
     id: "roleta-fazer-juntos-2026-09",
     tag: "geral",
     emoji: "🎡",
