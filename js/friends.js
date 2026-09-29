@@ -75,6 +75,12 @@ export async function getMoodsForDay(friendGroupId, dayISO) {
   return data || [];
 }
 
+export async function getMoodHistory(friendGroupId, sinceISO) {
+  const { data, error } = await supabase.from("friend_moods").select("*").eq("friend_group_id", friendGroupId).gte("day", sinceISO);
+  if (error) throw error;
+  return data || [];
+}
+
 export async function setMyMood(friendGroupId, dayISO, userId, mood) {
   const { error } = await supabase
     .from("friend_moods")

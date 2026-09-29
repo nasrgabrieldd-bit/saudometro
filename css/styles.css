@@ -627,6 +627,16 @@ button, input, textarea, select {
 .history-day { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 10px; color: var(--text-faint); }
 .history-day .dot { font-size: 18px; }
 
+/* faixa de humor da Home (casal e turma) — card colorido por dia, mais chamativo que os pontinhos da aba Humor */
+.moodstrip-grid { display: flex; gap: 6px; justify-content: space-between; margin-top: 8px; }
+.moodstrip-cell {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: var(--surface-alt); border-radius: 14px; padding: 10px 2px;
+}
+.moodstrip-cell.today { background: var(--accent-soft); }
+.moodstrip-cell .emoji { font-size: 22px; line-height: 1; }
+.moodstrip-cell .day { font-size: 10px; font-weight: 800; color: var(--text-muted); }
+
 /* ---------- relógio flip (cronômetro do último beijo) ---------- */
 
 .flip-clock {

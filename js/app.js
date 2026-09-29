@@ -1396,9 +1396,10 @@ async function renderFriendsHome() {
   const view = $("#friends-view");
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const today = todayISO();
-  const [members, todaysMoods, balance, nextEvents] = await Promise.all([
+  const [members, todaysMoods, moodHistory, balance, nextEvents] = await Promise.all([
     friends.listGroupMembers(State.friendGroup.id),
     friends.getMoodsForDay(State.friendGroup.id, today).catch(() => []),
+    friends.getMoodHistory(State.friendGroup.id, toISODate(addDays(new Date(), -6))).catch(() => []),
     friends.getGroupCoinBalance(State.friendGroup.id).catch(() => 0),
     friends.listUpcomingEvents(State.friendGroup.id, today, 1).catch(() => []),
   ]);
@@ -1425,6 +1426,11 @@ async function renderFriendsHome() {
         }).join("")}
       </div>
       <p class="hint-text" style="margin-top:10px; margin-bottom:0;">${myMood ? "Toque pra ver ou mudar seu humor de hoje." : "Toque pra contar como você tá hoje."}</p>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <div class="card-title" style="font-size:15px;">Humor da turma - últimos 7 dias</div>
+      ${friendsHistoryStripHTML(moodHistory, members)}
     </div>
 
     <div class="card" style="margin-top:14px; position:relative; padding-top:26px;">
@@ -2614,7 +2620,7 @@ async function renderHome() {
     db.ensureMonthPlan(State.coupleId, mk, goalTarget()),
     db.listEncountersForMonth(State.coupleId, mk),
     db.getCoupleStats(State.coupleId),
-    db.getMoodHistory(State.coupleId, toISODate(addDays(new Date(), -2))),
+    db.getMoodHistory(State.coupleId, toISODate(addDays(new Date(), -6))),
   ]);
   const todayStr = todayISO();
 
@@ -2677,6 +2683,10 @@ async function renderHome() {
         </div>
       ` : `<div class="card-sub" style="margin:10px 0;">-</div>`}
       <p class="hint-text">Toca aqui pra ${stats?.last_kiss_at ? "atualizar" : "registrar"} a hora do último beijo</p>
+    </div>` : "";
+  html.moodstrip = feat("moodstrip") ? `    <div class="card">
+      <div class="card-title" style="font-size:15px;">Humor dos últimos 7 dias</div>
+      ${moodStripHomeHTML(recentMoods)}
     </div>` : "";
   html.goal = feat("goal") ? `    <div class="card">
       <div class="row" style="align-items:center; gap:6px;">
@@ -2749,8 +2759,12 @@ async function renderHome() {
 ${(() => {
       const parts = widgetIds.map((id) => html[id] || "");
       const kissIdx = widgetIds.indexOf("kiss");
+      const moodStripIdx = widgetIds.indexOf("moodstrip");
       const gameCard = `<div id="home-game-card"></div>`;
-      if (kissIdx >= 0) parts.splice(kissIdx + 1, 0, gameCard);
+      // o jogo entra logo depois da faixa de humor (se ela estiver logo após o beijo, que é o
+      // padrão) ou logo depois do beijo direto, se a faixa estiver desligada ou movida de lugar
+      const afterIdx = moodStripIdx === kissIdx + 1 && homeWidgetOn("moodstrip") ? moodStripIdx : kissIdx;
+      if (afterIdx >= 0) parts.splice(afterIdx + 1, 0, gameCard);
       else parts.unshift(gameCard);
       return parts.join("");
     })()}
@@ -3730,6 +3744,42 @@ function historyStripHTML(history) {
     return `<div class="card-sub" style="margin:0 0 4px; font-weight:800; color:var(--text);">${ROLE_LABEL[role]}</div><div class="history-strip">${cells}</div>`;
   });
   return rows.join("<div style='height:14px;'></div>");
+}
+
+// faixa de humor da HOME (casal): visual novo, cards coloridos por dia — a aba Humor mantém o
+// visual antigo dos pontinhos (historyStripHTML acima), esse aqui é só pra Home.
+function moodStripHomeHTML(history) {
+  const days = [];
+  for (let i = 6; i >= 0; i--) days.push(addDays(new Date(), -i));
+  const todayIso = todayISO();
+  const rows = ["gabriel", "tata"].map((role) => {
+    const cells = days.map((d) => {
+      const iso = toISODate(d);
+      const entry = history.find((h) => h.day === iso && h.role === role);
+      const info = entry ? MOOD_BY_ID[entry.mood] : null;
+      return `<div class="moodstrip-cell ${iso === todayIso ? "today" : ""}"><span class="emoji">${info ? info.emoji : "·"}</span><span class="day">${weekdayAbbrev(d)}</span></div>`;
+    }).join("");
+    return `<div class="card-sub" style="margin:10px 0 4px; font-weight:800; color:var(--text);">${ROLE_LABEL[role]}</div><div class="moodstrip-grid">${cells}</div>`;
+  });
+  return rows.join("");
+}
+
+// mesma ideia, mas pra Home da turma: uma linha por pessoa em vez das 2 fixas do casal
+function friendsHistoryStripHTML(history, members) {
+  const days = [];
+  for (let i = 6; i >= 0; i--) days.push(addDays(new Date(), -i));
+  const todayIso = todayISO();
+  const rows = members.map((m) => {
+    const cells = days.map((d) => {
+      const iso = toISODate(d);
+      const entry = history.find((h) => h.day === iso && h.user_id === m.user_id);
+      const info = entry ? MOOD_BY_ID[entry.mood] : null;
+      return `<div class="moodstrip-cell ${iso === todayIso ? "today" : ""}"><span class="emoji">${info ? info.emoji : "·"}</span><span class="day">${weekdayAbbrev(d)}</span></div>`;
+    }).join("");
+    const name = m.user_id === State.userId ? "Você" : escapeHTML(m.display_name);
+    return `<div class="card-sub" style="margin:10px 0 4px; font-weight:800; color:var(--text);">${name}</div><div class="moodstrip-grid">${cells}</div>`;
+  });
+  return rows.join("");
 }
 
 function escapeHTML(s) {
@@ -5633,6 +5683,7 @@ function openCycleEditorForm(existing, consentAt) {
 
 const HOME_META = {
   kiss: { t: "Cronômetro do último beijo", d: "Dias sem se beijar e os avisos de saudade ligados a ele" },
+  moodstrip: { t: "Humor dos últimos 7 dias", d: "Faixa com o emoji de humor de cada dia da semana, de vocês dois", nw: true },
   goal: { t: "Meta de encontros do mês", d: "Card com a meta, o progresso e a moeda por encontro" },
   next: { t: "Próximo encontro", d: "Card com o próximo encontro combinado" },
   recharge: { t: "Fim de semana de recarregar", d: "Card, botões no calendário e recusar convite sem custo" },
