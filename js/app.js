@@ -39,6 +39,7 @@ const State = {
   activeTab: "home",
   notesView: "hub",
   profileView: "hub",
+  shopView: "hub",
   calendarMonth: startOfMonth(new Date()),
   calendarEncounters: [],
   calendarPlan: null,
@@ -531,6 +532,7 @@ function setActiveTab(tab) {
   State.activeTab = tab;
   if (tab === "notes") State.notesView = "hub";
   if (tab === "profile") State.profileView = "hub";
+  if (tab === "shop") State.shopView = "hub";
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   renderActiveTab();
 }
@@ -3833,6 +3835,18 @@ function wireProfileBack() {
   $("#btn-profile-back")?.addEventListener("click", () => { State.profileView = "hub"; renderProfile(); });
 }
 
+function shopSubHeader(title) {
+  return `
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+      <button class="btn btn-ghost btn-sm" id="btn-shop-back" style="flex:none; padding:9px 12px;">← Voltar</button>
+      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">${title}</h2>
+    </div>
+  `;
+}
+function wireShopBack() {
+  $("#btn-shop-back")?.addEventListener("click", () => { State.shopView = "hub"; renderShop(); });
+}
+
 // ================= CONVITES =================
 
 async function renderInvites() {
@@ -4694,8 +4708,7 @@ async function renderHomeGameCard() {
   } catch (e) { /* jogo ainda não tem progresso ou deu erro de rede: só não mostra o card */ }
 }
 
-async function renderShop() {
-  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+async function loadShopData() {
   const [coins, redemptions, customRows] = await Promise.all([
     db.getCoinBalances(State.coupleId),
     db.listShopRedemptions(State.coupleId),
@@ -4714,90 +4727,48 @@ async function renderShop() {
   }
   // item apagado depois de resgatado: usa a recompensa sugerida pelo custo que ficou registrado
   const rewardFor = (r) => perkById[r.perk_id]?.fulfillReward ?? suggestedReward(r.cost);
+  return { coins, redemptions, customRows, customPerks, perkById, myCoins, pending, fulfilled, rewardFor };
+}
 
-  function perkCardHTML(p) {
-    return `
-      <div class="card">
-        <div class="row" style="align-items:flex-start;">
-          <div style="flex:0 0 auto; font-size:30px;">${escapeHTML(p.emoji)}</div>
-          <div style="flex:1; min-width:0;">
-            <div class="card-title" style="font-size:15px;">${escapeHTML(gen(p.title, genderOf(State.role)))}</div>
-            ${p.desc ? `<div class="card-sub">${escapeHTML(p.desc)}</div>` : ""}
-          </div>
-          ${p.custom
-            ? `<button class="btn btn-ghost btn-sm" style="flex:none;" data-act="edit-perk" data-id="${p.rowId}">✏️ Editar</button>`
-            : `<button class="btn btn-ghost btn-sm" style="flex:none;" data-act="edit-cost" data-id="${p.id}">✏️ Valor</button>`}
-        </div>
-        <button class="btn ${myCoins >= p.cost ? "btn-warm" : "btn-secondary"} btn-block" data-act="redeem" data-perk="${p.id}" ${myCoins < p.cost ? "disabled" : ""}>Resgatar (💰 ${p.cost})</button>
-      </div>
-    `;
-  }
-
-  function redemptionItemHTML(r) {
-    const perk = perkById[r.perk_id];
-    const reward = rewardFor(r);
-    return `
-      <div class="entry-item">
-        <div class="entry-icon">${escapeHTML(perk?.emoji || "🎁")}</div>
-        <div class="entry-body">
-          <div class="entry-title">${escapeHTML(gen(r.title, genderOf(r.role)))}</div>
-          <div class="entry-meta">resgatado por ${ROLE_LABEL[r.role]} · ${r.cost}💰</div>
-          ${r.status === "pendente"
-            ? `<div class="entry-actions"><button class="btn btn-success btn-sm" data-act="fulfill" data-id="${r.id}">Marcar como cumprido${reward ? ` (💰+${reward} pra quem fez)` : ""} ✅</button></div>`
-            : `
-              <div style="margin-top:4px;"><span class="pill pill-success">Cumprido ✅</span></div>
-              <div class="entry-actions"><button class="btn btn-ghost btn-sm" data-act="undo-fulfill" data-id="${r.id}">↩️ Desfazer</button></div>
-            `}
-        </div>
-      </div>
-    `;
-  }
-
-  view.innerHTML = `
+function shopPerkCardHTML(p, myCoins) {
+  return `
     <div class="card">
-      <div class="row" style="align-items:center; gap:10px;">
-        <span class="icon-badge">${icon("wallet", { size: 20 })}</span>
-        <div class="card-title" style="font-size:15px; margin-bottom:0;">Sua carteira</div>
-      </div>
-      <div class="row" style="margin-top:10px;">
-        <span class="pill pill-coin">💰 você tem ${myCoins}</span>
-        <span class="pill pill-muted">${ROLE_LABEL[otherRole()]}: ${coins[otherRole()] || 0}💰</span>
-      </div>
-    </div>
-
-    <div class="section-title">🎮 Games</div>
-    <div class="card" id="btn-open-star-battle" style="cursor:pointer;">
-      <div class="row" style="align-items:center; gap:10px;">
-        <img src="icons/capivarinhas.jpg" alt="Capibatman" style="width:48px; height:48px; border-radius:12px; object-fit:cover; flex:none;" />
-        <div style="flex:1;">
-          <div class="card-title" style="font-size:15px; margin-bottom:0;">Capibatman</div>
-          <div class="hint-text" style="margin:0;">Quebra-cabeça de lógica · ganha moeda a cada fase</div>
+      <div class="row" style="align-items:flex-start;">
+        <div style="flex:0 0 auto; font-size:30px;">${escapeHTML(p.emoji)}</div>
+        <div style="flex:1; min-width:0;">
+          <div class="card-title" style="font-size:15px;">${escapeHTML(gen(p.title, genderOf(State.role)))}</div>
+          ${p.desc ? `<div class="card-sub">${escapeHTML(p.desc)}</div>` : ""}
         </div>
+        ${p.custom
+          ? `<button class="btn btn-ghost btn-sm" style="flex:none;" data-act="edit-perk" data-id="${p.rowId}">✏️ Editar</button>`
+          : `<button class="btn btn-ghost btn-sm" style="flex:none;" data-act="edit-cost" data-id="${p.id}">✏️ Valor</button>`}
+      </div>
+      <button class="btn ${myCoins >= p.cost ? "btn-warm" : "btn-secondary"} btn-block" data-act="redeem" data-perk="${p.id}" ${myCoins < p.cost ? "disabled" : ""}>Resgatar (💰 ${p.cost})</button>
+    </div>
+  `;
+}
+
+function shopRedemptionItemHTML(r, perkById, rewardFor) {
+  const perk = perkById[r.perk_id];
+  const reward = rewardFor(r);
+  return `
+    <div class="entry-item">
+      <div class="entry-icon">${escapeHTML(perk?.emoji || "🎁")}</div>
+      <div class="entry-body">
+        <div class="entry-title">${escapeHTML(gen(r.title, genderOf(r.role)))}</div>
+        <div class="entry-meta">resgatado por ${ROLE_LABEL[r.role]} · ${r.cost}💰</div>
+        ${r.status === "pendente"
+          ? `<div class="entry-actions"><button class="btn btn-success btn-sm" data-act="fulfill" data-id="${r.id}">Marcar como cumprido${reward ? ` (💰+${reward} pra quem fez)` : ""} ✅</button></div>`
+          : `
+            <div style="margin-top:4px;"><span class="pill pill-success">Cumprido ✅</span></div>
+            <div class="entry-actions"><button class="btn btn-ghost btn-sm" data-act="undo-fulfill" data-id="${r.id}">↩️ Desfazer</button></div>
+          `}
       </div>
     </div>
-
-    <div class="section-title">Trocar moedas por</div>
-    <div class="stack">
-      ${PERKS.filter((x) => !perkHidden(x.id)).map((x) => perkById[x.id] || x).map(perkCardHTML).join("")}
-    </div>
-
-    <div class="section-title">Criados por vocês 💡</div>
-    <div class="stack">
-      ${customPerks.map(perkCardHTML).join("")}
-      <button class="btn btn-secondary btn-block" id="btn-new-perk">➕ Criar um item da lojinha</button>
-    </div>
-
-    ${pending.length ? `
-      <div class="section-title">Pendentes</div>
-      <div class="card"><div class="stack">${pending.map(redemptionItemHTML).join("")}</div></div>
-    ` : ""}
-
-    ${fulfilled.length ? `
-      <div class="section-title">Histórico</div>
-      <div class="card"><div class="stack">${fulfilled.map(redemptionItemHTML).join("")}</div></div>
-    ` : ""}
   `;
+}
 
+function wireShopActions(redemptions, rewardFor, customRows, perkById) {
   view.querySelectorAll("[data-act='redeem']").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const perk = perkById[btn.dataset.perk];
@@ -4831,14 +4802,6 @@ async function renderShop() {
       }
     });
   });
-  $("#btn-open-star-battle").addEventListener("click", () => renderStarBattleGame("casal"));
-  $("#btn-new-perk").addEventListener("click", () => openPerkModal(null));
-  view.querySelectorAll("[data-act='edit-perk']").forEach((btn) => {
-    btn.addEventListener("click", () => openPerkModal(customRows.find((r) => r.id === btn.dataset.id)));
-  });
-  view.querySelectorAll("[data-act='edit-cost']").forEach((btn) => {
-    btn.addEventListener("click", () => openPerkCostModal(perkById[btn.dataset.id]));
-  });
   view.querySelectorAll("[data-act='undo-fulfill']").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const redemption = redemptions.find((r) => r.id === btn.dataset.id);
@@ -4856,6 +4819,143 @@ async function renderShop() {
       }
     });
   });
+  view.querySelectorAll("[data-act='edit-perk']").forEach((btn) => {
+    btn.addEventListener("click", () => openPerkModal(customRows.find((r) => r.id === btn.dataset.id)));
+  });
+  view.querySelectorAll("[data-act='edit-cost']").forEach((btn) => {
+    btn.addEventListener("click", () => openPerkCostModal(perkById[btn.dataset.id]));
+  });
+}
+
+async function renderShop() {
+  const map = {
+    hub: renderShopHub, games: renderShopGames, perks: renderShopPerks,
+    custom: renderShopCustom, pending: renderShopPending, history: renderShopHistory,
+  };
+  (map[State.shopView] || renderShopHub)();
+}
+
+async function renderShopHub() {
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const { coins, myCoins, pending, fulfilled, customRows } = await loadShopData();
+
+  view.innerHTML = `
+    <div class="card">
+      <div class="row" style="align-items:center; gap:10px;">
+        <span class="icon-badge">${icon("wallet", { size: 20 })}</span>
+        <div class="card-title" style="font-size:15px; margin-bottom:0;">Sua carteira</div>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <span class="pill pill-coin">💰 você tem ${myCoins}</span>
+        <span class="pill pill-muted">${ROLE_LABEL[otherRole()]}: ${coins[otherRole()] || 0}💰</span>
+      </div>
+    </div>
+
+    <div class="section-title">Atalhos</div>
+    <div class="shortcut-grid">
+      <button class="shortcut-card" data-view="games">
+        <span class="shortcut-icon">${icon("gamepad-2", { size: 24 })}</span>
+        <span class="shortcut-title">Jogos</span>
+        <span class="shortcut-sub">Capibatman</span>
+      </button>
+      <button class="shortcut-card" data-view="perks">
+        <span class="shortcut-icon">${icon("gift", { size: 24 })}</span>
+        <span class="shortcut-title">Trocar moedas</span>
+        <span class="shortcut-sub">Ver itens</span>
+      </button>
+      <button class="shortcut-card" data-view="custom">
+        <span class="shortcut-icon">${icon("lightbulb", { size: 24 })}</span>
+        <span class="shortcut-title">Criados por vocês</span>
+        <span class="shortcut-sub">${customRows.length ? `${customRows.length} item${customRows.length === 1 ? "" : "s"}` : "Criar um novo"}</span>
+      </button>
+      <button class="shortcut-card" data-view="pending">
+        <span class="shortcut-icon">${icon("clock", { size: 24 })}</span>
+        <span class="shortcut-title">Pendentes</span>
+        <span class="shortcut-sub">${pending.length ? `${pending.length} esperando` : "Nenhum"}</span>
+        ${pending.length ? `<span class="dot-badge" style="position:absolute; top:10px; right:10px;"></span>` : ""}
+      </button>
+      <button class="shortcut-card" data-view="history">
+        <span class="shortcut-icon">${icon("check", { size: 24 })}</span>
+        <span class="shortcut-title">Histórico</span>
+        <span class="shortcut-sub">${fulfilled.length ? `${fulfilled.length} cumprido${fulfilled.length === 1 ? "" : "s"}` : "Nada ainda"}</span>
+      </button>
+    </div>
+  `;
+
+  document.querySelectorAll(".shortcut-card").forEach((btn) => {
+    btn.addEventListener("click", () => { State.shopView = btn.dataset.view; renderShop(); });
+  });
+}
+
+async function renderShopGames() {
+  view.innerHTML = `
+    ${shopSubHeader("🎮 Jogos")}
+    <div class="card" id="btn-open-star-battle" style="cursor:pointer;">
+      <div class="row" style="align-items:center; gap:10px;">
+        <img src="icons/capivarinhas.jpg" alt="Capibatman" style="width:48px; height:48px; border-radius:12px; object-fit:cover; flex:none;" />
+        <div style="flex:1;">
+          <div class="card-title" style="font-size:15px; margin-bottom:0;">Capibatman</div>
+          <div class="hint-text" style="margin:0;">Quebra-cabeça de lógica · ganha moeda a cada fase</div>
+        </div>
+      </div>
+    </div>
+  `;
+  wireShopBack();
+  $("#btn-open-star-battle").addEventListener("click", () => renderStarBattleGame("casal"));
+}
+
+async function renderShopPerks() {
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const { redemptions, customRows, perkById, myCoins, rewardFor } = await loadShopData();
+  view.innerHTML = `
+    ${shopSubHeader("🎁 Trocar moedas por")}
+    <div class="stack">
+      ${PERKS.filter((x) => !perkHidden(x.id)).map((x) => perkById[x.id] || x).map((p) => shopPerkCardHTML(p, myCoins)).join("")}
+    </div>
+  `;
+  wireShopBack();
+  wireShopActions(redemptions, rewardFor, customRows, perkById);
+}
+
+async function renderShopCustom() {
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const { redemptions, customRows, customPerks, perkById, myCoins, rewardFor } = await loadShopData();
+  view.innerHTML = `
+    ${shopSubHeader("💡 Criados por vocês")}
+    <div class="stack">
+      ${customPerks.map((p) => shopPerkCardHTML(p, myCoins)).join("")}
+      <button class="btn btn-secondary btn-block" id="btn-new-perk">➕ Criar um item da lojinha</button>
+    </div>
+  `;
+  wireShopBack();
+  wireShopActions(redemptions, rewardFor, customRows, perkById);
+  $("#btn-new-perk").addEventListener("click", () => openPerkModal(null));
+}
+
+async function renderShopPending() {
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const { redemptions, customRows, perkById, pending, rewardFor } = await loadShopData();
+  view.innerHTML = `
+    ${shopSubHeader("⏳ Pendentes")}
+    ${pending.length
+      ? `<div class="card"><div class="stack">${pending.map((r) => shopRedemptionItemHTML(r, perkById, rewardFor)).join("")}</div></div>`
+      : `<div class="empty-state"><span class="emoji">🎁</span>Nenhum resgate pendente.</div>`}
+  `;
+  wireShopBack();
+  wireShopActions(redemptions, rewardFor, customRows, perkById);
+}
+
+async function renderShopHistory() {
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const { redemptions, customRows, perkById, fulfilled, rewardFor } = await loadShopData();
+  view.innerHTML = `
+    ${shopSubHeader("📜 Histórico")}
+    ${fulfilled.length
+      ? `<div class="card"><div class="stack">${fulfilled.map((r) => shopRedemptionItemHTML(r, perkById, rewardFor)).join("")}</div></div>`
+      : `<div class="empty-state"><span class="emoji">🎁</span>Nada cumprido ainda.</div>`}
+  `;
+  wireShopBack();
+  wireShopActions(redemptions, rewardFor, customRows, perkById);
 }
 
 function openPerkModal(existing) {
