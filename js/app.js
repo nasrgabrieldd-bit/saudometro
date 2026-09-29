@@ -6108,6 +6108,11 @@ function showNextChangelogEntry(queue, mode, resolve) {
       ${CHANGELOG_REACTIONS.map((r) => `<button class="btn btn-sm" style="flex:none; font-size:20px; padding:8px 14px; background:var(${accentVar}); color:var(${onAccentVar});" data-changelog-react="${r}">${r}</button>`).join("")}
     </div>
   `);
+  // fechar pelo X ou tocando fora também conta como "visto" — senão a mesma novidade
+  // voltava a aparecer toda vez que o app abria, só quem reagia é que fazia ela sumir de vez.
+  const dismiss = () => { markChangelogSeen(entry.id); closeModal(); resolve(); };
+  $("#modal-close-btn").addEventListener("click", dismiss);
+  $("#modal-overlay").onclick = dismiss;
   $("#modal-sheet").querySelectorAll("[data-changelog-react]").forEach((btn) => {
     btn.addEventListener("click", () => {
       markChangelogSeen(entry.id);
