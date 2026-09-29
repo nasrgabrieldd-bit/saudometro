@@ -73,7 +73,7 @@ function closeModal() {
 
 // ---------------- reações (um toque no humor ou no recadinho do par) ----------
 
-const REACTION_EMOJIS = ["❤️", "🤗", "😘", "🥹", "💪"];
+const REACTION_EMOJIS = ["❤️", "🤗", "😘", "🥹", "💪", "👍", "😂", "🔥"];
 
 function reactionBarHTML(kind, targetId, reactions) {
   const mine = reactions.find((r) => r.target_id === targetId && r.role === State.role)?.emoji;
