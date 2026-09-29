@@ -40,3 +40,40 @@ export function dayIndexSince(coupleCreatedAt, atDate = new Date()) {
 export function challengeForDay(dayIndex) {
   return CHALLENGES[dayIndex % CHALLENGES.length];
 }
+
+// desafio do dia da Turma: texto próprio (não reaproveita CHALLENGES), porque aquelas perguntas
+// falam de "seu par"/"nele(a)" — fazem sentido pra casal, não pra um grupo de amigos.
+// Sem gênero embutido de propósito: a Turma não guarda gênero de cada pessoa, então o texto é neutro.
+export const FRIEND_CHALLENGES = [
+  "Qual foi o motivo do seu último sorriso hoje?",
+  "Manda um elogio sincero pra alguém da turma, agora.",
+  "Descreve o abraço perfeito da turma inteira.",
+  "Qual música te lembra a turma agora mesmo?",
+  "Conta uma lembrança boa que vocês viveram juntos.",
+  "Qual foi a última vez que você riu muito com a turma?",
+  "O que você tá com vontade de fazer com a turma esse fim de semana?",
+  "Qual comida você adoraria comer com a turma agora?",
+  "Descreve a turma em 3 palavras.",
+  "Qual foi a coisa mais engraçada que rolou na turma essa semana?",
+  "Se pudesse mandar um recado pra turma toda agora, o que diria?",
+  "Qual apelido você daria pra turma, se pudesse escolher um?",
+  "Conta um plano que a turma ainda não realizou.",
+  "O que você mais sente falta quando a turma não tá reunida?",
+  "Qual foto da turma é a sua favorita, e por quê?",
+  "Qual foi a última vez que alguém da turma te surpreendeu?",
+  "O que você faria se pudesse ver a turma toda agora mesmo?",
+  "Qual qualidade de alguém da turma você queria ter?",
+  "Conta uma piada interna que só a turma entende.",
+  "Qual filme ou série combina com a vibe da turma?",
+  "O que você mais admira na turma hoje?",
+  "Manda um \"valeu por existir\" pra alguém da turma.",
+  "Qual foi o dia mais engraçado que a turma já teve junta?",
+  "Se hoje fosse o primeiro rolê da turma, o que você diria pra todo mundo?",
+  "Qual gesto pequeno de alguém da turma te alegra sempre?",
+  "O que você tá agradecendo por ter essa turma na sua vida hoje?",
+  "Descreve como seria um dia perfeito com a turma toda.",
+];
+
+export function friendChallengeForDay(dayIndex) {
+  return FRIEND_CHALLENGES[dayIndex % FRIEND_CHALLENGES.length];
+}

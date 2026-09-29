@@ -97,6 +97,13 @@ export const CHANGELOG = [
     text: "Na Home da turma tem uma seção nova pra guardar ideias de rolê (com link e foto) e avaliar com estrelas — o ranking é pela média de todo mundo que votou.",
   },
   {
+    id: "turma-desafio-do-dia-2026-09",
+    tag: "amigos",
+    emoji: "🎯",
+    title: "Desafio do dia chegou na Turma",
+    text: "O card \"Em breve\" da Home virou realidade: toda a turma responde a mesma pergunta, e dá pra ver a resposta de todo mundo. Perguntas próprias pra grupo de amigos, diferentes das do casal.",
+  },
+  {
     id: "turma-meta-roles-2026-09",
     tag: "amigos",
     emoji: "🎯",
