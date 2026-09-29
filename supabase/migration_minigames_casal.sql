@@ -26,6 +26,12 @@ create policy "game_room_players: owner sees" on game_room_players
     )
   ));
 
+-- "create or replace" só troca uma função de MESMA assinatura — como esta ganhou um 4º
+-- parâmetro (p_couple_id), sem isso o Postgres cria uma função NOVA por cima em vez de
+-- substituir a de 3 parâmetros, e depois não consegue decidir sozinho qual das duas chamar
+-- ("could not choose the best candidate function"). Remove a versão antiga antes de recriar.
+drop function if exists create_game_room(uuid, text, jsonb);
+
 create or replace function create_game_room(p_friend_group_id uuid, p_game_type text, p_settings jsonb default '{}'::jsonb, p_couple_id uuid default null)
 returns json
 language plpgsql
