@@ -1,10 +1,13 @@
 // Sistema de salas compartilhado pelos minigames multiplayer (Cartas, Stop) — não sabe
 // regra de jogo nenhuma, só sala/lobby/presença/reconexão. Sala vive dentro de uma turma
-// existente (reaproveita a confiança que a turma já estabelece).
+// OU de um casal existente (reaproveita a confiança que já existe, nunca convite pra estranho).
 import { supabase } from "./supabaseClient.js";
 
-export async function createRoom(friendGroupId, gameType, settings = {}) {
-  const { data, error } = await supabase.rpc("create_game_room", { p_friend_group_id: friendGroupId, p_game_type: gameType, p_settings: settings });
+// owner = { type: "friend_group" | "couple", id }
+export async function createRoom(owner, gameType, settings = {}) {
+  const params = { p_friend_group_id: owner.type === "friend_group" ? owner.id : null, p_game_type: gameType, p_settings: settings };
+  if (owner.type === "couple") params.p_couple_id = owner.id;
+  const { data, error } = await supabase.rpc("create_game_room", params);
   if (error) throw error;
   return data; // { id, code }
 }
@@ -45,13 +48,14 @@ export async function listRoomPlayers(roomId) {
 
 // pra reconexão: sala não fechada onde a pessoa ainda está (left_at nulo) — pra oferecer
 // "voltar pra partida em andamento" ao abrir o app ou a lista de jogos
-export async function findMyActiveRoom(friendGroupId, userId) {
+export async function findMyActiveRoom(owner, userId) {
+  const ownerColumn = owner.type === "couple" ? "couple_id" : "friend_group_id";
   const { data, error } = await supabase
     .from("game_room_players")
-    .select("room_id, game_rooms!inner(id, code, game_type, status, friend_group_id)")
+    .select(`room_id, game_rooms!inner(id, code, game_type, status, ${ownerColumn})`)
     .eq("user_id", userId)
     .is("left_at", null)
-    .eq("game_rooms.friend_group_id", friendGroupId)
+    .eq(`game_rooms.${ownerColumn}`, owner.id)
     .not("game_rooms.status", "in", "(closed,finished)")
     .limit(1)
     .maybeSingle();
@@ -71,8 +75,12 @@ export function subscribeRoomChanges(roomId, onChange) {
 // presença (quem tá com o app aberto agora nessa sala) — não grava nada no banco, é só a
 // lista de canais ativos no servidor do Supabase. Usa isso pra "🟢 online" / "🟡 reconectando"
 // sem gastar escrita nenhuma a cada segundo.
-export function trackPresence(roomId, userId, displayName) {
+// onSync precisa ser registrado ANTES do subscribe() (o cliente do Supabase Realtime recusa
+// registrar callback de "presence" depois que o canal já está inscrito), por isso trackPresence
+// já recebe onSync em vez de exigir uma chamada separada depois
+export function trackPresence(roomId, userId, displayName, onSync) {
   const channel = supabase.channel(`presence-room-${roomId}`, { config: { presence: { key: userId } } });
+  if (onSync) channel.on("presence", { event: "sync" }, () => onSync(presentUserIds(channel)));
   channel.subscribe(async (status) => {
     if (status === "SUBSCRIBED") {
       await channel.track({ user_id: userId, display_name: displayName, online_at: new Date().toISOString() });
@@ -85,10 +93,6 @@ export function trackPresence(roomId, userId, displayName) {
 export function presentUserIds(channel) {
   const state = channel.presenceState();
   return new Set(Object.keys(state));
-}
-
-export function subscribePresence(channel, onSync) {
-  channel.on("presence", { event: "sync" }, () => onSync(presentUserIds(channel)));
 }
 
 export function stopPresence(channel) {
