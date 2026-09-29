@@ -1111,6 +1111,32 @@ label.field-label:first-child { margin-top: 0; }
 .cg-hand .card-face.playable { cursor: pointer; transform: translateY(-8px); box-shadow: 0 10px 16px -6px rgba(0, 0, 0, .6); }
 .cg-hand .card-face.dim { filter: brightness(.5) saturate(.5); }
 
+/* ---------- Stop/Adedonha (Fase 3) ----------
+   Base usa tokens --friends-accent (turma é o padrão do mockup); override abaixo troca pra
+   --accent quando a sala é do Casal, mesmo esquema do .rm-*. */
+.sg-hexwrap { display: flex; justify-content: center; padding: 18px 0 8px; }
+.sg-hex { width: 88px; height: 96px; background: linear-gradient(160deg, var(--friends-accent), var(--friends-accent-strong)); clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px -8px rgba(30, 50, 120, .5); margin: 0 auto; }
+.sg-hex .letter { font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 40px; color: #fff; }
+.sg-catlist { padding: 6px 0; display: flex; flex-direction: column; gap: 8px; }
+.sg-cat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 9px 12px; }
+.sg-cat .lbl { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--friends-accent-strong); margin-bottom: 2px; }
+.sg-progress-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0 0; font-size: 11.5px; font-weight: 800; color: var(--muted); }
+.sg-stopbtn { margin: 12px 0 4px; background: linear-gradient(135deg, #ff8a5c, #e0433d); color: #fff; border-radius: 16px; padding: 16px; text-align: center; font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 18px; letter-spacing: .04em; box-shadow: 0 8px 20px -8px rgba(224, 67, 61, .6); cursor: pointer; }
+
+.sg-result-cat { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; margin: 0 0 10px; }
+.sg-result-cat .lbl { font-size: 10.5px; font-weight: 800; text-transform: uppercase; color: var(--friends-accent-strong); margin-bottom: 8px; }
+.sg-answer-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px dashed var(--border); }
+.sg-answer-row:first-of-type { border-top: none; }
+.sg-answer-row .who { width: 56px; font-size: 11.5px; font-weight: 800; color: var(--muted); flex: none; }
+.sg-answer-row .ans { flex: 1; font-weight: 800; font-size: 13.5px; }
+.sg-answer-row .pts { font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 13px; }
+.sg-answer-row .pts.ok { color: #1f8a6c; }
+.sg-answer-row .pts.rep { color: #c98a1f; }
+
+#screen-app .sg-hex { background: linear-gradient(160deg, var(--accent), var(--accent-strong)); }
+#screen-app .sg-cat .lbl { color: var(--accent-strong); }
+#screen-app .sg-result-cat .lbl { color: var(--accent-strong); }
+
 /* ---------- tela larga (computador) ----------
    O app é mobile-first (pensado pra celular, coluna de 480px). Em tela larga, só alarga
    essa coluna pra ficar mais confortável — layout, cards e menu continuam exatamente os

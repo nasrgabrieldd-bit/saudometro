@@ -187,6 +187,13 @@ export const CHANGELOG = [
     title: "Cartas já tem jogo de verdade",
     text: "O jogo de Cartas na sala multiplayer saiu do \"em breve\": baralho de descarte por cor, bloqueio, inversão, +2, curinga e curinga+4, tudo validado direitinho. Fique sem cartas antes dos outros pra vencer. Funciona no Casal e na Turma, até 8 jogadores.",
   },
+  {
+    id: "jogo-stop-de-verdade-2026-09",
+    tag: "geral",
+    emoji: "🔤",
+    title: "STOP já tem jogo de verdade",
+    text: "O STOP na sala multiplayer também saiu do \"em breve\": letra sorteada, 6 categorias (nome, animal, comida, cidade, objeto, filme/série), cronômetro e botão STOP pra fechar a rodada na hora. 5 rodadas por partida, pontuação automática (resposta única vale mais que repetida). Funciona no Casal e na Turma.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
