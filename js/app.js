@@ -3871,7 +3871,7 @@ async function spendCoinIfAvailable(role, amount, reason) {
 }
 
 // aceitar/recusar/cancelar um convite (fora dos 2 encontros oficiais do mês) e seus efeitos em moedas.
-// mandar qualquer convite já custou 1 moeda de quem mandou (ver openSaudadeModal / renderInvites).
+// mandar qualquer convite já custou 1 moeda de quem mandou (ver renderInvites).
 async function respondToConvite(entry, decision) {
   if (decision === "accept") {
     await db.updateEncounterStatus(entry.id, "confirmado");
