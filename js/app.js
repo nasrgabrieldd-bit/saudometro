@@ -17,6 +17,7 @@ import { PERKS, PERK_BY_ID, customToPerk, suggestedReward } from "./perks.js";
 import { planLabel } from "./plans.js";
 import { emptyGrid, markCell, revealCell, countFound, CELL_EMPTY, CELL_MARK, CELL_CAT } from "./games/starBattle.js";
 import { STAR_BATTLE_LEVELS } from "./games/starBattleLevels.js";
+import * as cardGame from "./games/cardGame.js";
 import { cycleInfo, cycleRingSVG, cycleLegendHTML, cycleTilesHTML, cycleHelpHTML, cyclePhaseName, cycleTip, cyclePhaseOnDate, averageCycleLength, CYCLE_COLORS, CYCLE_DISCLAIMER } from "./cycle.js";
 import { pickSaudadeNudge } from "./nudges.js";
 import { nameOf, genderOf, emojiOf, gen, genMixed, cleanName, setPeopleSettings, defaultEmojis, legacyPeople, feat, goalTarget, HOME_WIDGETS, homeOrder, homeWidgetOn, togetherSince, coinRule, luckyOn, perkHidden, COIN_DEFAULTS } from "./people.js";
@@ -2716,11 +2717,14 @@ function roomBack() {
 
 let roomChannelUnsub = null;
 let roomPresenceChannel = null;
-// sai de qualquer sala que esteja "aberta" na tela (troca de aba, troca de turma, etc.) —
-// não sai da sala em si (isso é leaveRoom), só para de ouvir as mudanças dela em tempo real
+let cardMatchChannelUnsub = null;
+// sai de qualquer sala (e partida de cartas, se tiver uma aberta) que esteja "aberta" na tela
+// (troca de aba, troca de turma, etc.) — não sai da sala em si (isso é leaveRoom), só para de
+// ouvir as mudanças dela em tempo real
 function closeRoomChannels() {
   if (roomChannelUnsub) { roomChannelUnsub(); roomChannelUnsub = null; }
   if (roomPresenceChannel) { gameRooms.stopPresence(roomPresenceChannel); roomPresenceChannel = null; }
+  if (cardMatchChannelUnsub) { cardMatchChannelUnsub(); cardMatchChannelUnsub = null; }
   State.roomView = null;
 }
 
@@ -2949,13 +2953,14 @@ function roomPlayerRowHTML(p, byId, room) {
 }
 
 function renderRoomPlaying(room) {
+  if (room.game_type === "cartas") { renderCardMatch(room); return; }
   const view = roomViewEl();
   State.roomView = { roomId: room.id };
   view.innerHTML = `
     <div class="card" style="text-align:center; padding:40px 20px;">
       <div style="font-size:40px;">🚧</div>
       <div class="card-title" style="margin-top:10px;">A partida começou!</div>
-      <p class="card-sub">O jogo em si (as regras de ${room.game_type === "cartas" ? "Cartas" : "STOP"}) entra na próxima etapa. Por enquanto, essa tela só confirma que o sistema de sala funciona de ponta a ponta.</p>
+      <p class="card-sub">O jogo em si (as regras de STOP) entra na próxima etapa. Por enquanto, essa tela só confirma que o sistema de sala funciona de ponta a ponta.</p>
       <button class="btn btn-block" style="margin-top:10px; ${roomBtnStyle()}" id="btn-leave-playing">Sair da sala</button>
     </div>
   `;
@@ -2963,6 +2968,202 @@ function renderRoomPlaying(room) {
     try { await gameRooms.leaveRoom(room.id); } catch (e) { /* ignora, já saindo de qualquer jeito */ }
     closeRoomChannels();
     renderGameHub();
+  });
+}
+
+// ================= JOGO DE CARTAS (Fase 2: motor de regras) =================
+
+const CARD_KIND_ICON = {
+  skip: `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2.4"/><line x1="6.5" y1="17.5" x2="17.5" y2="6.5" stroke="currentColor" stroke-width="2.4"/></svg>`,
+  reverse: `<svg viewBox="0 0 24 24" fill="none"><path d="M4 8c3-4 13-4 16 0M20 8l-3-1M20 8l-1 3" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 16c-3 4-13 4-16 0M4 16l3 1M4 16l1-3" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  draw2: `<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="7" width="12" height="15" rx="2.5" fill="currentColor" fill-opacity=".45"/><rect x="9" y="2" width="12" height="15" rx="2.5" fill="currentColor"/></svg>`,
+};
+const CARD_COLOR_HEX = { vermelho: "#e0433d", amarelo: "#f4c430", verde: "#3d9e4f", azul: "#3d66c9" };
+const CARD_CORNER_LABEL = { skip: "⊘", reverse: "⇄", draw2: "+2", wild: "✦", wild4: "+4" };
+
+// extraAttrs vai direto no elemento .card-face/.card-back (ex.: data-hand-index="2") — nunca
+// num wrapper à parte, senão o seletor CSS ".cg-hand .card-face:first-child" (que faz as
+// cartas da mão se sobrepor em leque) para de funcionar (toda carta viraria "primeira filha"
+// do próprio wrapper individual)
+function cardFaceHTML(card, extraClass = "", extraAttrs = "") {
+  if (!card) return `<div class="card-back ${extraClass}" ${extraAttrs}><svg class="mark" viewBox="0 0 24 24" fill="none"><path d="M12 2 21 7.5V16.5L12 22 3 16.5V7.5Z" fill="#fff" fill-opacity=".9"/></svg></div>`;
+  if (card.kind === "wild" || card.kind === "wild4") {
+    return `<div class="card-face wild ${extraClass}" ${extraAttrs}><div class="oval"></div><span class="num" style="color:#3a2233;">${CARD_CORNER_LABEL[card.kind]}</span></div>`;
+  }
+  const cc = CARD_COLOR_HEX[card.color];
+  if (card.kind === "number") {
+    return `<div class="card-face ${extraClass}" style="--cc:${cc};" ${extraAttrs}><div class="oval"></div><span class="corner">${card.value}</span><span class="corner br">${card.value}</span><span class="num">${card.value}</span></div>`;
+  }
+  return `<div class="card-face ${extraClass}" style="--cc:${cc};" ${extraAttrs}><div class="oval"></div><span class="icon">${CARD_KIND_ICON[card.kind]}</span><span class="corner">${CARD_CORNER_LABEL[card.kind]}</span></div>`;
+}
+
+function cardMoveText(move, byId) {
+  if (!move) return "";
+  const who = move.user_id === State.userId ? "Você" : escapeHTML(byId[move.user_id]?.display_name || "alguém");
+  if (move.action === "draw") return `${who} comprou uma carta`;
+  if (move.action === "pass") return `${who} passou a vez`;
+  if (move.action === "auto_pass") return "A vez passou porque alguém saiu da sala";
+  if (move.action === "play") {
+    const c = move.card;
+    const label = c.kind === "number" ? `${c.color[0].toUpperCase()}${c.color.slice(1)} ${c.value}`
+      : c.kind === "wild" ? "Curinga" : c.kind === "wild4" ? "Curinga +4"
+      : c.kind === "skip" ? `Bloqueio ${c.color}` : c.kind === "reverse" ? `Inversão ${c.color}` : `+2 ${c.color}`;
+    return `${who} jogou ${label}`;
+  }
+  return "";
+}
+
+function openColorChoiceModal() {
+  return new Promise((resolve) => {
+    openModal(`
+      <h3 class="modal-title">Escolha a cor</h3>
+      <div class="row" style="gap:8px; flex-wrap:wrap; justify-content:center; margin-top:6px;">
+        ${Object.entries(CARD_COLOR_HEX).map(([color, hex]) => `
+          <button data-color="${color}" style="width:60px; height:60px; border-radius:16px; background:${hex}; border:none;"></button>
+        `).join("")}
+      </div>
+    `, () => resolve(null));
+    $("#modal-sheet").querySelectorAll("[data-color]").forEach((btn) => {
+      btn.addEventListener("click", () => { closeModal(); resolve(btn.dataset.color); });
+    });
+  });
+}
+
+async function renderCardMatch(room) {
+  const view = roomViewEl();
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  State.roomView = { roomId: room.id };
+  let matchId;
+  try {
+    ({ match_id: matchId } = await gameRooms.startCardMatch(room.id));
+  } catch (e) {
+    view.innerHTML = `<div class="card" style="text-align:center; padding:24px;"><p class="error-text">Não deu: ${escapeHTML(e.message || String(e))}</p><button class="btn btn-block" style="margin-top:10px; ${roomBtnStyle()}" id="btn-cardmatch-back">Voltar</button></div>`;
+    $("#btn-cardmatch-back").addEventListener("click", () => { closeRoomChannels(); renderGameHub(); });
+    return;
+  }
+  await renderCardMatchScreen(matchId);
+}
+
+async function renderCardMatchScreen(matchId) {
+  const view = roomViewEl();
+  const [match, players, hand, members] = await Promise.all([
+    gameRooms.getCardMatch(matchId),
+    gameRooms.listCardMatchPlayers(matchId),
+    gameRooms.getMyHand(matchId, State.userId),
+    roomMembers(),
+  ]);
+  const byId = Object.fromEntries(members.map((m) => [m.user_id, m]));
+
+  if (match.status === "finished") {
+    const iWon = match.winner_user_id === State.userId;
+    const winnerName = match.winner_user_id === State.userId ? "Você" : escapeHTML(byId[match.winner_user_id]?.display_name || "alguém");
+    view.innerHTML = `
+      <div class="card" style="text-align:center; padding:40px 20px;">
+        <div style="font-size:40px;">${match.winner_user_id ? "🎉" : "🏳️"}</div>
+        <div class="card-title" style="margin-top:10px;">${match.winner_user_id ? `${winnerName} ${iWon ? "venceu!" : "venceu a partida!"}` : "A partida acabou sem vencedor"}</div>
+        <button class="btn btn-block" style="margin-top:14px; ${roomBtnStyle()}" id="btn-cardmatch-rematch">🔄 Jogar de novo</button>
+        <button class="btn btn-ghost btn-block" style="margin-top:8px;" id="btn-cardmatch-leave">Sair da sala</button>
+      </div>
+    `;
+    $("#btn-cardmatch-rematch").addEventListener("click", async () => {
+      try {
+        const { match_id: newId } = await gameRooms.startCardMatch(match.room_id);
+        await renderCardMatchScreen(newId);
+      } catch (e) { alert("Não deu: " + (e.message || e)); }
+    });
+    $("#btn-cardmatch-leave").addEventListener("click", async () => {
+      try { await gameRooms.leaveRoom(match.room_id); } catch (e) { /* já pode ter saído */ }
+      closeRoomChannels();
+      renderGameHub();
+    });
+    subscribeCardMatchScreen(matchId);
+    return;
+  }
+
+  const myTurn = match.current_turn_user_id === State.userId;
+  const opponents = players.filter((p) => p.user_id !== State.userId);
+
+  view.innerHTML = `
+    <div class="cg-table">
+      <div class="cg-topbar"><span>🃏 Cartas</span><span id="btn-cardmatch-exit" style="cursor:pointer;">✕</span></div>
+      <div class="cg-opp-row">
+        ${opponents.map((p) => {
+          const [c1, c2] = roomAvatarColors(p.user_id);
+          const initial = (byId[p.user_id]?.display_name || "?").trim()[0]?.toUpperCase() || "?";
+          const isTurn = match.current_turn_user_id === p.user_id;
+          return `
+            <div class="cg-opp ${isTurn ? "turn" : ""}">
+              <div class="av" style="--av1:${c1}; --av2:${c2};">${initial}</div>
+              <span class="nm">${escapeHTML(byId[p.user_id]?.display_name || "alguém")} · ${p.hand_count}</span>
+              <div class="stack ${p.hand_count <= 2 ? "warn" : ""}">${Array.from({ length: Math.min(p.hand_count, 6) }).map(() => `<span class="mini"></span>`).join("")}</div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+      <div class="cg-mat-wrap">
+        <div class="cg-mat">
+          <div class="dir-arc"></div>
+          <div class="cg-pile"></div>
+          ${cardFaceHTML(match.discard_top)}
+        </div>
+      </div>
+      <p class="cg-last-move">${cardMoveText(match.last_move, byId)}</p>
+      <div class="cg-you">
+        ${myTurn ? `<span class="cg-turn-pill">Sua vez${match.has_drawn_this_turn ? " · já comprou" : ""}</span>` : `<span class="cg-turn-pill" style="opacity:.5;">Vez de ${escapeHTML(byId[match.current_turn_user_id]?.display_name || "alguém")}</span>`}
+        <div class="cg-hand">
+          ${hand.map((card, i) => {
+            const playable = myTurn && cardGame.canPlay(card, match.discard_top, match.active_color);
+            return cardFaceHTML(card, playable ? "playable" : (myTurn ? "dim" : ""), `data-hand-index="${i}"`);
+          }).join("")}
+        </div>
+        ${myTurn ? `
+          <div class="row" style="gap:8px; margin-top:10px; padding:0 14px;">
+            ${!match.has_drawn_this_turn ? `<button class="btn btn-secondary btn-sm" style="flex:1;" id="btn-cardmatch-draw">🎴 Comprar</button>` : ""}
+            ${match.has_drawn_this_turn ? `<button class="btn btn-secondary btn-sm" style="flex:1;" id="btn-cardmatch-pass">Passar a vez</button>` : ""}
+          </div>
+        ` : ""}
+      </div>
+    </div>
+  `;
+
+  $("#btn-cardmatch-exit").addEventListener("click", async () => {
+    if (!confirm("Sair da sala? A partida continua pros outros.")) return;
+    try { await gameRooms.leaveRoom(match.room_id); } catch (e) { /* já pode ter saído */ }
+    closeRoomChannels();
+    renderGameHub();
+  });
+  view.querySelectorAll("[data-hand-index]").forEach((el) => {
+    el.addEventListener("click", async () => {
+      if (!myTurn) return;
+      const idx = Number(el.dataset.handIndex);
+      const card = hand[idx];
+      if (!cardGame.canPlay(card, match.discard_top, match.active_color)) return;
+      let chosenColor = null;
+      if (card.kind === "wild" || card.kind === "wild4") {
+        chosenColor = await openColorChoiceModal();
+        if (!chosenColor) return;
+      }
+      try { await gameRooms.playCard(matchId, idx, chosenColor); } catch (e) { alert("Não deu: " + (e.message || e)); }
+    });
+  });
+  $("#btn-cardmatch-draw")?.addEventListener("click", async () => {
+    try { await gameRooms.drawCard(matchId); } catch (e) { alert("Não deu: " + (e.message || e)); }
+  });
+  $("#btn-cardmatch-pass")?.addEventListener("click", async () => {
+    try { await gameRooms.passTurn(matchId); } catch (e) { alert("Não deu: " + (e.message || e)); }
+  });
+
+  subscribeCardMatchScreen(matchId);
+}
+
+function subscribeCardMatchScreen(matchId) {
+  if (cardMatchChannelUnsub) { cardMatchChannelUnsub(); cardMatchChannelUnsub = null; }
+  cardMatchChannelUnsub = gameRooms.subscribeCardMatch(matchId, async () => {
+    try {
+      if (State.roomView?.roomId == null) return;
+      await gameRooms.skipDepartedTurn(matchId).catch(() => {});
+      if (State.roomView?.roomId != null) await renderCardMatchScreen(matchId);
+    } catch (e) { /* partida pode ter sido encerrada; a tela de fim/saída ainda funciona */ }
   });
 }
 

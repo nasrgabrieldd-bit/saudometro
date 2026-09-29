@@ -1056,6 +1056,61 @@ label.field-label:first-child { margin-top: 0; }
 .rm-join-box { padding: 18px 0; }
 .rm-join-input { width: 100%; box-sizing: border-box; text-align: center; font-family: 'Baloo 2', sans-serif; font-size: 22px; letter-spacing: .16em; padding: 14px; border-radius: 14px; border: 1.5px solid var(--border); background: var(--surface); color: var(--text); box-shadow: inset 0 2px 6px -3px rgba(20, 30, 80, .2); text-transform: uppercase; }
 
+/* ---------- jogo de Cartas (Fase 2: mesa de jogo) ----------
+   Paleta fixa escura (não usa --accent/--friends-accent em lugar nenhum) — mesma mesa pro
+   casal e pra turma, só o resto do app em volta muda de cor. */
+.cg-table { background: linear-gradient(180deg, #232c5e, #171d40); border-radius: 20px; min-height: 460px; display: flex; flex-direction: column; color: #fff; position: relative; overflow: hidden; }
+.cg-topbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 4px; font-size: 12px; font-weight: 700; opacity: .7; letter-spacing: .03em; }
+.cg-opp-row { display: flex; justify-content: space-around; align-items: flex-start; padding: 10px 14px 0; flex-wrap: wrap; gap: 10px; }
+.cg-opp { display: flex; flex-direction: column; align-items: center; gap: 5px; opacity: .6; }
+.cg-opp.turn { opacity: 1; }
+.cg-opp .av { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12px; color: #fff; background: linear-gradient(150deg, var(--av1, #8fa4ff), var(--av2, #3d56c9)); }
+.cg-opp.turn .av { box-shadow: 0 0 0 2.5px #ffd15c; }
+.cg-opp .nm { font-size: 10.5px; font-weight: 700; text-align: center; }
+.cg-opp .stack { display: flex; }
+.cg-opp .stack .mini { width: 13px; height: 19px; border-radius: 3px; background: linear-gradient(165deg, #7c93ff, #3d56c9); margin-left: -7px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .25); }
+.cg-opp .stack .mini:first-child { margin-left: 0; }
+.cg-opp .stack.warn .mini { background: linear-gradient(165deg, #ff8a80, #e0433d); }
+
+.cg-mat-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 14px 0; }
+.cg-mat { width: 172px; height: 172px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, .07), transparent 60%), #1e2652; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); display: flex; align-items: center; justify-content: center; gap: 14px; position: relative; }
+.cg-mat .dir-arc { position: absolute; inset: -8px; border-radius: 50%; border: 1.5px dashed rgba(255, 255, 255, .18); }
+.cg-pile { width: 44px; height: 64px; border-radius: 9px; background: linear-gradient(165deg, #7c93ff, #3d56c9 55%, #232f8f); box-shadow: 0 4px 10px -4px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .3); }
+
+.card-face { width: 58px; height: 84px; border-radius: 14px; position: relative; flex: none; background: linear-gradient(165deg, color-mix(in srgb, var(--cc) 88%, #fff), var(--cc) 55%, color-mix(in srgb, var(--cc) 82%, #000) 100%); box-shadow: 0 8px 18px -8px color-mix(in srgb, var(--cc) 70%, transparent), inset 0 1px 0 rgba(255, 255, 255, .4), inset 0 0 0 1px rgba(255, 255, 255, .14); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.card-face::after { content: ""; position: absolute; top: -30%; left: -20%; width: 70%; height: 60%; background: rgba(255, 255, 255, .16); border-radius: 50%; filter: blur(1px); transform: rotate(-25deg); }
+.card-face .oval { position: absolute; width: 76%; height: 58%; background: rgba(255, 255, 255, .96); border-radius: 50%; box-shadow: 0 3px 10px rgba(0, 0, 0, .16); }
+.card-face .num { font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 25px; letter-spacing: -.01em; color: var(--cc); z-index: 1; }
+.card-face .corner { position: absolute; top: 6px; left: 7px; font-family: 'Nunito', sans-serif; font-size: 10.5px; font-weight: 800; color: rgba(255, 255, 255, .92); z-index: 2; }
+.card-face .corner.br { top: auto; left: auto; bottom: 6px; right: 7px; }
+.card-face .icon { z-index: 1; width: 24px; height: 24px; color: var(--cc); display: flex; }
+.card-face .icon svg { width: 100%; height: 100%; }
+.card-face.wild { background: conic-gradient(from 200deg, #e0433d 0 90deg, #f4c430 90deg 180deg, #3d9e4f 180deg 270deg, #3d66c9 270deg 360deg); }
+.card-face.wild .oval { opacity: .96; }
+.card-face.wild .num { font-size: 20px; }
+
+.card-back { width: 58px; height: 84px; border-radius: 14px; flex: none; background: linear-gradient(165deg, #7c93ff, #3d56c9 55%, #232f8f 100%); box-shadow: 0 8px 18px -8px rgba(40, 55, 150, .7), inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 0 0 1px rgba(255, 255, 255, .14); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+.card-back::after { content: ""; position: absolute; top: -30%; left: -20%; width: 70%; height: 60%; background: rgba(255, 255, 255, .15); border-radius: 50%; filter: blur(1px); transform: rotate(-25deg); }
+.card-back .mark { width: 24px; height: 24px; z-index: 1; opacity: .92; }
+
+.cg-mat .card-face { width: 44px; height: 64px; border-radius: 9px; box-shadow: 0 0 0 2.5px var(--cc), 0 6px 14px -6px rgba(0, 0, 0, .6); }
+.cg-mat .card-face .num { font-size: 20px; }
+.cg-mat .card-face .corner { font-size: 8.5px; }
+.cg-mat .card-face.wild .num { font-size: 16px; }
+
+.cg-last-move { text-align: center; font-size: 11px; opacity: .6; margin: -6px 0 0; }
+
+.cg-you { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 4px 0 16px; }
+.cg-turn-pill { font-size: 11px; font-weight: 800; color: #1c2458; background: #ffd15c; padding: 4px 12px; border-radius: 999px; }
+.cg-hand { display: flex; justify-content: center; flex-wrap: wrap; padding: 6px 10px 0; }
+.cg-hand .card-face, .cg-hand .card-back { width: 42px; height: 61px; border-radius: 10px; margin-left: -10px; transition: transform .15s; }
+.cg-hand .card-face:first-child, .cg-hand .card-back:first-child { margin-left: 0; }
+.cg-hand .card-face .num { font-size: 18px; }
+.cg-hand .card-face .corner { font-size: 8.5px; top: 4px; left: 5px; }
+.cg-hand .card-face .icon { width: 17px; height: 17px; }
+.cg-hand .card-face.playable { cursor: pointer; transform: translateY(-8px); box-shadow: 0 10px 16px -6px rgba(0, 0, 0, .6); }
+.cg-hand .card-face.dim { filter: brightness(.5) saturate(.5); }
+
 /* ---------- tela larga (computador) ----------
    O app é mobile-first (pensado pra celular, coluna de 480px). Em tela larga, só alarga
    essa coluna pra ficar mais confortável — layout, cards e menu continuam exatamente os
