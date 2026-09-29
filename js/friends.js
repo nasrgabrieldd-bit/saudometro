@@ -75,6 +75,59 @@ export async function getMoodsForDay(friendGroupId, dayISO) {
   return data || [];
 }
 
+// ---------- fazer juntos (ideias de rolê da turma, com ranking por estrelas) ----------
+
+export async function listDateIdeas(friendGroupId) {
+  const { data, error } = await supabase.from("friend_date_ideas").select("*").eq("friend_group_id", friendGroupId).order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function listDateIdeaRatings(friendGroupId) {
+  const { data, error } = await supabase
+    .from("friend_date_idea_ratings")
+    .select("*, friend_date_ideas!inner(friend_group_id)")
+    .eq("friend_date_ideas.friend_group_id", friendGroupId);
+  if (error) throw error;
+  return (data || []).map(({ friend_date_ideas, ...r }) => r);
+}
+
+export async function dateIdeaPhotoUrl(path) {
+  const { data, error } = await supabase.storage.from("friend-date-ideas").createSignedUrl(path, 3600);
+  if (error) throw error;
+  return data.signedUrl;
+}
+
+export async function createDateIdea(friendGroupId, userId, { title, link, photoBlob }) {
+  let photoPath = null;
+  if (photoBlob) {
+    photoPath = `${friendGroupId}/${crypto.randomUUID()}.jpg`;
+    const up = await supabase.storage.from("friend-date-ideas").upload(photoPath, photoBlob, { contentType: "image/jpeg" });
+    if (up.error) throw up.error;
+  }
+  const { data, error } = await supabase
+    .from("friend_date_ideas")
+    .insert({ friend_group_id: friendGroupId, created_by: userId, title, link: link || null, photo_path: photoPath })
+    .select()
+    .single();
+  if (error) {
+    if (photoPath) await supabase.storage.from("friend-date-ideas").remove([photoPath]).catch(() => {});
+    throw error;
+  }
+  return data;
+}
+
+export async function deleteDateIdea(id, photoPath) {
+  if (photoPath) await supabase.storage.from("friend-date-ideas").remove([photoPath]).catch(() => {});
+  const { error } = await supabase.from("friend_date_ideas").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function rateDateIdea(ideaId, userId, stars) {
+  const { error } = await supabase.from("friend_date_idea_ratings").upsert({ idea_id: ideaId, user_id: userId, stars }, { onConflict: "idea_id,user_id" });
+  if (error) throw error;
+}
+
 export async function getMoodHistory(friendGroupId, sinceISO) {
   const { data, error } = await supabase.from("friend_moods").select("*").eq("friend_group_id", friendGroupId).gte("day", sinceISO);
   if (error) throw error;

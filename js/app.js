@@ -353,6 +353,7 @@ async function enterApp(profile) {
   await maybeShowGoogleLinkNudge();
   await maybeShowConviteNudge();
   await maybeShowConviteAcceptedNudge();
+  await maybeShowDateIdeaNudge();
   await maybeShowChangelog("casal");
 }
 
@@ -1173,7 +1174,7 @@ async function enterFriendsMode(group) {
   });
   setFriendsTab("home");
   updateFriendsStreakBadge();
-  maybeShowChangelog("amigos");
+  maybeShowFriendDateIdeaNudge().then(() => maybeShowChangelog("amigos"));
   State.friendsGameUnsubscribe = friends.subscribeFriendGameChanges(group.id, () => renderFriendsActiveTab());
 }
 
@@ -1247,6 +1248,7 @@ function renderFriendsActiveTab() {
     notes: renderFriendsExperiencias,
     shop: renderFriendsShop,
     group: renderFriendsGroup,
+    "together-ideas": renderFriendsTogetherIdeas,
   };
   Promise.resolve((map[State.friendsTab] || renderFriendsHome)()).catch((e) => {
     if (db.isNetworkError(e)) { renderOfflineFallback($("#friends-view"), "amigos"); return; }
@@ -1433,6 +1435,11 @@ async function renderFriendsHome() {
       ${friendsHistoryStripHTML(moodHistory, members)}
     </div>
 
+    <div class="card" style="margin-top:14px; cursor:pointer;" id="friends-home-ideas-card">
+      <div class="card-title" style="font-size:15px;">🎯 Fazer juntos</div>
+      <p class="card-sub" style="margin-bottom:0;">Ideias de coisas pra turma fazer, com link e foto. Avaliem com estrelas e o ranking se forma sozinho.</p>
+    </div>
+
     <div class="card" style="margin-top:14px; position:relative; padding-top:26px;">
       <span style="position:absolute; top:-14px; left:16px; background:var(--friends-accent-strong); color:var(--on-friends-accent); font-size:11.5px; font-weight:800; padding:6px 12px; border-radius:999px;">Desafio da semana</span>
       <p class="card-sub" style="margin-bottom:0;">Em breve: um desafio novo toda semana pra turma participar junto.</p>
@@ -1451,6 +1458,7 @@ async function renderFriendsHome() {
   `;
   $("#friends-home-mood-card")?.addEventListener("click", () => setFriendsTab("mood"));
   $("#friends-home-role-card")?.addEventListener("click", () => setFriendsTab("roles"));
+  $("#friends-home-ideas-card")?.addEventListener("click", () => setFriendsTab("together-ideas"));
   renderFriendsHomeGameCard(members, byId);
 }
 
@@ -1485,6 +1493,185 @@ async function renderFriendsHomeGameCard(members, byId) {
       renderStarBattleGame("amigos");
     });
   } catch (e) { /* jogo ainda não tem progresso ou deu erro de rede: só não mostra o card */ }
+}
+
+// junta ideia da turma + notas de todo mundo, ordenado por média (maior primeiro)
+function rankFriendDateIdeas(ideas, ratings, myUserId) {
+  return ideas.map((idea) => {
+    const theseRatings = ratings.filter((r) => r.idea_id === idea.id);
+    const avg = theseRatings.length ? theseRatings.reduce((s, r) => s + r.stars, 0) / theseRatings.length : 0;
+    const mine = theseRatings.find((r) => r.user_id === myUserId)?.stars || 0;
+    return { ...idea, avg, count: theseRatings.length, mine };
+  }).sort((a, b) => b.avg - a.avg || b.count - a.count || (a.created_at < b.created_at ? 1 : -1));
+}
+
+function friendDateIdeaCardHTML(idea, byId) {
+  const href = idea.link ? (idea.link.startsWith("http") ? idea.link : `https://${idea.link}`) : null;
+  return `
+    <div class="card idea-card" data-idea-id="${idea.id}">
+      ${idea.photo_path
+        ? `<img class="idea-photo" data-photo="${escapeHTML(idea.photo_path)}" />`
+        : `<div class="idea-photo">${icon("camera", { size: 22 })}</div>`}
+      <div style="flex:1; min-width:0;">
+        <div class="card-title" style="font-size:15px; margin-bottom:2px;">${escapeHTML(idea.title)}</div>
+        <div class="hint-text" style="margin:0 0 4px;">de ${idea.created_by === State.userId ? "você" : escapeHTML(byId[idea.created_by] || "alguém")}</div>
+        ${href ? `<a href="${escapeHTML(href)}" target="_blank" rel="noopener" style="font-size:11.5px; color:var(--friends-accent-strong); display:block; margin-bottom:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">🔗 ${escapeHTML(idea.link)}</a>` : ""}
+        <div class="row" style="align-items:center; gap:0;">
+          <div class="star-row" data-rate-idea="${idea.id}">${[1, 2, 3, 4, 5].map((n) => `<span class="star ${n <= idea.mine ? "filled" : ""}" data-star="${n}">★</span>`).join("")}</div>
+          <span style="font-size:11px; font-weight:800; color:var(--text-muted); margin-left:6px;">${idea.count ? `⭐ ${idea.avg.toFixed(1)} · ${idea.count} avaliaç${idea.count === 1 ? "ão" : "ões"}` : "Sem avaliação ainda"}</span>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm" data-delete-idea="${idea.id}" aria-label="Apagar ideia" style="flex:none;">🗑️</button>
+    </div>
+  `;
+}
+
+async function renderFriendsTogetherIdeas() {
+  const view = $("#friends-view");
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const [members, ideas, ratings] = await Promise.all([
+    friends.listGroupMembers(State.friendGroup.id),
+    friends.listDateIdeas(State.friendGroup.id),
+    friends.listDateIdeaRatings(State.friendGroup.id),
+  ]);
+  const byId = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
+  const ranked = rankFriendDateIdeas(ideas, ratings, State.userId);
+
+  view.innerHTML = `
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+      <button class="btn btn-ghost btn-sm" id="btn-friends-ideas-back" style="flex:none; padding:9px 12px;">← Voltar</button>
+      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">🎯 Fazer juntos</h2>
+    </div>
+    <div class="card">
+      <div class="card-sub">Ideias de coisas pra turma fazer, com link e foto. Avaliem com estrelas e o ranking se forma sozinho.</div>
+      <button class="btn btn-block" style="margin-top:10px; background:var(--friends-accent); color:var(--on-friends-accent);" id="btn-new-friend-idea">➕ Adicionar ideia</button>
+    </div>
+    <div class="section-title">Ranking</div>
+    <div class="stack" id="idea-list">
+      ${ranked.length ? ranked.map((idea) => friendDateIdeaCardHTML(idea, byId)).join("") : `<div class="empty-state"><span class="emoji">🎯</span>Nenhuma ideia ainda. Adiciona a primeira!</div>`}
+    </div>
+  `;
+  $("#btn-friends-ideas-back").addEventListener("click", () => setFriendsTab("home"));
+  view.querySelectorAll("[data-photo]").forEach((img) => {
+    friends.dateIdeaPhotoUrl(img.dataset.photo).then((url) => { img.src = url; }).catch(() => { img.alt = "Não deu pra carregar a foto"; });
+  });
+  $("#btn-new-friend-idea").addEventListener("click", () => openFriendDateIdeaModal());
+  wireFriendDateIdeaCards(ranked, renderFriendsTogetherIdeas);
+}
+
+function wireFriendDateIdeaCards(ranked, afterChange) {
+  const view = $("#friends-view");
+  view.querySelectorAll("[data-rate-idea]").forEach((row) => {
+    row.querySelectorAll(".star").forEach((star) => {
+      star.addEventListener("click", async () => {
+        try {
+          await friends.rateDateIdea(row.dataset.rateIdea, State.userId, parseInt(star.dataset.star, 10));
+          await afterChange();
+        } catch (e) { alert("Não deu: " + (e.message || e)); }
+      });
+    });
+  });
+  view.querySelectorAll("[data-delete-idea]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const idea = ranked.find((i) => i.id === btn.dataset.deleteIdea);
+      if (!confirm(`Apagar "${idea.title}"? Isso apaga pra turma toda.`)) return;
+      try {
+        await friends.deleteDateIdea(idea.id, idea.photo_path);
+        await afterChange();
+      } catch (e) { alert("Não deu: " + (e.message || e)); }
+    });
+  });
+}
+
+function openFriendDateIdeaModal() {
+  openModal(`
+    <h3 class="modal-title">🎯 Nova ideia</h3>
+    <div id="idea-picker" style="text-align:center; padding:20px; border:2px dashed var(--border); border-radius:14px; margin-bottom:10px; cursor:pointer;">
+      <div style="font-size:28px;">📷</div>
+      <div class="hint-text" style="margin-top:4px;">Toque pra escolher uma foto (opcional)</div>
+    </div>
+    <div id="idea-preview" style="display:none; margin-bottom:10px; text-align:center; cursor:pointer;"><img id="idea-preview-img" style="max-width:100%; max-height:160px; border-radius:12px;" /><div class="hint-text" style="margin-top:4px;">Toque pra trocar a foto</div></div>
+    <input type="file" id="idea-file" accept="image/*" hidden />
+    <label class="field-label">Nome da ideia</label>
+    <input type="text" id="idea-title" maxlength="120" placeholder="ex: acampar num sítio" />
+    <label class="field-label">Link (opcional)</label>
+    <input type="text" id="idea-link" maxlength="500" placeholder="ex: airbnb.com/rooms/..." />
+    <button class="btn btn-primary btn-block" style="margin-top:16px;" id="btn-save-idea">Adicionar</button>
+    <p class="error-text" id="idea-err" style="margin-top:8px;" hidden></p>
+  `);
+  let selectedBlob = null;
+  $("#idea-picker").addEventListener("click", () => $("#idea-file").click());
+  $("#idea-preview").addEventListener("click", () => $("#idea-file").click());
+  $("#idea-file").addEventListener("change", async (ev) => {
+    const file = ev.target.files?.[0];
+    if (!file) return;
+    try {
+      selectedBlob = await compressImage(file);
+      $("#idea-preview-img").src = URL.createObjectURL(selectedBlob);
+      $("#idea-picker").style.display = "none";
+      $("#idea-preview").style.display = "";
+    } catch (e) {
+      $("#idea-err").hidden = false;
+      $("#idea-err").textContent = "Não deu pra usar essa foto: " + (e.message || e);
+    }
+  });
+  $("#btn-save-idea").addEventListener("click", async () => {
+    const title = $("#idea-title").value.trim();
+    const link = $("#idea-link").value.trim();
+    if (!title) { $("#idea-err").hidden = false; $("#idea-err").textContent = "Dá um nome pra ideia :)"; return; }
+    setBusy("#btn-save-idea", true);
+    try {
+      await friends.createDateIdea(State.friendGroup.id, State.userId, { title, link, photoBlob: selectedBlob });
+      closeModal();
+      await renderFriendsTogetherIdeas();
+    } catch (e) {
+      $("#idea-err").hidden = false;
+      $("#idea-err").textContent = "Não deu: " + (e.message || e);
+      setBusy("#btn-save-idea", false);
+    }
+  });
+}
+
+// mesmo popup do casal, mas pra turma: aparece toda vez que abrir até avaliar tudo
+async function maybeShowFriendDateIdeaNudge() {
+  let ideas, ratings;
+  try {
+    [ideas, ratings] = await Promise.all([
+      friends.listDateIdeas(State.friendGroup.id),
+      friends.listDateIdeaRatings(State.friendGroup.id),
+    ]);
+  } catch (e) { return; }
+  const pending = ideas.filter((idea) => !ratings.some((r) => r.idea_id === idea.id && r.user_id === State.userId));
+  if (!pending.length) return;
+
+  return new Promise((resolve) => {
+    openModal(`
+      <h3 class="modal-title">🎯 Ideias pra avaliar</h3>
+      <p class="card-sub">Tem ideia${pending.length === 1 ? "" : "s"} de "fazer juntos" esperando sua nota:</p>
+      <div class="stack" id="date-idea-nudge-list">
+        ${pending.map((idea) => `
+          <div class="card" style="padding:12px;" data-nudge-idea="${idea.id}">
+            <div style="font-weight:800; margin-bottom:6px;">${escapeHTML(idea.title)}</div>
+            <div class="star-row" data-rate-idea="${idea.id}">${[1, 2, 3, 4, 5].map((n) => `<span class="star" data-star="${n}">★</span>`).join("")}</div>
+          </div>
+        `).join("")}
+      </div>
+      <button class="btn btn-ghost btn-block" style="margin-top:10px;" id="date-idea-nudge-later">Ver depois</button>
+    `);
+    const finish = () => { closeModal(); resolve(); };
+    $("#date-idea-nudge-list").querySelectorAll("[data-rate-idea]").forEach((row) => {
+      row.querySelectorAll(".star").forEach((star) => {
+        star.addEventListener("click", async () => {
+          try {
+            await friends.rateDateIdea(row.dataset.rateIdea, State.userId, parseInt(star.dataset.star, 10));
+            row.closest("[data-nudge-idea]").remove();
+            if (!$("#date-idea-nudge-list").children.length) finish();
+          } catch (e) { alert("Não deu: " + (e.message || e)); }
+        });
+      });
+    });
+    $("#date-idea-nudge-later").addEventListener("click", finish);
+  });
 }
 
 async function renderFriendsMood() {
@@ -3071,40 +3258,6 @@ function openSweetNoteModal(alreadyEarnedToday) {
   });
 }
 
-function openSaudadeModal() {
-  const minDate = todayISO();
-  openModal(`
-    <h3 class="modal-title">🥺 Sinal de saudade</h3>
-    <p class="card-sub">Escolhe um dia pra tentar se ver. Isso não mexe na meta do mês, é só um pedido especial pra ${ROLE_LABEL[otherRole()]} aprovar. ${cn(` Se ${partnerThey()} recusar, a moeda volta pra você.`)}</p>
-    <label class="field-label">Que dia?</label>
-    <input type="date" id="saudade-date" min="${minDate}" value="${minDate}" />
-    <label class="field-label">Mensagem (opcional)</label>
-    <textarea id="saudade-msg" rows="2" placeholder="tô com saudade, será que dá pra gente se ver?"></textarea>
-    <button class="btn btn-warm btn-block" style="margin-top:16px;" id="send-saudade">Enviar sinal${costTag("miss")}</button>
-  `);
-  $("#send-saudade").addEventListener("click", async () => {
-    setBusy("#send-saudade", true);
-    const dateVal = $("#saudade-date").value;
-    const msg = $("#saudade-msg").value.trim();
-    try {
-      await addCoins(State.role, -coinRule("miss"), "sinal de saudade");
-      await db.createEncounter({
-        coupleId: State.coupleId,
-        startDate: parseISODate(dateVal),
-        title: `🥺 Sinal de saudade${msg ? ": " + msg : ""}`,
-        kind: "convite",
-        createdBy: State.role,
-        status: "pendente",
-      });
-      closeModal();
-      renderActiveTab();
-    } catch (e) {
-      alert("Não deu: " + (e.message || e));
-      setBusy("#send-saudade", false);
-    }
-  });
-}
-
 // ================= CALENDÁRIO =================
 
 async function renderCalendar() {
@@ -4013,6 +4166,7 @@ async function renderNotes() {
     hub: renderNotesHub, history: renderNotesHistory,
     challenge: renderChallengeView, capsule: renderCapsuleView,
     wishes: renderWishesView, invites: renderInvites, memories: renderMemoriesView,
+    "together-ideas": renderTogetherIdeasView,
   };
   (map[State.notesView] || renderNotesHub)();
 }
@@ -4021,18 +4175,20 @@ async function renderNotesHub() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const todayStr = todayISO();
 
-  const [notes, noteReactions, todayAnswers, capsules, redemptions, invites, coins, memories, memoryReactions] = await Promise.all([
+  const [notes, noteReactions, todayAnswers, capsules, redemptions, invites, memories, memoryReactions, dateIdeas, dateIdeaRatings] = await Promise.all([
     db.listRecentSweetNotes(State.coupleId, 5),
     db.listReactions(State.coupleId, "note").catch(() => null), // null = recurso ainda não ativado no banco
     db.getChallengeAnswersForDay(State.coupleId, todayStr),
     db.listTimeCapsules(State.coupleId),
     db.listWishRedemptions(State.coupleId),
     db.listAllInvites(State.coupleId),
-    feat("miss") ? db.getCoinBalances(State.coupleId) : Promise.resolve({}),
     db.listMemories(State.coupleId, 10).catch(() => null), // null = recurso ainda não ativado no banco
     db.listReactions(State.coupleId, "memory").catch(() => null),
+    db.listDateIdeas(State.coupleId).catch(() => []),
+    db.listDateIdeaRatings(State.coupleId).catch(() => []),
   ]);
   const memoriesPending = memories ? memories.filter((m) => m.role !== State.role && m.reply_role !== State.role && !(memoryReactions || []).some((r) => r.target_id === m.id && r.role === State.role)).length : 0;
+  const dateIdeasPending = dateIdeas.filter((idea) => !dateIdeaRatings.some((r) => r.idea_id === idea.id && r.role === State.role)).length;
 
   const myLastNote = notes.find((n) => n.role === State.role);
   const iSentToday = notes.some((n) => n.role === State.role && n.created_at.slice(0, 10) === todayStr);
@@ -4052,15 +4208,6 @@ async function renderNotesHub() {
       <button class="btn btn-ghost btn-block" style="margin-top:8px;" id="btn-notes-history">Ver histórico completo →</button>
     </div>
     </div>
-
-${feat("miss") ? `    <div class="card">
-      <div class="card-title" style="font-size:15px;">Mandar sinal de saudade</div>
-      <div class="card-sub">${coinsOn() && coinRule("miss") > 0 ? `Gasta ${coinWord(coinRule("miss"))} 💰 e manda` : "Manda"} um pedido de visita pra ${ROLE_LABEL[otherRole()]} aprovar.</div>
-      <div class="row" style="align-items:center;">
-        ${coinsOn() ? `<span class="pill pill-coin">💰 você tem ${coins[State.role] || 0}</span>` : ""}
-        <button class="btn btn-warm" id="btn-saudade" ${(coinsOn() && (coins[State.role] || 0) < coinRule("miss")) ? "disabled" : ""}>🥺 Mandar sinal</button>
-      </div>
-    </div>` : ""}
 
     <div class="section-title">Atalhos</div>
     <div class="shortcut-grid">
@@ -4092,11 +4239,16 @@ ${feat("wishes") ? `      <button class="shortcut-card" data-view="wishes">
         <span class="shortcut-sub">${memories === null ? "Ver" : memoriesPending ? `${memoriesPending} nova${memoriesPending === 1 ? "" : "s"}` : "Mandar uma foto"}</span>
         ${memoriesPending ? `<span class="dot-badge" style="position:absolute; top:10px; right:10px;"></span>` : ""}
       </button>
+      <button class="shortcut-card" data-view="together-ideas">
+        <span class="shortcut-icon">🎯</span>
+        <span class="shortcut-title">Fazer juntos</span>
+        <span class="shortcut-sub">${dateIdeas.length ? `${dateIdeas.length} ideia${dateIdeas.length === 1 ? "" : "s"}` : "Adicionar ideia"}</span>
+        ${dateIdeasPending ? `<span class="dot-badge" style="position:absolute; top:10px; right:10px;"></span>` : ""}
+      </button>
     </div>
   `;
 
   $("#btn-send-note")?.addEventListener("click", () => openSweetNoteModal(iSentToday));
-  $("#btn-saudade")?.addEventListener("click", openSaudadeModal);
   wireReactions();
   $("#btn-notes-history")?.addEventListener("click", () => { State.notesView = "history"; renderNotes(); });
   document.querySelectorAll(".shortcut-card").forEach((btn) => {
@@ -4509,6 +4661,177 @@ function formatNoteTimestamp(iso) {
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
   return `${humanDateShort(d)} · ${hh}:${mm}`;
+}
+
+// ================= FAZER JUNTOS (casal) =================
+
+// junta ideia + notas de todo mundo num só objeto, já ordenado por média (maior primeiro)
+function rankDateIdeas(ideas, ratings) {
+  return ideas.map((idea) => {
+    const mine_ = ratings.filter((r) => r.idea_id === idea.id);
+    const avg = mine_.length ? mine_.reduce((s, r) => s + r.stars, 0) / mine_.length : 0;
+    const mine = mine_.find((r) => r.role === State.role)?.stars || 0;
+    return { ...idea, avg, count: mine_.length, mine };
+  }).sort((a, b) => b.avg - a.avg || b.count - a.count || (a.created_at < b.created_at ? 1 : -1));
+}
+
+function dateIdeaCardHTML(idea) {
+  const href = idea.link ? (idea.link.startsWith("http") ? idea.link : `https://${idea.link}`) : null;
+  return `
+    <div class="card idea-card" data-idea-id="${idea.id}">
+      ${idea.photo_path
+        ? `<img class="idea-photo" data-photo="${escapeHTML(idea.photo_path)}" />`
+        : `<div class="idea-photo">${icon("camera", { size: 22 })}</div>`}
+      <div style="flex:1; min-width:0;">
+        <div class="card-title" style="font-size:15px; margin-bottom:2px;">${escapeHTML(idea.title)}</div>
+        ${href ? `<a href="${escapeHTML(href)}" target="_blank" rel="noopener" style="font-size:11.5px; color:var(--accent-strong); display:block; margin-bottom:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">🔗 ${escapeHTML(idea.link)}</a>` : ""}
+        <div class="row" style="align-items:center; gap:0;">
+          <div class="star-row" data-rate-idea="${idea.id}">${[1, 2, 3, 4, 5].map((n) => `<span class="star ${n <= idea.mine ? "filled" : ""}" data-star="${n}">★</span>`).join("")}</div>
+          <span style="font-size:11px; font-weight:800; color:var(--text-muted); margin-left:6px;">${idea.count ? `⭐ ${idea.avg.toFixed(1)} · ${idea.count} avaliaç${idea.count === 1 ? "ão" : "ões"}` : "Sem avaliação ainda"}</span>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm" data-delete-idea="${idea.id}" aria-label="Apagar ideia" style="flex:none;">🗑️</button>
+    </div>
+  `;
+}
+
+async function renderTogetherIdeasView() {
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const [ideas, ratings] = await Promise.all([
+    db.listDateIdeas(State.coupleId),
+    db.listDateIdeaRatings(State.coupleId),
+  ]);
+  const ranked = rankDateIdeas(ideas, ratings);
+
+  view.innerHTML = `
+    ${subViewHeader("🎯 Fazer juntos")}
+    <div class="card">
+      <div class="card-sub">Ideias de coisas pra fazer juntos, com link e foto. Avaliem com estrelas e o ranking se forma sozinho.</div>
+      <button class="btn btn-primary btn-block" style="margin-top:10px;" id="btn-new-date-idea">➕ Adicionar ideia</button>
+    </div>
+    <div class="section-title">Ranking</div>
+    <div class="stack" id="idea-list">
+      ${ranked.length ? ranked.map(dateIdeaCardHTML).join("") : `<div class="empty-state"><span class="emoji">🎯</span>Nenhuma ideia ainda. Adiciona a primeira!</div>`}
+    </div>
+  `;
+  wireNotesBack();
+  view.querySelectorAll("[data-photo]").forEach((img) => {
+    db.dateIdeaPhotoUrl(img.dataset.photo).then((url) => { img.src = url; }).catch(() => { img.alt = "Não deu pra carregar a foto"; });
+  });
+  $("#btn-new-date-idea").addEventListener("click", () => openDateIdeaModal());
+  wireDateIdeaCards(ranked, renderTogetherIdeasView);
+}
+
+function wireDateIdeaCards(ranked, afterChange) {
+  view.querySelectorAll("[data-rate-idea]").forEach((row) => {
+    row.querySelectorAll(".star").forEach((star) => {
+      star.addEventListener("click", async () => {
+        try {
+          await db.rateDateIdea(row.dataset.rateIdea, State.role, parseInt(star.dataset.star, 10));
+          await afterChange();
+        } catch (e) { alert("Não deu: " + (e.message || e)); }
+      });
+    });
+  });
+  view.querySelectorAll("[data-delete-idea]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const idea = ranked.find((i) => i.id === btn.dataset.deleteIdea);
+      if (!confirm(`Apagar "${idea.title}"? Isso apaga pros dois.`)) return;
+      try {
+        await db.deleteDateIdea(idea.id, idea.photo_path);
+        await afterChange();
+      } catch (e) { alert("Não deu: " + (e.message || e)); }
+    });
+  });
+}
+
+function openDateIdeaModal() {
+  openModal(`
+    <h3 class="modal-title">🎯 Nova ideia</h3>
+    <div id="idea-picker" style="text-align:center; padding:20px; border:2px dashed var(--border); border-radius:14px; margin-bottom:10px; cursor:pointer;">
+      <div style="font-size:28px;">📷</div>
+      <div class="hint-text" style="margin-top:4px;">Toque pra escolher uma foto (opcional)</div>
+    </div>
+    <div id="idea-preview" style="display:none; margin-bottom:10px; text-align:center; cursor:pointer;"><img id="idea-preview-img" style="max-width:100%; max-height:160px; border-radius:12px;" /><div class="hint-text" style="margin-top:4px;">Toque pra trocar a foto</div></div>
+    <input type="file" id="idea-file" accept="image/*" hidden />
+    <label class="field-label">Nome da ideia</label>
+    <input type="text" id="idea-title" maxlength="120" placeholder="ex: acampar num sítio" />
+    <label class="field-label">Link (opcional)</label>
+    <input type="text" id="idea-link" maxlength="500" placeholder="ex: airbnb.com/rooms/..." />
+    <button class="btn btn-primary btn-block" style="margin-top:16px;" id="btn-save-idea">Adicionar</button>
+    <p class="error-text" id="idea-err" style="margin-top:8px;" hidden></p>
+  `);
+  let selectedBlob = null;
+  $("#idea-picker").addEventListener("click", () => $("#idea-file").click());
+  $("#idea-preview").addEventListener("click", () => $("#idea-file").click());
+  $("#idea-file").addEventListener("change", async (ev) => {
+    const file = ev.target.files?.[0];
+    if (!file) return;
+    try {
+      selectedBlob = await compressImage(file);
+      $("#idea-preview-img").src = URL.createObjectURL(selectedBlob);
+      $("#idea-picker").style.display = "none";
+      $("#idea-preview").style.display = "";
+    } catch (e) {
+      $("#idea-err").hidden = false;
+      $("#idea-err").textContent = "Não deu pra usar essa foto: " + (e.message || e);
+    }
+  });
+  $("#btn-save-idea").addEventListener("click", async () => {
+    const title = $("#idea-title").value.trim();
+    const link = $("#idea-link").value.trim();
+    if (!title) { $("#idea-err").hidden = false; $("#idea-err").textContent = "Dá um nome pra ideia :)"; return; }
+    setBusy("#btn-save-idea", true);
+    try {
+      await db.createDateIdea(State.coupleId, State.role, { title, link, photoBlob: selectedBlob });
+      closeModal();
+      await renderTogetherIdeasView();
+    } catch (e) {
+      $("#idea-err").hidden = false;
+      $("#idea-err").textContent = "Não deu: " + (e.message || e);
+      setBusy("#btn-save-idea", false);
+    }
+  });
+}
+
+// pop-up ao abrir o app com as ideias que ainda faltam sua nota — continua voltando toda vez
+// que abrir o app até você avaliar (ou apagar/ver depois não marca como resolvido, só avaliar resolve)
+async function maybeShowDateIdeaNudge() {
+  let ideas, ratings;
+  try {
+    [ideas, ratings] = await Promise.all([db.listDateIdeas(State.coupleId), db.listDateIdeaRatings(State.coupleId)]);
+  } catch (e) { return; }
+  const pending = ideas.filter((idea) => !ratings.some((r) => r.idea_id === idea.id && r.role === State.role));
+  if (!pending.length) return;
+
+  return new Promise((resolve) => {
+    openModal(`
+      <h3 class="modal-title">🎯 Ideias pra avaliar</h3>
+      <p class="card-sub">Tem ideia${pending.length === 1 ? "" : "s"} de "fazer juntos" esperando sua nota:</p>
+      <div class="stack" id="date-idea-nudge-list">
+        ${pending.map((idea) => `
+          <div class="card" style="padding:12px;" data-nudge-idea="${idea.id}">
+            <div style="font-weight:800; margin-bottom:6px;">${escapeHTML(idea.title)}</div>
+            <div class="star-row" data-rate-idea="${idea.id}">${[1, 2, 3, 4, 5].map((n) => `<span class="star" data-star="${n}">★</span>`).join("")}</div>
+          </div>
+        `).join("")}
+      </div>
+      <button class="btn btn-ghost btn-block" style="margin-top:10px;" id="date-idea-nudge-later">Ver depois em Recados</button>
+    `);
+    const finish = () => { closeModal(); resolve(); };
+    $("#date-idea-nudge-list").querySelectorAll("[data-rate-idea]").forEach((row) => {
+      row.querySelectorAll(".star").forEach((star) => {
+        star.addEventListener("click", async () => {
+          try {
+            await db.rateDateIdea(row.dataset.rateIdea, State.role, parseInt(star.dataset.star, 10));
+            row.closest("[data-nudge-idea]").remove();
+            if (!$("#date-idea-nudge-list").children.length) finish();
+          } catch (e) { alert("Não deu: " + (e.message || e)); }
+        });
+      });
+    });
+    $("#date-idea-nudge-later").addEventListener("click", finish);
+  });
 }
 
 // ================= LOJINHA =================
@@ -5694,7 +6017,7 @@ const HOME_META = {
 };
 
 const FEATURE_LIST = [
-  { k: "miss", g: "Recados e brincadeiras", t: "Sinal de saudade", d: "Pedir visita, encontro de saudade e mensagens de saudade, na aba Recados" },
+  { k: "miss", g: "Recados e brincadeiras", t: "Saudade", d: "Encontro de saudade no calendário e mensagens de saudade" },
   { k: "weekly", g: "Recados e brincadeiras", t: "Pergunta da semana", d: "Uma pergunta nova por semana, na aba Humor" },
   { k: "daily", g: "Recados e brincadeiras", t: "Desafio do dia", d: "Uma pergunta por dia, no hub de Recados" },
   { k: "capsule", g: "Recados e brincadeiras", t: "Cápsula do tempo", d: "Mensagem que só abre numa data futura" },
@@ -5825,7 +6148,6 @@ const RULE_LIST = [
   { k: "login15", t: "Bônus de 15 dias seguidos usando o app (1x)", kind: "earn" },
   { k: "login30", t: "Bônus de 30 dias seguidos usando o app (1x)", kind: "earn", max: 50 },
   { k: "invite", t: "Mandar um convite", kind: "cost" },
-  { k: "miss", t: "Mandar sinal de saudade", kind: "cost" },
   { k: "decline", t: "Recusar um convite", kind: "cost" },
   { k: "freeze", t: "Proteger a sequência de dias", kind: "cost" },
   { k: "wish", t: "Resgatar um desejo secreto às cegas", kind: "cost" },
@@ -5848,7 +6170,6 @@ function coinRulesHTML() {
   if (r("invite") > 0) earn.push("convite que você mandou foi recusado, a moeda volta");
   earn.push("cumprir um resgate da lojinha que o outro pediu (varia por item, veja a Lojinha)");
   if (r("invite") > 0) spend.push(`mandar um convite (-${r("invite")})`);
-  if (feat("miss") && r("miss") > 0) spend.push(`mandar um sinal de saudade (-${r("miss")})`);
   if (r("decline") > 0) spend.push(`recusar um convite de alguém (-${r("decline")}${feat("recharge") ? ", de graça se for na sua semana de recarregar" : ""})`);
   if (feat("streaks") && r("freeze") > 0) spend.push(`usar o freeze pra proteger a sequência de dias (-${r("freeze")})`);
   if (feat("wishes") && r("wish") > 0) spend.push(`resgatar um desejo secreto às cegas (-${r("wish")})`);

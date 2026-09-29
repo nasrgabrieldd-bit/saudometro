@@ -648,6 +648,59 @@ export async function deleteMemory(id, photoPath) {
   if (error) throw error;
 }
 
+// ---------- fazer juntos (ideias de rolê do casal, com ranking por estrelas) ----------
+
+export async function listDateIdeas(coupleId) {
+  const { data, error } = await supabase.from("date_ideas").select("*").eq("couple_id", coupleId).order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function listDateIdeaRatings(coupleId) {
+  const { data, error } = await supabase
+    .from("date_idea_ratings")
+    .select("*, date_ideas!inner(couple_id)")
+    .eq("date_ideas.couple_id", coupleId);
+  if (error) throw error;
+  return (data || []).map(({ date_ideas, ...r }) => r);
+}
+
+export async function dateIdeaPhotoUrl(path) {
+  const { data, error } = await supabase.storage.from("date-ideas").createSignedUrl(path, 3600);
+  if (error) throw error;
+  return data.signedUrl;
+}
+
+export async function createDateIdea(coupleId, role, { title, link, photoBlob }) {
+  let photoPath = null;
+  if (photoBlob) {
+    photoPath = `${coupleId}/${crypto.randomUUID()}.jpg`;
+    const up = await supabase.storage.from("date-ideas").upload(photoPath, photoBlob, { contentType: "image/jpeg" });
+    if (up.error) throw up.error;
+  }
+  const { data, error } = await supabase
+    .from("date_ideas")
+    .insert({ couple_id: coupleId, created_by: role, title, link: link || null, photo_path: photoPath })
+    .select()
+    .single();
+  if (error) {
+    if (photoPath) await supabase.storage.from("date-ideas").remove([photoPath]).catch(() => {});
+    throw error;
+  }
+  return data;
+}
+
+export async function deleteDateIdea(id, photoPath) {
+  if (photoPath) await supabase.storage.from("date-ideas").remove([photoPath]).catch(() => {});
+  const { error } = await supabase.from("date_ideas").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function rateDateIdea(ideaId, role, stars) {
+  const { error } = await supabase.from("date_idea_ratings").upsert({ idea_id: ideaId, role, stars }, { onConflict: "idea_id,role" });
+  if (error) throw error;
+}
+
 // ---------- cápsula do tempo ----------
 
 export async function createTimeCapsule(coupleId, fromRole, message, openOnISO) {
