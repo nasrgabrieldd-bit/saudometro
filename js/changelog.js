@@ -54,6 +54,48 @@ export const CHANGELOG = [
     title: "Capibatman chegou pra turma",
     text: "Um quebra-cabeça de achar capivara escondida, agora nos Prêmios da turma. Cada fase que a turma passa cai moeda no cofre, e a dificuldade sobe aos poucos. Quem topa ser o primeiro a jogar?",
   },
+  {
+    id: "perfil-lojinha-atalhos-2026-09",
+    tag: "geral",
+    emoji: "🗂️",
+    title: "Perfil e Lojinha mais organizados",
+    text: "As duas telas viraram um hub com atalhos, igual Recados já era: menos rolagem, mais fácil de achar as coisas. E agora, se você já faz parte de uma turma, tem um botão direto pra ela no topo do Perfil.",
+  },
+  {
+    id: "humores-e-reacoes-2026-09",
+    tag: "geral",
+    emoji: "🥰",
+    title: "Mais humores e mais reações",
+    text: "Um monte de humor novo (De zoeira, Queria colo, Melosa(o), e mais) e mais emojis pra reagir. E o \"como você está com seu par\" agora tem uma lista própria, mais a ver com o sentimento de vocês dois.",
+  },
+  {
+    id: "convite-vira-encontro-2026-09",
+    tag: "casal",
+    emoji: "🎉",
+    title: "Convite aceito agora é encontro de verdade",
+    text: "Quando um convite é aceito, ele conta na meta de encontros do mês (antes só \"encontro combinado\" contava). E os dois recebem um aviso comemorando quando abrirem o app. O card da meta, na Home, ganhou setinhas pra navegar entre os meses.",
+  },
+  {
+    id: "faixa-humor-semana-2026-09",
+    tag: "geral",
+    emoji: "📅",
+    title: "Humor da semana na tela inicial",
+    text: "Uma faixa nova na Home mostra o humor dos últimos 7 dias, com um visual bem mais colorido. Casal vê dos dois, turma vê de todo mundo. A aba Humor continua com o visual de sempre.",
+  },
+  {
+    id: "fazer-juntos-casal-2026-09",
+    tag: "casal",
+    emoji: "🎯",
+    title: "Fazer juntos: chegou no lugar do Sinal de Saudade",
+    text: "Agora, em Recados, dá pra guardar ideias de coisas pra fazer juntos (com link e foto) e avaliar com estrelas — o ranking se forma sozinho pela média de vocês dois. Um aviso aparece quando tem ideia nova esperando sua nota.",
+  },
+  {
+    id: "fazer-juntos-amigos-2026-09",
+    tag: "amigos",
+    emoji: "🎯",
+    title: "Fazer juntos, agora na turma também",
+    text: "Na Home da turma tem uma seção nova pra guardar ideias de rolê (com link e foto) e avaliar com estrelas — o ranking é pela média de todo mundo que votou.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
