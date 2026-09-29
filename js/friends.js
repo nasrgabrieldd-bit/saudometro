@@ -75,6 +75,24 @@ export async function getMoodsForDay(friendGroupId, dayISO) {
   return data || [];
 }
 
+// ---------- cápsula do tempo (coletiva: qualquer um sela, a turma toda abre junto) ----------
+
+export async function listTimeCapsules(friendGroupId) {
+  const { data, error } = await supabase.from("friend_time_capsules").select("*").eq("friend_group_id", friendGroupId).order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createTimeCapsule(friendGroupId, fromUserId, message, openOnISO) {
+  const { data, error } = await supabase
+    .from("friend_time_capsules")
+    .insert({ friend_group_id: friendGroupId, from_user_id: fromUserId, message, open_on: openOnISO })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 // ---------- fazer juntos (ideias de rolê da turma, com ranking por estrelas) ----------
 
 export async function listDateIdeas(friendGroupId) {
