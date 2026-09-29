@@ -194,6 +194,13 @@ export const CHANGELOG = [
     title: "STOP já tem jogo de verdade",
     text: "O STOP na sala multiplayer também saiu do \"em breve\": letra sorteada, 6 categorias (nome, animal, comida, cidade, objeto, filme/série), cronômetro e botão STOP pra fechar a rodada na hora. 5 rodadas por partida, pontuação automática (resposta única vale mais que repetida). Funciona no Casal e na Turma.",
   },
+  {
+    id: "stop-contestar-resposta-2026-09",
+    tag: "geral",
+    emoji: "🚩",
+    title: "Dá pra contestar resposta do STOP",
+    text: "Achou que alguém colou uma resposta que não vale? Na tela de resultado, toque no 🚩 ao lado da resposta pra abrir uma votação de 10 segundos. Se a maioria da turma achar que é inválida, ela some do placar. Quem respondeu não vota na própria palavra.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";

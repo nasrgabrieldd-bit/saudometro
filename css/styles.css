@@ -1132,6 +1132,12 @@ label.field-label:first-child { margin-top: 0; }
 .sg-answer-row .pts { font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 13px; }
 .sg-answer-row .pts.ok { color: #1f8a6c; }
 .sg-answer-row .pts.rep { color: #c98a1f; }
+.sg-answer-row .react { font-size: 13px; cursor: default; }
+.sg-answer-row .react[data-flag-user] { cursor: pointer; opacity: .75; }
+.sg-answer-row .react[data-flag-user]:hover { opacity: 1; }
+
+.sg-contest-banner { background: #fff3f0; border: 1px dashed #e0433d; border-radius: 10px; padding: 8px 10px; margin: 2px 0 6px; display: flex; flex-direction: column; gap: 6px; }
+.sg-contest-txt { font-size: 12px; font-weight: 800; color: #c0392b; }
 
 #screen-app .sg-hex { background: linear-gradient(160deg, var(--accent), var(--accent-strong)); }
 #screen-app .sg-cat .lbl { color: var(--accent-strong); }

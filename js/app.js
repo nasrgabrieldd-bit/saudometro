@@ -2721,6 +2721,11 @@ let roomPresenceChannel = null;
 let cardMatchChannelUnsub = null;
 let stopMatchChannelUnsub = null;
 let stopTimerHandle = null;
+let stopContestTimers = new Map(); // contestId -> setInterval handle (várias contestações podem estar abertas ao mesmo tempo)
+function clearStopContestTimers() {
+  for (const handle of stopContestTimers.values()) clearInterval(handle);
+  stopContestTimers.clear();
+}
 // sai de qualquer sala (e partida de cartas/stop, se tiver uma aberta) que esteja "aberta" na
 // tela (troca de aba, troca de turma, etc.) — não sai da sala em si (isso é leaveRoom), só para
 // de ouvir as mudanças dela em tempo real
@@ -2730,6 +2735,7 @@ function closeRoomChannels() {
   if (cardMatchChannelUnsub) { cardMatchChannelUnsub(); cardMatchChannelUnsub = null; }
   if (stopMatchChannelUnsub) { stopMatchChannelUnsub(); stopMatchChannelUnsub = null; }
   if (stopTimerHandle) { clearInterval(stopTimerHandle); stopTimerHandle = null; }
+  clearStopContestTimers();
   State.roomView = null;
 }
 
@@ -3186,6 +3192,7 @@ async function renderStopMatchScreen(matchId) {
 async function renderStopAnswering(matchId, match) {
   const view = roomViewEl();
   if (stopTimerHandle) { clearInterval(stopTimerHandle); stopTimerHandle = null; }
+  clearStopContestTimers();
 
   const mine = await gameRooms.listStopAnswers(matchId, match.round_number).catch(() => []);
   const draft = Object.fromEntries(mine.filter((a) => a.user_id === State.userId).map((a) => [a.category, a.answer]));
@@ -3258,15 +3265,61 @@ async function renderStopAnswering(matchId, match) {
   stopTimerHandle = setInterval(tick, 1000);
 }
 
+function stopContestBannerHTML(contest, isTarget) {
+  return `
+    <div class="sg-contest-banner" data-contest-id="${contest.id}">
+      <span class="sg-contest-txt">🚩 Contestada <span data-contest-countdown>--s</span></span>
+      ${isTarget
+        ? `<span class="hint-text" style="margin:0;">Quem respondeu não vota na própria palavra.</span>`
+        : `<div class="row" style="gap:6px;">
+             <button class="btn btn-sm" data-contest-vote="true" style="flex:1; background:#ffe0dc; color:#c0392b;">Inválida</button>
+             <button class="btn btn-sm" data-contest-vote="false" style="flex:1; background:var(--surface-alt);">Válida</button>
+           </div>`}
+    </div>
+  `;
+}
+
+function wireStopContestBanner(matchId, contest, isTarget) {
+  if (stopContestTimers.has(contest.id)) { clearInterval(stopContestTimers.get(contest.id)); stopContestTimers.delete(contest.id); }
+  const el = document.querySelector(`[data-contest-id="${contest.id}"]`);
+  if (!el) return;
+  if (!isTarget) {
+    el.querySelectorAll("[data-contest-vote]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        try { await gameRooms.castStopContestBallot(contest.id, btn.dataset.contestVote === "true"); }
+        catch (e) { alert("Não deu: " + (e.message || e)); }
+      });
+    });
+  }
+  const tick = () => {
+    const msLeft = new Date(contest.voting_ends_at).getTime() - Date.now();
+    const span = el.querySelector("[data-contest-countdown]");
+    if (msLeft <= 0) {
+      if (span) span.textContent = "0s";
+      clearInterval(stopContestTimers.get(contest.id));
+      stopContestTimers.delete(contest.id);
+      gameRooms.finishStopContest(contest.id).catch(() => {});
+      return;
+    }
+    if (span) span.textContent = `${Math.ceil(msLeft / 1000)}s`;
+  };
+  tick();
+  stopContestTimers.set(contest.id, setInterval(tick, 1000));
+}
+
 async function renderStopResults(matchId, match) {
   const view = roomViewEl();
   if (stopTimerHandle) { clearInterval(stopTimerHandle); stopTimerHandle = null; }
+  clearStopContestTimers();
 
-  const [answers, members] = await Promise.all([
+  const [answers, members, contests] = await Promise.all([
     gameRooms.listStopAnswers(matchId, match.round_number).catch(() => []),
     roomMembers(),
+    gameRooms.listStopContests(matchId, match.round_number).catch(() => []),
   ]);
   const byId = Object.fromEntries(members.map((m) => [m.user_id, m]));
+  const activeContestByKey = new Map();
+  for (const c of contests) if (!c.resolved) activeContestByKey.set(`${c.target_user_id}|${c.category}`, c);
   const byCategory = {};
   for (const c of stopGame.CATEGORIES) byCategory[c.key] = answers.filter((a) => a.category === c.key);
   const pointsByCategory = Object.fromEntries(stopGame.CATEGORIES.map((c) => [c.key, stopGame.scoreCategory(byCategory[c.key], match.current_letter)]));
@@ -3284,14 +3337,36 @@ async function renderStopResults(matchId, match) {
         ${byCategory[c.key].length
           ? byCategory[c.key].map((a) => {
               const pts = pointsByCategory[c.key].get(a.user_id) || 0;
-              const who = a.user_id === State.userId ? "Você" : escapeHTML(byId[a.user_id]?.display_name || "alguém");
-              return `<div class="sg-answer-row"><span class="who">${who}</span><span class="ans">${escapeHTML(a.answer) || "—"}</span><span class="pts ${pts >= 10 ? "ok" : pts > 0 ? "rep" : ""}">${pts > 0 ? "+" + pts : "0"}</span></div>`;
+              const isOwn = a.user_id === State.userId;
+              const who = isOwn ? "Você" : escapeHTML(byId[a.user_id]?.display_name || "alguém");
+              const key = `${a.user_id}|${c.key}`;
+              const activeContest = activeContestByKey.get(key);
+              const canFlag = !isOwn && a.answer.trim() && !a.invalidated && !activeContest;
+              return `
+                <div class="sg-answer-row">
+                  <span class="who">${who}</span>
+                  <span class="ans">${escapeHTML(a.answer) || "—"}</span>
+                  <span class="pts ${pts >= 10 ? "ok" : pts > 0 ? "rep" : ""}">${pts > 0 ? "+" + pts : "0"}</span>
+                  ${a.invalidated ? `<span class="react" title="Invalidada pela turma">❌</span>` : ""}
+                  ${canFlag ? `<span class="react" data-flag-user="${a.user_id}" data-flag-category="${c.key}" style="cursor:pointer;" title="Contestar">🚩</span>` : ""}
+                </div>
+                ${activeContest ? stopContestBannerHTML(activeContest, isOwn) : ""}
+              `;
             }).join("")
           : `<p class="hint-text" style="margin:0;">Ninguém respondeu.</p>`}
       </div>
     `).join("")}
     <button class="btn btn-block" style="margin-top:14px; ${roomBtnStyle()}" id="btn-stop-next-round">PRÓXIMA RODADA</button>
   `;
+
+  for (const c of contests) if (!c.resolved) wireStopContestBanner(matchId, c, c.target_user_id === State.userId);
+
+  view.querySelectorAll("[data-flag-user]").forEach((el) => {
+    el.addEventListener("click", async () => {
+      try { await gameRooms.proposeStopContest(matchId, match.round_number, el.dataset.flagCategory, el.dataset.flagUser); await renderStopResults(matchId, match); }
+      catch (e) { alert("Não deu: " + (e.message || e)); }
+    });
+  });
   $("#btn-stop-next-round").addEventListener("click", async (e) => {
     setBusy("#btn-stop-next-round", true);
     try { await gameRooms.advanceStopRound(matchId); await renderStopMatchScreen(matchId); }
@@ -3302,6 +3377,7 @@ async function renderStopResults(matchId, match) {
 async function renderStopFinished(matchId, match) {
   const view = roomViewEl();
   if (stopTimerHandle) { clearInterval(stopTimerHandle); stopTimerHandle = null; }
+  clearStopContestTimers();
 
   const [answers, members] = await Promise.all([
     gameRooms.listStopAnswers(matchId).catch(() => []),
@@ -3355,8 +3431,10 @@ async function renderStopFinished(matchId, match) {
   });
 }
 
-// evita re-renderizar (e perder o que a pessoa tá digitando) toda vez que o tempo real dispara —
-// só re-renderiza de verdade quando fase/rodada/status realmente mudou
+// na fase de resposta, só re-renderiza de verdade quando fase/rodada/status realmente mudou
+// (senão perde o que a pessoa tá digitando); na fase de resultado/fim não tem campo de texto
+// pra perder, então sempre re-renderiza — é ali que os votos de contestação (🚩) precisam
+// aparecer em tempo real pros outros jogadores
 function subscribeStopMatchScreen(matchId, initialMatch) {
   if (stopMatchChannelUnsub) { stopMatchChannelUnsub(); stopMatchChannelUnsub = null; }
   let sig = `${initialMatch.status}|${initialMatch.phase}|${initialMatch.round_number}`;
@@ -3365,8 +3443,9 @@ function subscribeStopMatchScreen(matchId, initialMatch) {
       if (State.roomView?.roomId == null) return;
       const fresh = await gameRooms.getStopMatch(matchId);
       const freshSig = `${fresh.status}|${fresh.phase}|${fresh.round_number}`;
-      if (freshSig === sig) return;
+      const sigChanged = freshSig !== sig;
       sig = freshSig;
+      if (!sigChanged && fresh.phase === "answering" && fresh.status !== "finished") return;
       if (State.roomView?.roomId != null) {
         if (fresh.status === "finished") await renderStopFinished(matchId, fresh);
         else if (fresh.phase === "results") await renderStopResults(matchId, fresh);

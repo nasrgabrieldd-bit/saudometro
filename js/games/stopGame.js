@@ -31,13 +31,14 @@ export function isValidAnswer(answer, letter) {
   return n.startsWith(normalize(letter));
 }
 
-// answers: [{ user_id, answer }] de uma categoria numa rodada -> Map<user_id, pontos>
-// única resposta válida = 10, resposta válida repetida (2+ pessoas) = 5 cada, inválida/vazia = 0
+// answers: [{ user_id, answer, invalidated? }] de uma categoria numa rodada -> Map<user_id, pontos>
+// única resposta válida = 10, resposta válida repetida (2+ pessoas) = 5 cada, inválida/vazia/
+// contestada e invalidada pela turma = 0
 export function scoreCategory(answers, letter) {
   const points = new Map();
   const validNormalized = new Map(); // user_id -> normalized
   for (const a of answers) {
-    if (isValidAnswer(a.answer, letter)) validNormalized.set(a.user_id, normalize(a.answer));
+    if (!a.invalidated && isValidAnswer(a.answer, letter)) validNormalized.set(a.user_id, normalize(a.answer));
     else points.set(a.user_id, 0);
   }
   const countByText = new Map();
