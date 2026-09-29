@@ -11,7 +11,7 @@ export async function listMyFriendGroups() {
   // a segunda traz todo mundo de todas as minhas turmas, só pra contar quantos tem em cada uma
   // (sem esse filtro por user_id, uma turma de 3 pessoas aparecia repetida 3x na lista)
   const [{ data: mine, error: err1 }, { data: allMembers, error: err2 }] = await Promise.all([
-    supabase.from("friend_members").select("friend_group_id, display_name, friend_groups(id, name, code, emoji, color_key)").eq("user_id", myId).order("joined_at", { ascending: true }),
+    supabase.from("friend_members").select("friend_group_id, display_name, friend_groups(id, name, code, emoji, color_key, created_at)").eq("user_id", myId).order("joined_at", { ascending: true }),
     supabase.from("friend_members").select("friend_group_id"),
   ]);
   if (err1) throw err1;
@@ -24,6 +24,7 @@ export async function listMyFriendGroups() {
     code: r.friend_groups?.code || "",
     emoji: r.friend_groups?.emoji || "👥",
     colorKey: r.friend_groups?.color_key || "azul",
+    createdAt: r.friend_groups?.created_at || null,
     myDisplayName: r.display_name,
     memberCount: counts[r.friend_group_id] || 1,
   }));
@@ -264,6 +265,32 @@ export async function markGroupRedemptionFulfilled(id) {
 }
 
 // ---------- rolês (agenda de encontros da turma) ----------
+
+// ---------- desafio do dia (mesma pergunta pra turma toda, cíclica) ----------
+
+export async function getChallengeAnswersForDay(friendGroupId, dayISO) {
+  const { data, error } = await supabase.from("friend_challenge_answers").select("*").eq("friend_group_id", friendGroupId).eq("day", dayISO);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function listChallengeAnswersHistory(friendGroupId, sinceISO) {
+  const { data, error } = await supabase
+    .from("friend_challenge_answers")
+    .select("*")
+    .eq("friend_group_id", friendGroupId)
+    .gte("day", sinceISO)
+    .order("day", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function upsertChallengeAnswer(friendGroupId, dayISO, userId, answer) {
+  const { error } = await supabase
+    .from("friend_challenge_answers")
+    .upsert({ friend_group_id: friendGroupId, day: dayISO, user_id: userId, answer }, { onConflict: "friend_group_id,day,user_id" });
+  if (error) throw error;
+}
 
 // ---------- meta de rolês do mês ----------
 

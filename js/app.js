@@ -10,7 +10,7 @@ import { FRIEND_PERKS, FRIEND_PERK_BY_ID, FRIEND_PERK_CATEGORIES } from "./frien
 import * as db from "./db.js";
 import { MOODS, MOOD_BY_ID, PARTNER_MOODS, PARTNER_MOOD_BY_ID, TALK_OPTIONS, TALK_BY_ID } from "./moods.js";
 import { weekIndexSince, questionForWeek } from "./questions.js";
-import { dayIndexSince, challengeForDay } from "./challenges.js";
+import { dayIndexSince, challengeForDay, friendChallengeForDay } from "./challenges.js";
 import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush, needsHomeScreenFirst } from "./push.js";
 import { PERKS, PERK_BY_ID, customToPerk, suggestedReward } from "./perks.js";
 import { planLabel } from "./plans.js";
@@ -1254,6 +1254,7 @@ function renderFriendsActiveTab() {
     "friends-privacy": renderFriendsPrivacy,
     "friends-wallet": renderFriendsWallet,
     capsule: renderFriendsCapsule,
+    challenge: renderFriendsChallenge,
   };
   Promise.resolve((map[State.friendsTab] || renderFriendsHome)()).catch((e) => {
     if (db.isNetworkError(e)) { renderOfflineFallback($("#friends-view"), "amigos"); return; }
@@ -1406,7 +1407,7 @@ async function renderFriendsHome() {
   const mk = monthKey(new Date());
   const monthStart = toISODate(startOfMonth(new Date()));
   const monthEnd = toISODate(startOfMonth(addMonths(new Date(), 1)));
-  const [members, todaysMoods, moodHistory, balance, nextEvents, monthPlan, monthEvents] = await Promise.all([
+  const [members, todaysMoods, moodHistory, balance, nextEvents, monthPlan, monthEvents, challengeAnswers] = await Promise.all([
     friends.listGroupMembers(State.friendGroup.id),
     friends.getMoodsForDay(State.friendGroup.id, today).catch(() => []),
     friends.getMoodHistory(State.friendGroup.id, toISODate(addDays(new Date(), -6))).catch(() => []),
@@ -1414,7 +1415,12 @@ async function renderFriendsHome() {
     friends.listUpcomingEvents(State.friendGroup.id, today, 1).catch(() => []),
     friends.ensureMonthPlan(State.friendGroup.id, mk, 2).catch(() => ({ target: 2 })),
     friends.listEventsForMonth(State.friendGroup.id, monthStart, monthEnd).catch(() => []),
+    friends.getChallengeAnswersForDay(State.friendGroup.id, today).catch(() => []),
   ]);
+  const groupCreatedAt = State.friendGroup.createdAt || today;
+  const challengeIdx = dayIndexSince(groupCreatedAt);
+  const todayChallenge = friendChallengeForDay(challengeIdx);
+  const myChallengeAnswer = challengeAnswers.find((a) => a.user_id === State.userId);
   const moodByUser = Object.fromEntries(todaysMoods.map((m) => [m.user_id, m.mood]));
   const myMood = moodByUser[State.userId];
   const byId = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
@@ -1473,9 +1479,10 @@ async function renderFriendsHome() {
       <p class="card-sub" style="margin-bottom:0;">Sele uma mensagem que só abre numa data futura — a turma toda abre junto.</p>
     </div>
 
-    <div class="card" style="margin-top:14px; position:relative; padding-top:26px;">
-      <span style="position:absolute; top:-14px; left:16px; background:var(--friends-accent-strong); color:var(--on-friends-accent); font-size:11.5px; font-weight:800; padding:6px 12px; border-radius:999px;">Desafio da semana</span>
-      <p class="card-sub" style="margin-bottom:0;">Em breve: um desafio novo toda semana pra turma participar junto.</p>
+    <div class="card" style="margin-top:14px; position:relative; padding-top:26px; cursor:pointer;" id="friends-home-challenge-card">
+      <span style="position:absolute; top:-14px; left:16px; background:var(--friends-accent-strong); color:var(--on-friends-accent); font-size:11.5px; font-weight:800; padding:6px 12px; border-radius:999px;">Desafio do dia</span>
+      <div class="card-title" style="font-size:14.5px; font-family:'Baloo 2', sans-serif;">"${escapeHTML(todayChallenge)}"</div>
+      <p class="card-sub" style="margin-bottom:0;">${myChallengeAnswer ? `✅ Você já respondeu · ${challengeAnswers.length} da turma responderam` : `Toque pra responder${challengeAnswers.length ? ` · ${challengeAnswers.length} já respondeu(ram)` : ""}`}</p>
     </div>
 
     <div class="row" style="gap:12px; margin-top:14px;">
@@ -1493,6 +1500,7 @@ async function renderFriendsHome() {
   $("#friends-home-role-card")?.addEventListener("click", () => setFriendsTab("roles"));
   $("#friends-home-ideas-card")?.addEventListener("click", () => setFriendsTab("together-ideas"));
   $("#friends-home-capsule-card")?.addEventListener("click", () => setFriendsTab("capsule"));
+  $("#friends-home-challenge-card")?.addEventListener("click", () => setFriendsTab("challenge"));
   $("#friends-goal-minus")?.addEventListener("click", async () => {
     const newTarget = Math.max(1, roleTarget - 1);
     try { await friends.setMonthTarget(State.friendGroup.id, mk, newTarget); await renderFriendsHome(); } catch (e) { alert("Não deu: " + (e.message || e)); }
@@ -2952,6 +2960,78 @@ async function renderFriendsCapsule() {
     } catch (e) {
       alert("Não deu: " + (e.message || e));
       setBusy("#btn-seal-capsule", false);
+    }
+  });
+}
+
+async function renderFriendsChallenge() {
+  const view = $("#friends-view");
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const todayStr = todayISO();
+  const since60 = toISODate(addDays(new Date(), -60));
+  const groupCreatedAt = State.friendGroup.createdAt || todayStr;
+  const [members, todayAnswers, history] = await Promise.all([
+    friends.listGroupMembers(State.friendGroup.id).catch(() => []),
+    friends.getChallengeAnswersForDay(State.friendGroup.id, todayStr),
+    friends.listChallengeAnswersHistory(State.friendGroup.id, since60),
+  ]);
+  const byId = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
+  const todayIdx = dayIndexSince(groupCreatedAt);
+  const todayChallenge = friendChallengeForDay(todayIdx);
+  const myAnswer = todayAnswers.find((a) => a.user_id === State.userId);
+
+  const historyDays = [...new Set(history.map((r) => r.day))]
+    .filter((d) => d !== todayStr)
+    .sort((a, b) => (a < b ? 1 : -1))
+    .slice(0, 10);
+
+  view.innerHTML = `
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+      <button class="btn btn-ghost btn-sm" id="btn-friends-challenge-back" style="flex:none; padding:9px 12px;">← Voltar</button>
+      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">🎯 Desafio do dia</h2>
+    </div>
+    <div class="card" style="background:var(--friends-accent-soft);">
+      <div class="card-title" style="font-size:15.5px; font-family:'Baloo 2', sans-serif;">"${escapeHTML(todayChallenge)}"</div>
+      ${myAnswer ? `
+        <div class="entry-meta" style="margin-top:8px; color:var(--text);">Você: "${escapeHTML(myAnswer.answer)}"</div>
+      ` : `
+        <textarea id="challenge-answer" rows="2" placeholder="escreve aqui..." style="margin-top:10px;"></textarea>
+        <button class="btn btn-block" style="margin-top:10px; background:var(--friends-accent); color:var(--on-friends-accent);" id="btn-answer-challenge">Responder desafio</button>
+      `}
+      ${todayAnswers.filter((a) => a.user_id !== State.userId).map((a) => `<div class="entry-meta" style="margin-top:8px; color:var(--text);">${escapeHTML(byId[a.user_id] || "alguém")}: "${escapeHTML(a.answer)}"</div>`).join("")}
+      ${todayAnswers.length <= 1 && !myAnswer ? `<p class="hint-text" style="margin-top:8px;">Ninguém da turma respondeu hoje ainda.</p>` : ""}
+    </div>
+    ${historyDays.length ? `
+      <div class="card">
+        <div class="card-title" style="font-size:14px;">Desafios anteriores</div>
+        <div class="stack">${historyDays.map((day) => {
+          const dayAnswers = history.filter((r) => r.day === day);
+          const prompt = friendChallengeForDay(dayIndexSince(groupCreatedAt, parseISODate(day)));
+          return `
+            <div class="entry-item">
+              <div class="entry-icon">🎯</div>
+              <div class="entry-body">
+                <div class="entry-title">${escapeHTML(prompt)}</div>
+                <div class="entry-meta">${humanDateShort(parseISODate(day))}</div>
+                ${dayAnswers.map((a) => `<div class="entry-meta" style="margin-top:4px; color:var(--text);">${escapeHTML(a.user_id === State.userId ? "Você" : (byId[a.user_id] || "alguém"))}: "${escapeHTML(a.answer)}"</div>`).join("")}
+              </div>
+            </div>
+          `;
+        }).join("")}</div>
+      </div>
+    ` : ""}
+  `;
+  $("#btn-friends-challenge-back").addEventListener("click", () => setFriendsTab("home"));
+  $("#btn-answer-challenge")?.addEventListener("click", async () => {
+    const answer = $("#challenge-answer").value.trim();
+    if (!answer) { alert("Escreve uma resposta primeiro :)"); return; }
+    setBusy("#btn-answer-challenge", true);
+    try {
+      await friends.upsertChallengeAnswer(State.friendGroup.id, todayStr, State.userId, answer);
+      await renderFriendsChallenge();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#btn-answer-challenge", false);
     }
   });
 }
