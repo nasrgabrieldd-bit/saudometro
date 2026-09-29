@@ -354,6 +354,7 @@ async function enterApp(profile) {
   await maybeShowConviteNudge();
   await maybeShowConviteAcceptedNudge();
   await maybeShowDateIdeaNudge();
+  await maybeShowLoveDayNudge();
   await maybeShowChangelog("casal");
 }
 
@@ -6518,6 +6519,56 @@ function showNextConviteAccepted(queue, resolve) {
     showNextConviteAccepted(queue.slice(1), resolve);
   };
   $("#btn-convite-accepted-ok").addEventListener("click", finish);
+}
+
+// ================= DIA DE DIZER EU TE AMO (a cada 45 dias) =================
+
+const LOVE_DAY_SUGGESTIONS = {
+  simples: [
+    "Manda um áudio contando um motivo bem específico que te fez pensar nele(a) hoje.",
+    "Deixa um bilhetinho escondido num lugar que ele(a) vai achar sem esperar.",
+    "Prepara o café ou lanche do jeito que ele(a) gosta, sem ele(a) pedir.",
+    "Manda uma foto de um momento de vocês dois com uma legenda bem fofa.",
+  ],
+  elaboradas: [
+    "Prepara um jantar surpresa com a comida favorita dele(a).",
+    "Organiza um passeio surpresa pra um lugar que ele(a) sempre quis ir.",
+    "Monta uma noite temática: o filme, a comida e a música que ele(a) ama.",
+    "Planeja um dia inteiro sem tela, só pros dois, e avisa ele(a) de surpresa.",
+  ],
+};
+const LOVE_DAY_SEEN_KEY = "loveDayLastShown";
+
+function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+// a cada 45 dias desde que o casal começou a usar o app, sugere um jeito de demonstrar afeto —
+// um dia fixo no calendário de vocês, não precisa guardar nada novo no banco pra isso
+async function maybeShowLoveDayNudge() {
+  if (!State.coupleCreatedAt) return;
+  const idx = dayIndexSince(State.coupleCreatedAt);
+  if (idx <= 0 || idx % 45 !== 0) return;
+  const todayStr = todayISO();
+  try { if (localStorage.getItem(LOVE_DAY_SEEN_KEY) === todayStr) return; } catch (e) { /* sem storage: mostra sempre */ }
+
+  const simples = gen(pickRandom(LOVE_DAY_SUGGESTIONS.simples), genderOf(otherRole()));
+  const elaborada = gen(pickRandom(LOVE_DAY_SUGGESTIONS.elaboradas), genderOf(otherRole()));
+  return new Promise((resolve) => {
+    openModal(`
+      <div style="text-align:center; font-size:40px;">💘</div>
+      <h3 class="modal-title" style="text-align:center;">Dia de dizer eu te amo</h3>
+      <p class="card-sub" style="text-align:center;">Fazem 45 dias desde a última vez. Que tal surpreender ${ROLE_LABEL[otherRole()]} hoje?</p>
+      <div class="card" style="background:var(--surface-alt); margin-top:10px;">
+        <div class="card-sub" style="margin-bottom:6px;"><strong style="color:var(--text);">Simples:</strong> ${escapeHTML(simples)}</div>
+        <div class="card-sub" style="margin-bottom:0;"><strong style="color:var(--text);">Elaborada:</strong> ${escapeHTML(elaborada)}</div>
+      </div>
+      <button class="btn btn-primary btn-block" style="margin-top:16px;" id="btn-love-day-ok">Bora! 💗</button>
+    `);
+    $("#btn-love-day-ok").addEventListener("click", () => {
+      try { localStorage.setItem(LOVE_DAY_SEEN_KEY, todayStr); } catch (e) { /* sem storage: volta a aparecer no próximo abrir hoje */ }
+      closeModal();
+      resolve();
+    });
+  });
 }
 
 // mostra as novidades ainda não vistas, uma de cada vez — a pessoa reage com um emoji pra
