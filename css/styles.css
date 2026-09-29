@@ -637,6 +637,13 @@ button, input, textarea, select {
 .moodstrip-cell .emoji { font-size: 22px; line-height: 1; }
 .moodstrip-cell .day { font-size: 10px; font-weight: 800; color: var(--text-muted); }
 
+/* estrelas (Fazer juntos) */
+.star-row { display: flex; gap: 2px; align-items: center; }
+.star-row .star { font-size: 20px; line-height: 1; color: var(--border); cursor: pointer; }
+.star-row .star.filled { color: #ffb648; }
+.idea-card { display: flex; gap: 12px; align-items: flex-start; }
+.idea-photo { width: 64px; height: 64px; border-radius: 12px; object-fit: cover; flex: none; background: var(--surface-alt); display: flex; align-items: center; justify-content: center; }
+
 /* ---------- relógio flip (cronômetro do último beijo) ---------- */
 
 .flip-clock {
