@@ -153,6 +153,19 @@ export async function skipDepartedTurn(matchId) {
   if (error) throw error;
 }
 
+// regra oficial do Uno: chama "UNO" com 1 carta na mão; qualquer outro jogador pode flagrar
+// quem não chamou a tempo (penalidade de 2 cartas)
+export async function callUno(matchId) {
+  const { error } = await supabase.rpc("call_uno", { p_match_id: matchId });
+  if (error) throw error;
+}
+
+export async function catchUno(matchId, targetUserId) {
+  const { data, error } = await supabase.rpc("catch_uno", { p_match_id: matchId, p_target_user_id: targetUserId });
+  if (error) throw error;
+  return data; // { caught }
+}
+
 export function subscribeCardMatch(matchId, onChange) {
   const channel = supabase
     .channel(`card-match-${matchId}`)

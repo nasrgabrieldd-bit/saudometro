@@ -62,9 +62,12 @@ export function dealHands(deck, playerCount, handSize = 7) {
 }
 
 // pode jogar se bater a cor ativa, o valor (cartas número), o "símbolo" (mesmo kind de carta de
-// ação, cor diferente) ou se for curinga/curinga+4 (sempre jogável)
-export function canPlay(card, topCard, activeColor) {
-  if (card.kind === "wild" || card.kind === "wild4") return true;
+// ação, cor diferente) ou se for curinga. Curinga+4: regra oficial do Uno — só pode ser jogado
+// se a pessoa NÃO tiver nenhuma carta da cor ativa na mão (por isso recebe a mão inteira, não
+// só a carta sendo avaliada).
+export function canPlay(card, topCard, activeColor, hand = []) {
+  if (card.kind === "wild") return true;
+  if (card.kind === "wild4") return !hand.some((c) => c.color === activeColor);
   if (card.color === activeColor) return true;
   if (card.kind === "number" && topCard?.kind === "number" && card.value === topCard.value) return true;
   if (card.kind !== "number" && card.kind === topCard?.kind) return true;
