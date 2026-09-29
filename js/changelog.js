@@ -97,6 +97,13 @@ export const CHANGELOG = [
     text: "Na Home da turma tem uma seção nova pra guardar ideias de rolê (com link e foto) e avaliar com estrelas — o ranking é pela média de todo mundo que votou.",
   },
   {
+    id: "roleta-fazer-juntos-2026-09",
+    tag: "geral",
+    emoji: "🎡",
+    title: "Roleta do Fazer Juntos",
+    text: "Não sabe qual ideia escolher? Em Fazer Juntos agora tem um botão de sortear, que escolhe uma das ideias da lista na sorte.",
+  },
+  {
     id: "dia-eu-te-amo-2026-09",
     tag: "casal",
     emoji: "💘",
