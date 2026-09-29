@@ -1546,6 +1546,7 @@ async function renderFriendsTogetherIdeas() {
     <div class="card">
       <div class="card-sub">Ideias de coisas pra turma fazer, com link e foto. Avaliem com estrelas e o ranking se forma sozinho.</div>
       <button class="btn btn-block" style="margin-top:10px; background:var(--friends-accent); color:var(--on-friends-accent);" id="btn-new-friend-idea">➕ Adicionar ideia</button>
+      ${ranked.length ? `<button class="btn btn-secondary btn-block" style="margin-top:8px;" id="btn-idea-roulette">🎡 Sortear uma ideia</button>` : ""}
     </div>
     <div class="section-title">Ranking</div>
     <div class="stack" id="idea-list">
@@ -1553,6 +1554,7 @@ async function renderFriendsTogetherIdeas() {
     </div>
   `;
   $("#btn-friends-ideas-back").addEventListener("click", () => setFriendsTab("home"));
+  $("#btn-idea-roulette")?.addEventListener("click", () => openDateIdeaRoulette(ranked));
   view.querySelectorAll("[data-photo]").forEach((img) => {
     friends.dateIdeaPhotoUrl(img.dataset.photo).then((url) => { img.src = url; }).catch(() => { img.alt = "Não deu pra carregar a foto"; });
   });
@@ -4709,6 +4711,7 @@ async function renderTogetherIdeasView() {
     <div class="card">
       <div class="card-sub">Ideias de coisas pra fazer juntos, com link e foto. Avaliem com estrelas e o ranking se forma sozinho.</div>
       <button class="btn btn-primary btn-block" style="margin-top:10px;" id="btn-new-date-idea">➕ Adicionar ideia</button>
+      ${ranked.length ? `<button class="btn btn-secondary btn-block" style="margin-top:8px;" id="btn-idea-roulette">🎡 Sortear uma ideia</button>` : ""}
     </div>
     <div class="section-title">Ranking</div>
     <div class="stack" id="idea-list">
@@ -4720,6 +4723,7 @@ async function renderTogetherIdeasView() {
     db.dateIdeaPhotoUrl(img.dataset.photo).then((url) => { img.src = url; }).catch(() => { img.alt = "Não deu pra carregar a foto"; });
   });
   $("#btn-new-date-idea").addEventListener("click", () => openDateIdeaModal());
+  $("#btn-idea-roulette")?.addEventListener("click", () => openDateIdeaRoulette(ranked));
   wireDateIdeaCards(ranked, renderTogetherIdeasView);
 }
 
@@ -4744,6 +4748,38 @@ function wireDateIdeaCards(ranked, afterChange) {
       } catch (e) { alert("Não deu: " + (e.message || e)); }
     });
   });
+}
+
+// roleta: sorteia uma ideia da lista, com uma animação simples de "girando" antes de revelar.
+// serve tanto pro casal quanto pra turma (recebe a lista já pronta, não sabe de onde ela veio)
+function openDateIdeaRoulette(ideas) {
+  if (!ideas.length) return;
+  openModal(`
+    <h3 class="modal-title" style="text-align:center;">🎡 Sorteando...</h3>
+    <div class="card" style="text-align:center; padding:28px 16px;">
+      <div id="roulette-spin" style="font-family:'Baloo 2', sans-serif; font-weight:800; font-size:17px; min-height:50px; display:flex; align-items:center; justify-content:center;">🎯</div>
+    </div>
+  `);
+  const titles = ideas.map((i) => i.title);
+  let i = 0;
+  const spin = setInterval(() => {
+    const el = document.getElementById("roulette-spin");
+    if (!el) { clearInterval(spin); return; }
+    el.textContent = titles[i % titles.length];
+    i++;
+  }, 90);
+  setTimeout(() => {
+    clearInterval(spin);
+    const winner = ideas[Math.floor(Math.random() * ideas.length)];
+    const href = winner.link ? (winner.link.startsWith("http") ? winner.link : `https://${winner.link}`) : null;
+    openModal(`
+      <div style="text-align:center; font-size:40px;">🎉</div>
+      <h3 class="modal-title" style="text-align:center;">${escapeHTML(winner.title)}</h3>
+      ${href ? `<p class="card-sub" style="text-align:center;"><a href="${escapeHTML(href)}" target="_blank" rel="noopener" style="color:var(--accent-strong);">🔗 ${escapeHTML(winner.link)}</a></p>` : ""}
+      <button class="btn btn-primary btn-block" style="margin-top:16px;" id="btn-roulette-close">Combinado! 💗</button>
+    `);
+    $("#btn-roulette-close").addEventListener("click", closeModal);
+  }, 1800);
 }
 
 function openDateIdeaModal() {
