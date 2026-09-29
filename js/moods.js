@@ -21,6 +21,12 @@ export const MOODS = [
   { id: "assustada", emoji: "😨", label: "Assustada(o)" },
   { id: "pensativa", emoji: "🤔", label: "Pensativa(o)" },
   { id: "safadinha", emoji: "😏", label: "Safadinha(o)" },
+  { id: "zoeira", emoji: "🤡", label: "De zoeira" },
+  { id: "fominha", emoji: "🍕", label: "Com fominha" },
+  { id: "cafeina", emoji: "☕", label: "Precisando de café" },
+  { id: "gelada", emoji: "🥶", label: "Com frio" },
+  { id: "risada", emoji: "😂", label: "Rindo à toa" },
+  { id: "de_boa", emoji: "🤙", label: "De boa" },
 ];
 
 export const MOOD_BY_ID = Object.fromEntries(MOODS.map((m) => [m.id, m]));
