@@ -3209,7 +3209,7 @@ async function renderStopAnswering(matchId, match) {
       ${stopGame.CATEGORIES.map((c) => `
         <div class="sg-cat">
           <div class="lbl">${escapeHTML(c.label)}</div>
-          <input type="text" data-stop-field="${c.key}" value="${escapeHTML(draft[c.key] || "")}" placeholder="..." style="border:none; background:none; font-weight:800; font-size:14px; width:100%; color:var(--text); padding:0;" />
+          <input type="text" data-stop-field="${c.key}" value="${escapeHTML(draft[c.key] || "")}" placeholder="..." style="border:none; background:none; font-weight:800; font-size:16px; width:100%; color:var(--text); padding:0;" />
         </div>
       `).join("")}
     </div>
@@ -8079,6 +8079,19 @@ function applyStaticIcons() {
     el.innerHTML = icon(el.dataset.icon, { size: 22 });
   });
 }
+
+// Android: o conteúdo rola dentro de áreas com scroll próprio (#view-container, #friends-view,
+// .modal-sheet), não na página inteira — e o navegador só garante "sobe sozinho até o campo
+// ficar visível" de verdade pro scroll da página. Sem isso, um campo mais pra baixo num
+// formulário fica escondido atrás do teclado e a pessoa não consegue rolar até ele. Resolve na
+// força bruta: todo campo de texto que ganha foco se rola pro centro da tela sozinho, dando um
+// instante pro teclado terminar de abrir antes de medir a posição.
+document.addEventListener("focusin", (e) => {
+  const el = e.target;
+  if (!(el instanceof HTMLElement)) return;
+  if (!el.matches("textarea, input[type='text'], input[type='search'], input[type='email'], input[type='tel'], input[type='url'], input[type='number'], input[type='password'], input[type='date'], input[type='time']")) return;
+  setTimeout(() => el.scrollIntoView({ block: "center", behavior: "smooth" }), 300);
+});
 
 initTheme();
 applyStaticIcons();
