@@ -97,6 +97,13 @@ export const CHANGELOG = [
     text: "Na Home da turma tem uma seção nova pra guardar ideias de rolê (com link e foto) e avaliar com estrelas — o ranking é pela média de todo mundo que votou.",
   },
   {
+    id: "jogar-com-amigos-salas-2026-09",
+    tag: "amigos",
+    emoji: "🎮",
+    title: "Jogar com amigos: salas de Cartas e STOP",
+    text: "Nos Prêmios da turma, um botão novo cria salas de verdade pra jogar Cartas ou STOP com a turma: código pra convidar, lobby com todo mundo pronto, host, reconexão. O jogo em si (as regras de cada um) vem nas próximas etapas — por enquanto é o esqueleto de sala completo.",
+  },
+  {
     id: "turma-desafio-do-dia-2026-09",
     tag: "amigos",
     emoji: "🎯",
