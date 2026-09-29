@@ -8083,14 +8083,19 @@ function applyStaticIcons() {
 // Android: o conteúdo rola dentro de áreas com scroll próprio (#view-container, #friends-view,
 // .modal-sheet), não na página inteira — e o navegador só garante "sobe sozinho até o campo
 // ficar visível" de verdade pro scroll da página. Sem isso, um campo mais pra baixo num
-// formulário fica escondido atrás do teclado e a pessoa não consegue rolar até ele. Resolve na
-// força bruta: todo campo de texto que ganha foco se rola pro centro da tela sozinho, dando um
-// instante pro teclado terminar de abrir antes de medir a posição.
+// formulário fica escondido atrás do teclado e a pessoa não consegue rolar até ele. Só entra em
+// ação quando o campo focado está mesmo fora da parte visível da tela (senão brigava com a
+// pessoa tentando rolar manualmente pra baixo) e move o mínimo necessário, não centraliza.
 document.addEventListener("focusin", (e) => {
   const el = e.target;
   if (!(el instanceof HTMLElement)) return;
   if (!el.matches("textarea, input[type='text'], input[type='search'], input[type='email'], input[type='tel'], input[type='url'], input[type='number'], input[type='password'], input[type='date'], input[type='time']")) return;
-  setTimeout(() => el.scrollIntoView({ block: "center", behavior: "smooth" }), 300);
+  setTimeout(() => {
+    const rect = el.getBoundingClientRect();
+    const visibleHeight = window.visualViewport?.height || window.innerHeight;
+    const alreadyVisible = rect.top >= 0 && rect.bottom <= visibleHeight;
+    if (!alreadyVisible) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, 300);
 });
 
 initTheme();
