@@ -1163,7 +1163,7 @@ async function enterFriendsMode(group) {
         <div class="avatar" id="friends-avatar-badge" style="cursor:pointer; background:var(--friends-accent-soft); color:var(--friends-accent-strong);">?</div>
       </div>
     </header>
-    <main id="friends-view" style="flex:1; padding:20px 16px 110px; overflow:auto;"></main>
+    <main id="friends-view" style="flex:1; min-height:0; padding:20px 16px 110px; overflow:auto;"></main>
     <nav class="bottom-nav">
       ${FRIENDS_TABS.map((t) => `<button class="nav-btn" data-friends-tab="${t.tab}"><span class="nav-icon">${icon(t.icon, { size: 22 })}</span><span class="nav-label">${t.label}</span></button>`).join("")}
     </nav>
