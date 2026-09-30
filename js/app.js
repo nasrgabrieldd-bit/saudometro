@@ -213,7 +213,7 @@ async function boot() {
   } else if (myFriendGroups.length === 1) {
     await enterFriendsMode(myFriendGroups[0]);
   } else {
-    renderOnboardingChoices();
+    renderOnboardingEntry();
   }
 }
 
@@ -616,6 +616,83 @@ function returnToOnboarding() {
 }
 
 // ================= ONBOARDING =================
+
+const TOUR_SEEN_KEY = "featureTourSeenV1";
+
+const TOUR_SLIDES = [
+  {
+    emoji: "💗", title: "Seu cantinho com quem faz falta.",
+    sub: "Humor, encontros, recadinhos, jogos e as pequenas coisas que aproximam — pro casal ou pra turma de amigos.",
+    strip: [["😊", "Humor"], ["📅", "Encontros"], ["💌", "Recados"], ["🎮", "Jogos"]],
+  },
+  {
+    emoji: "😊", title: "Nem todo “tô bem” é igual.",
+    sub: "Registrem como estão no geral e também na relação (ou na turma). Ajuda vocês a se entenderem melhor, todo santo dia.",
+  },
+  {
+    emoji: "📅", title: "Saudade também pode virar plano.",
+    sub: "Marquem encontros (ou rolês, na turma), guardem datas especiais e criem uma lista do que fazer juntos — quando bater a dúvida, é só sortear uma ideia.",
+  },
+  {
+    emoji: "💌", title: "Às vezes é só um “lembrei de você”.",
+    sub: "Mandem recadinhos, fotos e guardem momentos — inclusive uma cápsula do tempo, pra escrever hoje e abrir numa data especial no futuro.",
+  },
+  {
+    emoji: "🎮", title: "Jogar junto deixa tudo mais leve.",
+    sub: "Capibatman (minigames rápidos), Cartas no estilo Uno e Stop — dá pra jogar em dupla ou com a turma toda, em tempo real.",
+  },
+  {
+    emoji: "🎁", title: "Pequenas atitudes, grandes momentos.",
+    sub: "Ganhem moedas usando o app no dia a dia e troquem por recompensas prontas ou criadas por vocês mesmos, na lojinha.",
+  },
+  {
+    emoji: "👥", title: "Casal, turma, ou os dois.", turma: true,
+    sub: "O Saudômetro pode ser o cantinho de um casal ou de uma turma de amigos inteira — e dá pra ter as duas coisas na mesma conta, sem complicação.",
+    cta: "Vamos começar",
+  },
+];
+
+// tour de boas-vindas: roda uma vez só pra quem nunca viu (guardado no aparelho), antes da
+// escolha de casal/turma. Quem já viu (ou pediu pra pular) cai direto em renderOnboardingChoices.
+function renderOnboardingEntry() {
+  let seen = false;
+  try { seen = localStorage.getItem(TOUR_SEEN_KEY) === "1"; } catch (e) { /* sem storage: mostra sempre */ }
+  if (seen) { renderOnboardingChoices(); return; }
+  renderFeatureTour(0);
+}
+
+function markTourSeen() {
+  try { localStorage.setItem(TOUR_SEEN_KEY, "1"); } catch (e) { /* sem storage: só volta a aparecer */ }
+}
+
+function renderFeatureTour(index) {
+  const slide = TOUR_SLIDES[index];
+  const isLast = index === TOUR_SLIDES.length - 1;
+  $("#screen-onboarding").style.display = "flex";
+  $("#screen-onboarding").innerHTML = `
+    <div class="tour-topbar">
+      ${index > 0 ? `<button class="tour-back" id="tour-back" aria-label="Voltar">←</button>` : `<span style="width:36px;"></span>`}
+      <div class="tour-dots">
+        ${TOUR_SLIDES.map((s, i) => `<span class="tour-dot ${s.turma ? "turma" : ""} ${i === index ? "active" : ""}"></span>`).join("")}
+      </div>
+      <button class="tour-skip" id="tour-skip">Pular</button>
+    </div>
+    <div class="tour-icon-circle ${slide.turma ? "turma" : ""}">${slide.emoji}</div>
+    <h1 class="tour-title">${escapeHTML(slide.title)}</h1>
+    <p class="tour-sub">${escapeHTML(slide.sub)}</p>
+    ${slide.strip ? `
+      <div class="tour-feature-strip">
+        ${slide.strip.map(([emoji, label]) => `<div><span class="emoji">${emoji}</span>${escapeHTML(label)}</div>`).join("")}
+      </div>` : ""}
+    <button class="btn btn-primary btn-block" id="tour-next" style="margin-top:8px;">${slide.cta || "Continuar"}</button>
+  `;
+  $("#tour-skip").addEventListener("click", () => { markTourSeen(); renderOnboardingChoices(); });
+  $("#tour-back")?.addEventListener("click", () => renderFeatureTour(index - 1));
+  $("#tour-next").addEventListener("click", () => {
+    if (isLast) { markTourSeen(); renderOnboardingChoices(); }
+    else renderFeatureTour(index + 1);
+  });
+}
 
 // depois do Google (ou pra quem já estava numa sessão de antes): escolher casal ou turma de amigos
 function renderOnboardingChoices() {
