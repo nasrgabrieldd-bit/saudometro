@@ -176,7 +176,11 @@ html, body {
 }
 
 body {
-  min-height: 100vh;
+  min-height: 100vh; /* navegador sem suporte a dvh: pelo menos não fica menor que a tela */
+  height: 100dvh; /* altura de verdade (não só mínima) — sem isso, o #app-shell só CRESCE em
+    vez de ficar do tamanho da tela e deixar o overflow:auto de dentro (#view-container/
+    #friends-view) rolar por conta própria; a rolagem acaba acontecendo na página inteira em
+    vez de dentro da área certa, o que é inconsistente entre navegadores/Android */
   display: flex;
   justify-content: center;
   overflow-wrap: break-word;
@@ -199,6 +203,7 @@ button, input, textarea, select {
   width: 100%;
   max-width: 480px;
   min-height: 100vh;
+  height: 100dvh; /* mesmo motivo do body: altura de verdade, não só mínima */
   background: var(--bg);
   display: flex;
   flex-direction: column;
@@ -280,6 +285,9 @@ button, input, textarea, select {
 
 #view-container {
   flex: 1;
+  min-height: 0; /* sem isso, um flex:1 com overflow:auto não "encolhe" pra caber no espaço
+    disponível — ele cresce pro tamanho do conteúdo e quem acaba rolando é a página inteira,
+    não essa área (e a página inteira rolando é inconsistente entre navegadores/Android) */
   padding: 4px 20px 110px;
   overflow-y: auto;
 }
