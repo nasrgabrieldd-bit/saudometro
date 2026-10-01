@@ -2,10 +2,12 @@
 -- "Apelido pro namorado(a)/sogra" ao pool clássico (agora 12 categorias, continua sorteando 6
 -- por partida). É seguro rodar mais de uma vez.
 
--- amplia a constraint de categoria: troca 'cidade' por 'cep', acrescenta 'apelido_vinculo'
+-- amplia a constraint de categoria: acrescenta 'cep' e 'apelido_vinculo' — mantém 'cidade' na
+-- lista (partidas novas não sorteiam mais ela, mas respostas antigas já gravadas com essa
+-- categoria continuam existindo na tabela e não podem violar a constraint)
 alter table stop_answers drop constraint if exists stop_answers_category_check;
 alter table stop_answers add constraint stop_answers_category_check check (category in (
-  'nome', 'animal', 'comida', 'cep', 'objeto', 'filme_serie', 'cor', 'pais', 'profissao', 'marca', 'fruta', 'apelido_vinculo',
+  'nome', 'animal', 'comida', 'cidade', 'cep', 'objeto', 'filme_serie', 'cor', 'pais', 'profissao', 'marca', 'fruta', 'apelido_vinculo',
   'lugar_beijo', 'elogio_picante', 'apelido_safado', 'fantasia_leve', 'peca_intima', 'programa_noite'
 ));
 
