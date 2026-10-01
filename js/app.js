@@ -24,7 +24,7 @@ import { pickSaudadeNudge } from "./nudges.js";
 import { nameOf, genderOf, emojiOf, gen, genMixed, cleanName, setPeopleSettings, defaultEmojis, legacyPeople, feat, goalTarget, HOME_WIDGETS, homeOrder, homeWidgetOn, togetherSince, coinRule, luckyOn, perkHidden, COIN_DEFAULTS } from "./people.js";
 import {
   toISODate, monthKey, parseISODate, addDays, addMonths, startOfMonth,
-  daysInMonth, mondayIndex, mondayOfWeek, fridayOfWeekend, fridayOfWeekContaining, humanDateLong,
+  daysInMonth, mondayIndex, mondayOfWeek, humanDateLong,
   humanDateShort, weekdayAbbrev, monthLabel, isSameDate, todayISO, genCoupleCode,
 } from "./util.js";
 
@@ -47,7 +47,7 @@ const State = {
   calendarMonth: startOfMonth(new Date()),
   calendarEncounters: [],
   calendarPlan: null,
-  calendarWeekend: [],
+  calendarRecharge: [],
   coupleCreatedAt: null,
   settings: null,
   unsubscribe: null,
@@ -557,11 +557,28 @@ let kissTimerInterval = null;
 function clearKissTimer() {
   if (kissTimerInterval) { clearInterval(kissTimerInterval); kissTimerInterval = null; }
 }
+let rechargeTimerInterval = null;
+function clearRechargeTimer() {
+  if (rechargeTimerInterval) { clearInterval(rechargeTimerInterval); rechargeTimerInterval = null; }
+}
+// escreve dias/horas/min/seg num flip-clock a partir de uma diferença em ms (já sem ficar negativa)
+function tickFlipClock(counterEl, diffMs) {
+  const totalSec = Math.floor(Math.max(0, diffMs) / 1000);
+  const days = Math.floor(totalSec / 86400);
+  const hours = Math.floor((totalSec % 86400) / 3600);
+  const mins = Math.floor((totalSec % 3600) / 60);
+  const secs = totalSec % 60;
+  counterEl.querySelector("[data-unit='d']").textContent = String(days).padStart(2, "0");
+  counterEl.querySelector("[data-unit='h']").textContent = String(hours).padStart(2, "0");
+  counterEl.querySelector("[data-unit='m']").textContent = String(mins).padStart(2, "0");
+  counterEl.querySelector("[data-unit='s']").textContent = String(secs).padStart(2, "0");
+}
 
 function renderActiveTab() {
   if (State.activeTab === "shop" && !feat("shop")) State.activeTab = "home";
   if (!State.coupleId) return;
   clearKissTimer();
+  clearRechargeTimer();
   const map = { home: renderHome, calendar: renderCalendar, mood: renderMood, notes: renderNotes, shop: renderShop, profile: renderProfile };
   Promise.resolve((map[State.activeTab] || renderHome)()).catch(handleRenderError);
 }
@@ -609,6 +626,7 @@ function returnToOnboarding() {
   State.partner = null;
   setPeopleSettings(null);
   clearKissTimer();
+  clearRechargeTimer();
   closeModal();
   $("#screen-app").style.display = "none";
   renderOnboardingChoices();
@@ -639,7 +657,7 @@ const TOUR_SLIDES = [
   },
   {
     emoji: "🎮", title: "Jogar junto deixa tudo mais leve.",
-    sub: "Capibatman (minigames rápidos), Cartas no estilo Uno e Stop — dá pra jogar em dupla ou com a turma toda, em tempo real.",
+    sub: "Capibatman (minigames rápidos), Capiverso (cartas no estilo Uno) e Capistop — dá pra jogar em dupla ou com a turma toda, em tempo real.",
   },
   {
     emoji: "🎁", title: "Pequenas atitudes, grandes momentos.",
@@ -2632,7 +2650,7 @@ async function renderFriendsShop() {
         <div class="rm-ic cards" style="width:48px; height:48px;">${ROOM_GAME_ICON.cartas}</div>
         <div style="flex:1;">
           <div class="card-title" style="font-size:15px; margin-bottom:0;">Jogar com amigos</div>
-          <div class="hint-text" style="margin:0;">Cartas e Stop · crie uma sala e chame a turma</div>
+          <div class="hint-text" style="margin:0;">${GAME_LABEL.cartas} e ${GAME_LABEL.stop} · crie uma sala e chame a turma</div>
         </div>
       </div>
     </div>
@@ -2748,9 +2766,16 @@ function openNewCustomPerkModal() {
 // Fase 1: só o esqueleto de sala/lobby/presença/reconexão — o motor de regras de cada jogo
 // (Fase 2/3) ainda não existe; ao iniciar a partida, mostra uma tela "🚧 em breve" por ora.
 
+// Cartas (estilo Uno) virou "Capiverso" e Stop virou "Capistop" — mesma família visual do
+// Capibatman (ícone próprio em vez de emoji genérico)
+const GAME_LABEL = { cartas: "Capiverso", stop: "Capistop" };
+function gameIconImg(gameType, px) {
+  const file = gameType === "cartas" ? "capiverso" : "capistop";
+  return `<img src="icons/${file}.png" alt="${GAME_LABEL[gameType]}" style="width:${px}px; height:${px}px; object-fit:cover; border-radius:${Math.round(px * 0.28)}px; vertical-align:middle; flex:none;" />`;
+}
 const ROOM_GAME_ICON = {
-  cartas: `<svg viewBox="0 0 24 24" fill="none"><rect x="2" y="5" width="14" height="18" rx="3" transform="rotate(-8 9 14)" fill="#ffffff" fill-opacity=".35"/><rect x="6" y="3" width="14" height="18" rx="3" fill="#ffffff"/><circle cx="13" cy="12" r="4.2" fill="#6f8bff"/><path d="M13 8.6v6.8M9.8 12h6.4" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round"/></svg>`,
-  stop: `<svg viewBox="0 0 24 24" fill="none"><path d="M12 2 21 7.5V16.5L12 22 3 16.5V7.5Z" fill="#ffffff"/><text x="12" y="16.5" font-family="'Baloo 2',sans-serif" font-weight="800" font-size="12.5" fill="#e0791f" text-anchor="middle">S</text></svg>`,
+  cartas: `<img src="icons/capiverso.png" alt="Capiverso" style="width:100%; height:100%; object-fit:cover; border-radius:16px;" />`,
+  stop: `<img src="icons/capistop.png" alt="Capistop" style="width:100%; height:100%; object-fit:cover; border-radius:16px;" />`,
 };
 
 const ROOM_AVATAR_PALETTE = [
@@ -2829,9 +2854,9 @@ async function renderGameHub(ctx) {
           <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">🎮 Jogar ${State.roomCtx === "casal" ? "a dois" : "com amigos"}</h2>
         </div>
         <div class="card" style="text-align:center; padding:24px 16px;">
-          <div style="font-size:30px;">${active.game_type === "cartas" ? "🃏" : "🔤"}</div>
+          <div>${gameIconImg(active.game_type, 56)}</div>
           <div class="card-title" style="margin-top:8px;">Você tem uma partida em andamento</div>
-          <p class="card-sub">Sala ${escapeHTML(active.code)} · ${active.game_type === "cartas" ? "Cartas" : "STOP"}</p>
+          <p class="card-sub">Sala ${escapeHTML(active.code)} · ${GAME_LABEL[active.game_type]}</p>
           <button class="btn btn-block" style="margin-top:10px; ${roomBtnStyle()}" id="btn-rejoin-room">Voltar pra sala</button>
           <button class="btn btn-ghost btn-block" style="margin-top:8px;" id="btn-leave-active-room">Sair dessa sala</button>
         </div>
@@ -2857,14 +2882,14 @@ async function renderGameHub(ctx) {
       <div class="rm-gamecard cards" data-game="cartas">
         <div class="ic">${ROOM_GAME_ICON.cartas}</div>
         <div style="flex:1;">
-          <div class="t">Cartas</div>
+          <div class="t">${GAME_LABEL.cartas}</div>
           <div class="s">2 a 8 jogadores · fique sem cartas antes dos outros</div>
         </div>
       </div>
       <div class="rm-gamecard stop" data-game="stop">
         <div class="ic">${ROOM_GAME_ICON.stop}</div>
         <div style="flex:1;">
-          <div class="t">STOP</div>
+          <div class="t">${GAME_LABEL.stop}</div>
           <div class="s">2 a 8 jogadores · uma letra, pouco tempo, muitas respostas</div>
         </div>
       </div>
@@ -2878,10 +2903,10 @@ async function renderGameHub(ctx) {
 }
 
 function openGameChoiceModal(gameType) {
-  const label = gameType === "cartas" ? "Cartas" : "STOP";
+  const label = GAME_LABEL[gameType];
   const showSpicyToggle = gameType === "stop" && State.roomCtx === "casal";
   openModal(`
-    <h3 class="modal-title">${gameType === "cartas" ? "🃏" : "🔤"} ${label}</h3>
+    <h3 class="modal-title">${gameIconImg(gameType, 26)} ${label}</h3>
     ${showSpicyToggle ? `
       <label class="hint-text" style="display:flex; align-items:flex-start; gap:8px; text-align:left; font-size:13px; cursor:pointer; margin:4px 0 12px;">
         <input type="checkbox" id="stop-spicy-toggle" style="margin-top:2px; flex:none;" />
@@ -2910,11 +2935,11 @@ function openGameChoiceModal(gameType) {
 
 function renderRoomJoin(gameType) {
   const view = roomViewEl();
-  const label = gameType === "cartas" ? "Cartas" : "STOP";
+  const label = GAME_LABEL[gameType];
   view.innerHTML = `
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
       <button class="btn btn-ghost btn-sm" id="btn-join-back" style="flex:none; padding:9px 12px;">← Voltar</button>
-      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">${gameType === "cartas" ? "🃏" : "🔤"} ${label}</h2>
+      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">${gameIconImg(gameType, 22)} ${label}</h2>
     </div>
     <div class="rm-join-box">
       <p class="field-label" style="margin-bottom:6px;">Digite o código da sala</p>
@@ -2970,7 +2995,7 @@ async function renderRoomLobbyScreen(room) {
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
       <div>
         <div class="hint-text" style="margin:0; text-transform:uppercase; font-weight:800; letter-spacing:.03em;">Sala</div>
-        <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0; color:${roomAccentStrong()};">${room.game_type === "cartas" ? "🃏 Cartas" : "🔤 STOP"}</h2>
+        <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0; color:${roomAccentStrong()};">${gameIconImg(room.game_type, 22)} ${GAME_LABEL[room.game_type]}</h2>
       </div>
       <button class="btn btn-ghost btn-sm" id="btn-leave-room" style="color:${roomAccentStrong()}; font-weight:800;">SAIR ✕</button>
     </div>
@@ -3002,7 +3027,7 @@ async function renderRoomLobbyScreen(room) {
     try { await navigator.clipboard.writeText(room.code); } catch (e) { /* sem clipboard: sem problema, o código já tá visível */ }
   });
   $("#btn-share-code")?.addEventListener("click", async () => {
-    const text = `Bora jogar ${room.game_type === "cartas" ? "Cartas" : "STOP"}? Código da sala: ${room.code}`;
+    const text = `Bora jogar ${GAME_LABEL[room.game_type]}? Código da sala: ${room.code}`;
     if (navigator.share) { try { await navigator.share({ text }); } catch (e) { /* cancelou o compartilhamento */ } }
     else { try { await navigator.clipboard.writeText(text); } catch (e) { /* sem clipboard nem share: só ignora */ } }
   });
@@ -3186,7 +3211,7 @@ async function renderCardMatchScreen(matchId) {
 
   view.innerHTML = `
     <div class="cg-table">
-      <div class="cg-topbar"><span>🃏 Cartas</span><span id="btn-cardmatch-exit" style="cursor:pointer;">✕</span></div>
+      <div class="cg-topbar"><span>${gameIconImg("cartas", 20)} Capiverso</span><span id="btn-cardmatch-exit" style="cursor:pointer;">✕</span></div>
       <div class="cg-opp-row">
         ${opponents.map((p) => {
           const [c1, c2] = roomAvatarColors(p.user_id);
@@ -4230,10 +4255,8 @@ async function renderHome() {
   // só conta como "resolvido" o que já tá confirmado — um convite pendente não desliga o lembrete
   const weekHasSomething = weekEntries.some((e) => e.status === "aconteceu" || e.status === "confirmado" || e.status === "agendado");
 
-  const nextWeekendFriday = fridayOfWeekend(today) || nextUpcomingFriday(today);
-  const weekendRows = await db.getWeekendRecharge(State.coupleId, monthKey(nextWeekendFriday));
-  const myWeekendOn = weekendRows.some((r) => r.week_start === toISODate(nextWeekendFriday) && r.role === State.role && r.active);
-  const partnerWeekendOn = weekendRows.some((r) => r.week_start === toISODate(nextWeekendFriday) && r.role !== State.role && r.active);
+  const rechargePeriod = feat("recharge") ? await db.getLatestRechargePeriod(State.coupleId).catch(() => null) : null;
+  State.rechargePeriod = rechargePeriod;
 
   const partnerRecentMood = recentMoods.filter((m) => m.role !== State.role).sort((a, b) => a.day < b.day ? 1 : -1)[0];
   const partnerNeedsCare = NEEDS_CARE_MOODS.has(partnerRecentMood?.mood) || NEEDS_CARE_MOODS.has(partnerRecentMood?.mood_partner);
@@ -4255,17 +4278,20 @@ async function renderHome() {
   // cada card da tela inicial; a ordem e quais aparecem vêm da configuração do casal
   const nextSpecial = homeWidgetOn("special") ? await findNextSpecialDate() : null;
   const html = {};
-  html.kiss = feat("kiss") ? `    <div class="card" id="kiss-card" style="cursor:pointer; text-align:center;">
-      <div class="card-title" style="font-size:15px;">⏱️ Sem se beijar</div>
-      ${stats?.last_kiss_at ? `
-        <div class="flip-clock" id="kiss-counter">
-          <div class="flip-unit"><span class="flip-value" data-unit="d">00</span><span class="flip-label">dias</span></div>
-          <div class="flip-unit"><span class="flip-value" data-unit="h">00</span><span class="flip-label">hrs</span></div>
-          <div class="flip-unit"><span class="flip-value" data-unit="m">00</span><span class="flip-label">min</span></div>
-          <div class="flip-unit"><span class="flip-value" data-unit="s">00</span><span class="flip-label">seg</span></div>
-        </div>
-      ` : `<div class="card-sub" style="margin:10px 0;">-</div>`}
-      <p class="hint-text">Toca aqui pra ${stats?.last_kiss_at ? "atualizar" : "registrar"} a hora do último beijo</p>
+  html.kiss = feat("kiss") ? `    <div class="card" style="text-align:center;">
+      <div id="kiss-clickzone" style="cursor:pointer;">
+        <div class="card-title" style="font-size:15px;">⏱️ Sem se beijar</div>
+        ${stats?.last_kiss_at ? `
+          <div class="flip-clock" id="kiss-counter">
+            <div class="flip-unit"><span class="flip-value" data-unit="d">00</span><span class="flip-label">dias</span></div>
+            <div class="flip-unit"><span class="flip-value" data-unit="h">00</span><span class="flip-label">hrs</span></div>
+            <div class="flip-unit"><span class="flip-value" data-unit="m">00</span><span class="flip-label">min</span></div>
+            <div class="flip-unit"><span class="flip-value" data-unit="s">00</span><span class="flip-label">seg</span></div>
+          </div>
+        ` : `<div class="card-sub" style="margin:10px 0;">-</div>`}
+        <p class="hint-text">Toca aqui pra ${stats?.last_kiss_at ? "atualizar" : "registrar"} a hora do último beijo</p>
+      </div>
+      ${feat("recharge") ? rechargeStateHTML(rechargePeriod) : ""}
     </div>` : "";
   html.moodstrip = feat("moodstrip") ? `    <div class="card">
       <div class="card-title" style="font-size:15px;">Humor dos últimos 7 dias</div>
@@ -4298,15 +4324,11 @@ async function renderHome() {
       <div class="card-title">Próximo encontro</div>
       <p class="center-note" style="padding:6px 0;">Nada marcado ainda. Que tal combinar um? 💕</p>
     </div>`) : "";
-  html.recharge = feat("recharge") ? `    <div class="card" id="weekend-card" style="cursor:pointer;">
-      <div class="switch-row">
-        <div>
-          <div class="card-title" style="font-size:15px;">🔋 Fim de semana de recarregar</div>
-          <div class="card-sub" style="margin-bottom:0;">${humanDateShort(nextWeekendFriday)} a ${humanDateShort(addDays(nextWeekendFriday, 2))}. ${myWeekendOn ? gen("Você está reclusa(o) recarregando", genderOf(State.role)) : "Tudo normal pra você"}${partnerWeekendOn ? `. ${ROLE_LABEL[State.partner?.role]} também recarregando` : ""}.</div>
-        </div>
-        <span class="switch ${myWeekendOn ? "on" : ""}" style="pointer-events:none;"></span>
-      </div>
-      <p class="hint-text" style="margin-top:8px;">Toca aqui pra escolher outro fim de semana</p>
+  // se o cronômetro do beijo tá ligado, o estado da recarga já foi embutido lá dentro
+  // (html.kiss acima) — esse card só existe como alternativa pra quem desligou o beijo
+  html.recharge = (feat("recharge") && !feat("kiss")) ? `    <div class="card">
+      <div class="card-title" style="font-size:15px;">🔋 Recarregar a bateria</div>
+      ${rechargeStateHTML(rechargePeriod)}
     </div>` : "";
   html.mood = todayMoodCardHTML(recentMoods, todayStr);
   html.together = togetherCardHTML();
@@ -4338,6 +4360,12 @@ async function renderHome() {
         <div class="banner-text">${nudgeText}</div>
       </div>
     ` : ""}
+    ${feat("recharge") && rechargePeriod?.status === "aceito" && rechargePeriod.start_date <= todayStr && todayStr <= rechargePeriod.end_date ? `
+      <div class="banner banner-warm">
+        <div class="banner-icon">🔋</div>
+        <div class="banner-text"><strong>Semana de recarregar até ${humanDateShort(parseISODate(rechargePeriod.end_date))}</strong>Pode ter menos conversa que o normal, mas não precisa sumir — só não precisa ser tão fofo esses dias. Respeitem o combinado 💛</div>
+      </div>
+    ` : ""}
 
 ${(() => {
       const parts = widgetIds.map((id) => html[id] || "");
@@ -4365,33 +4393,33 @@ ${(() => {
   view.querySelectorAll(".checklist-row").forEach((btn) => {
     btn.addEventListener("click", () => setActiveTab(btn.dataset.tab));
   });
-  $("#weekend-card")?.addEventListener("click", () => openWeekendModal(nextWeekendFriday));
   $("#mood-reminder-banner")?.addEventListener("click", () => setActiveTab("mood"));
   $("#install-banner")?.addEventListener("click", openInstallGuide);
-  $("#kiss-card")?.addEventListener("click", () => openKissModal(stats?.last_kiss_at));
+  $("#kiss-clickzone")?.addEventListener("click", () => openKissModal(stats?.last_kiss_at));
+  wireRechargeButtons();
 
   clearKissTimer();
   if (feat("kiss") && stats?.last_kiss_at) {
     const target = new Date(stats.last_kiss_at).getTime();
     const counterEl = $("#kiss-counter");
-    const dEl = counterEl.querySelector("[data-unit='d']");
-    const hEl = counterEl.querySelector("[data-unit='h']");
-    const mEl = counterEl.querySelector("[data-unit='m']");
-    const sEl = counterEl.querySelector("[data-unit='s']");
-    const tick = () => {
-      const diff = Math.max(0, Date.now() - target);
-      const totalSec = Math.floor(diff / 1000);
-      const days = Math.floor(totalSec / 86400);
-      const hours = Math.floor((totalSec % 86400) / 3600);
-      const mins = Math.floor((totalSec % 3600) / 60);
-      const secs = totalSec % 60;
-      dEl.textContent = String(days).padStart(2, "0");
-      hEl.textContent = String(hours).padStart(2, "0");
-      mEl.textContent = String(mins).padStart(2, "0");
-      sEl.textContent = String(secs).padStart(2, "0");
-    };
+    const tick = () => tickFlipClock(counterEl, Date.now() - target);
     tick();
     kissTimerInterval = setInterval(tick, 1000);
+  }
+
+  clearRechargeTimer();
+  if (feat("recharge") && rechargePeriod?.status === "aceito") {
+    const counterEl = $("#recharge-counter");
+    if (counterEl) {
+      const target = parseISODate(rechargePeriod.end_date).getTime() + 86400000 - 1; // fim do dia final
+      const tick = () => {
+        const diff = target - Date.now();
+        tickFlipClock(counterEl, diff);
+        if (diff <= 0) renderActiveTab(); // acabou: re-renderiza pra sumir o contador e tirar o banner
+      };
+      tick();
+      rechargeTimerInterval = setInterval(tick, 1000);
+    }
   }
 
   if (feat("kiss")) maybeShowKissMilestone(daysSinceKiss, stats?.last_kiss_at);
@@ -4446,46 +4474,108 @@ function openKissModal(currentISO) {
   });
 }
 
-function openWeekendModal(defaultDate) {
-  openModal(`
-    <h3 class="modal-title">🔋 Recarregar a bateria</h3>
-    <p class="card-sub">Escolhe um dia daquele fim de semana. Enquanto tiver ativo, ${ROLE_LABEL[otherRole()]} sabe que você quer ficar tranquila, sem compromisso.</p>
-    <label class="field-label">Data</label>
-    <input type="date" id="recharge-date" value="${toISODate(defaultDate)}" />
-    <p class="hint-text" id="recharge-range" style="margin-top:8px;"></p>
-    <button class="btn btn-warm btn-block" style="margin-top:16px;" id="btn-toggle-recharge">Ativar</button>
-  `);
+// bloco de estado da recarga: nada pendente/ativo -> botão de propor; pendente -> aceitar/recusar
+// (ou esperando, se fui eu que propus); aceita e já começou -> contador regressivo até acabar;
+// aceita e ainda não começou -> só um aviso da data. Reaproveitado tanto dentro do card do beijo
+// quanto no card próprio (pra quem desligou o cronômetro do beijo).
+function rechargeStateHTML(period) {
+  if (!period) {
+    return `<button class="btn btn-ghost btn-sm" id="btn-recharge-propose" style="margin-top:10px;">🔋 Marcar recarga</button>`;
+  }
+  const start = parseISODate(period.start_date);
+  const end = parseISODate(period.end_date);
+  const range = `${humanDateShort(start)} a ${humanDateShort(end)}`;
+  const iProposed = period.proposed_by === State.role;
 
-  const dateInput = $("#recharge-date");
-  const btn = $("#btn-toggle-recharge");
-
-  async function refresh() {
-    const picked = parseISODate(dateInput.value);
-    const friday = fridayOfWeekContaining(picked);
-    $("#recharge-range").textContent = `Fim de semana de ${humanDateShort(friday)} a ${humanDateShort(addDays(friday, 2))}`;
-    const rows = await db.getWeekendRecharge(State.coupleId, monthKey(friday));
-    const active = rows.some((r) => r.week_start === toISODate(friday) && r.role === State.role && r.active);
-    btn.textContent = active ? "Desativar" : "Ativar";
-    btn.className = active ? "btn btn-danger btn-block" : "btn btn-warm btn-block";
-    btn.dataset.friday = toISODate(friday);
-    btn.dataset.active = active ? "1" : "0";
+  if (period.status === "pendente") {
+    return iProposed
+      ? `<p class="hint-text" style="margin:10px 0 2px;">⏳ Esperando ${ROLE_LABEL[otherRole()]} aceitar recarregar de ${range}.</p>
+         <button class="btn btn-ghost btn-sm" id="btn-recharge-cancel">Cancelar</button>`
+      : `<p class="hint-text" style="margin:10px 0 6px;">🔋 ${ROLE_LABEL[period.proposed_by]} quer recarregar de ${range}.</p>
+         <div class="row" style="gap:8px;">
+           <button class="btn btn-success btn-sm" style="flex:1;" id="btn-recharge-accept">Aceitar</button>
+           <button class="btn btn-danger btn-sm" style="flex:1;" id="btn-recharge-decline">Recusar</button>
+         </div>`;
   }
 
-  dateInput.addEventListener("change", refresh);
-  refresh();
+  if (period.status === "aceito") {
+    const todayISO = toISODate(new Date());
+    const active = period.start_date <= todayISO && todayISO <= period.end_date;
+    if (active) {
+      return `
+        <p class="hint-text" style="margin:10px 0 4px;">🔋 Recarregando até ${humanDateShort(end)}</p>
+        <div class="flip-clock" id="recharge-counter">
+          <div class="flip-unit"><span class="flip-value" data-unit="d">00</span><span class="flip-label">dias</span></div>
+          <div class="flip-unit"><span class="flip-value" data-unit="h">00</span><span class="flip-label">hrs</span></div>
+          <div class="flip-unit"><span class="flip-value" data-unit="m">00</span><span class="flip-label">min</span></div>
+          <div class="flip-unit"><span class="flip-value" data-unit="s">00</span><span class="flip-label">seg</span></div>
+        </div>
+      `;
+    }
+    return `<p class="hint-text" style="margin:10px 0 0;">🔋 Recarga marcada pra ${range}.</p>`;
+  }
 
-  btn.addEventListener("click", async () => {
-    const friday = btn.dataset.friday;
-    const nowActive = btn.dataset.active === "1";
-    setBusy("#btn-toggle-recharge", true);
+  return `<button class="btn btn-ghost btn-sm" id="btn-recharge-propose" style="margin-top:10px;">🔋 Marcar recarga</button>`;
+}
+
+function openRechargeProposalModal() {
+  const dateVal = toISODate(new Date());
+  let days = 1;
+  openModal(`
+    <h3 class="modal-title">🔋 Marcar recarga</h3>
+    <p class="card-sub">Escolhe quando você precisa de um tempo. ${ROLE_LABEL[otherRole()]} vai precisar aceitar antes de valer.</p>
+    <label class="field-label">A partir de quando</label>
+    <input type="date" id="recharge-start" value="${dateVal}" min="${dateVal}" />
+    <div class="row" style="align-items:center; margin-top:14px;"><span style="flex:1;">Quantos dias</span>
+      <button type="button" class="btn btn-secondary btn-sm" data-d="-1" style="flex:none; width:38px;">−</button>
+      <strong id="recharge-days" style="min-width:70px; text-align:center;">1 dia</strong>
+      <button type="button" class="btn btn-secondary btn-sm" data-d="1" style="flex:none; width:38px;">+</button>
+    </div>
+    <button class="btn btn-warm btn-block" style="margin-top:16px;" id="btn-recharge-send">Propor pra ${ROLE_LABEL[otherRole()]}</button>
+  `);
+  const syncDays = () => { $("#recharge-days").textContent = `${days} dia${days === 1 ? "" : "s"}`; };
+  syncDays();
+  document.querySelectorAll("#modal-sheet [data-d]").forEach((b) => b.addEventListener("click", () => {
+    days = Math.min(14, Math.max(1, days + parseInt(b.dataset.d, 10)));
+    syncDays();
+  }));
+  $("#btn-recharge-send").addEventListener("click", async () => {
+    setBusy("#btn-recharge-send", true);
     try {
-      await db.setWeekendRecharge(State.coupleId, friday, State.role, !nowActive);
+      const start = parseISODate($("#recharge-start").value);
+      const end = addDays(start, days - 1);
+      await db.proposeRechargePeriod(State.coupleId, State.role, toISODate(start), toISODate(end));
       closeModal();
       renderActiveTab();
     } catch (e) {
       alert("Não deu: " + (e.message || e));
-      setBusy("#btn-toggle-recharge", false);
+      setBusy("#btn-recharge-send", false);
     }
+  });
+}
+
+function wireRechargeButtons() {
+  $("#btn-recharge-propose")?.addEventListener("click", (ev) => { ev.stopPropagation(); openRechargeProposalModal(); });
+  $("#btn-recharge-cancel")?.addEventListener("click", async (ev) => {
+    ev.stopPropagation();
+    if (!State.rechargePeriod) return;
+    setBusy("#btn-recharge-cancel", true);
+    try { await db.cancelRechargePeriod(State.rechargePeriod.id); renderActiveTab(); }
+    catch (e) { alert("Não deu: " + (e.message || e)); setBusy("#btn-recharge-cancel", false); }
+  });
+  $("#btn-recharge-accept")?.addEventListener("click", async (ev) => {
+    ev.stopPropagation();
+    if (!State.rechargePeriod) return;
+    setBusy("#btn-recharge-accept", true);
+    try { await db.respondRechargePeriod(State.rechargePeriod.id, true); renderActiveTab(); }
+    catch (e) { alert("Não deu: " + (e.message || e)); setBusy("#btn-recharge-accept", false); }
+  });
+  $("#btn-recharge-decline")?.addEventListener("click", async (ev) => {
+    ev.stopPropagation();
+    if (!State.rechargePeriod) return;
+    setBusy("#btn-recharge-decline", true);
+    try { await db.respondRechargePeriod(State.rechargePeriod.id, false); renderActiveTab(); }
+    catch (e) { alert("Não deu: " + (e.message || e)); setBusy("#btn-recharge-decline", false); }
   });
 }
 
@@ -4507,12 +4597,6 @@ function daysUntilLabel(date) {
   return "já passou";
 }
 function startOfDay(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
-
-function nextUpcomingFriday(from) {
-  let d = new Date(from);
-  while (d.getDay() !== 5) d = addDays(d, 1);
-  return d;
-}
 
 async function encountersInRange(start, end) {
   const months = new Set([monthKey(start), monthKey(end)]);
@@ -4570,13 +4654,13 @@ function iconFor(e) {
   return "✉️";
 }
 
-// respeita a semana de recarregar: recusar um convite que cai nela nunca custa moeda
-async function isRechargeExemptForDate(dateISO, role) {
+// respeita a recarga: recusar um convite que cai numa recarga aceita nunca custa moeda, pra
+// qualquer um dos dois (o período vale pro casal todo, não é mais por pessoa como era antes)
+async function isRechargeExemptForDate(dateISO) {
   if (!feat("recharge")) return false;
-  const friday = fridayOfWeekend(parseISODate(dateISO));
-  if (!friday) return false;
-  const rows = await db.getWeekendRecharge(State.coupleId, monthKey(friday));
-  return rows.some((r) => r.week_start === toISODate(friday) && r.role === role && r.active);
+  const period = await db.getLatestRechargePeriod(State.coupleId).catch(() => null);
+  if (!period || period.status !== "aceito") return false;
+  return period.start_date <= dateISO && dateISO <= period.end_date;
 }
 
 // nunca bloqueia a ação por falta de moeda — só cobra quando dá pra cobrar
@@ -4600,7 +4684,7 @@ async function respondToConvite(entry, decision) {
     await db.updateEncounterStatus(entry.id, "recusado");
     // recusar "devolve" a moeda pra quem convidou — quem recusou fica devendo, tenta cobrar dela
     await addCoins(entry.created_by, coinRule("invite"), "convite recusado: reembolso");
-    const exempt = await isRechargeExemptForDate(entry.start_date, State.role);
+    const exempt = await isRechargeExemptForDate(entry.start_date);
     if (!exempt) await spendCoinIfAvailable(State.role, coinRule("decline"), "recusou um convite");
   } else if (decision === "cancel") {
     await db.updateEncounterStatus(entry.id, "recusado");
@@ -4659,10 +4743,10 @@ function openSweetNoteModal(alreadyEarnedToday) {
 async function renderCalendar() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const mk = monthKey(State.calendarMonth);
-  const [plan, encounters, weekend, myCycle, partnerCycle] = await Promise.all([
+  const [plan, encounters, rechargeDays, myCycle, partnerCycle] = await Promise.all([
     db.ensureMonthPlan(State.coupleId, mk, goalTarget()),
     db.listEncountersForMonth(State.coupleId, mk),
-    db.getWeekendRecharge(State.coupleId, mk),
+    feat("recharge") ? db.getAcceptedRechargePeriodsForMonth(State.coupleId, mk) : Promise.resolve([]),
     genderOf(State.role) === "mulher" ? db.getCycle(State.coupleId, State.role).catch(() => null) : null,
     State.partner ? db.getCycle(State.coupleId, State.partner.role).catch(() => null) : null,
   ]);
@@ -4678,7 +4762,7 @@ async function renderCalendar() {
   }
   State.calendarPlan = plan;
   State.calendarEncounters = encounters;
-  State.calendarWeekend = weekend;
+  State.calendarRecharge = rechargeDays;
 
   const target = plan.base_target + plan.carry_in;
   const countable = encounters.filter(isCountableEncounter);
@@ -4778,15 +4862,14 @@ function buildDayGrid() {
     const iso = toISODate(date);
     const entries = entriesOnDay(date);
     const isToday = isSameDate(date, new Date());
-    const friday = feat("recharge") ? fridayOfWeekend(date) : null;
-    const weekendActive = friday && State.calendarWeekend.some((w) => w.week_start === toISODate(friday) && w.active);
+    const rechargeActive = feat("recharge") && State.calendarRecharge.some((p) => p.start_date <= iso && iso <= p.end_date);
     const cyKey = State.calendarCycle ? cyclePhaseOnDate(State.calendarCycle.s, date, State.calendarCycle.full) : null;
     const cyDot = cyKey ? `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${CYCLE_COLORS[cyKey]};"></span>` : "";
     const dots = cyDot + entries.slice(0, cyKey ? 2 : 3).map(iconFor).join("");
     html += `
       <button class="day-cell ${isToday ? "today" : ""}" data-date="${iso}">
         <span class="num">${day}</span>
-        <span class="dots">${dots}${weekendActive ? "🔋" : ""}</span>
+        <span class="dots">${dots}${rechargeActive ? "🔋" : ""}</span>
       </button>
     `;
   }
@@ -4808,9 +4891,6 @@ function showDayDetail(iso) {
   document.querySelectorAll(".day-cell").forEach((c) => c.classList.toggle("selected", c.dataset.date === iso));
   const date = parseISODate(iso);
   const entries = entriesOnDay(date);
-  const friday = feat("recharge") ? fridayOfWeekend(date) : null;
-  const weekendRow = friday ? State.calendarWeekend.filter((w) => w.week_start === toISODate(friday)) : [];
-  const myWeekendOn = weekendRow.some((w) => w.role === State.role && w.active);
 
   const entriesHTML = entries.length ? entries.map((e) => entryItemHTML(e)).join("") : `
     <div class="empty-state"><span class="emoji">🗓️</span>Nada marcado nesse dia ainda.</div>
@@ -4826,18 +4906,12 @@ function showDayDetail(iso) {
       <div class="row" style="margin-top:14px;">
         ${feat("miss") ? `<button class="btn btn-secondary" id="btn-add-saudade-day">🫂 Encontro de saudade</button>` : ""}
         <button class="btn btn-secondary" id="btn-add-evento-day">📌 Evento</button>
-        ${friday ? `<button class="btn ${myWeekendOn ? "btn-danger" : "btn-secondary"}" id="btn-toggle-weekend-day">${myWeekendOn ? "🔋 Cancelar recarga" : "🔋 Recarregar esse fds"}</button>` : ""}
       </div>
     </div>
   `;
 
   $("#btn-add-saudade-day")?.addEventListener("click", () => openAddEncounterModal("saudade", date));
   $("#btn-add-evento-day").addEventListener("click", () => openAddEventModal(date));
-  $("#btn-toggle-weekend-day")?.addEventListener("click", async () => {
-    await db.setWeekendRecharge(State.coupleId, toISODate(friday), State.role, !myWeekendOn);
-    await renderCalendar();
-    showDayDetail(iso);
-  });
 
   wireEntryActions();
 }
@@ -4870,6 +4944,11 @@ function entryItemHTML(e) {
       `;
   } else if (isTerminal) {
     actions = `<button class="btn btn-ghost btn-sm" data-act="undo" data-id="${e.id}">↩️ Desfazer</button>`;
+  }
+  // editar título/data/categoria: disponível pros dois papéis, não só quem criou (mesma
+  // confiança já usada em apagar) — só faz sentido pra evento/planejado, não pra convite/saudade
+  if (e.kind === "evento" || e.kind === "planejado") {
+    actions += `<button class="btn btn-ghost btn-sm" data-act="edit" data-id="${e.id}" title="Editar">✏️ Editar</button>`;
   }
   actions += `<button class="btn btn-ghost btn-sm" data-act="delete" data-id="${e.id}" title="Apagar">🗑️ Apagar</button>`;
   return `
@@ -4939,6 +5018,11 @@ function wireEntryActions() {
           const entry = State.calendarEncounters.find((e) => e.id === id);
           const deleted = await deleteEntryWithConfirm(entry);
           if (!deleted) { btn.disabled = false; return; }
+        } else if (act === "edit") {
+          const entry = State.calendarEncounters.find((e) => e.id === id);
+          openEditEventModal(entry);
+          btn.disabled = false;
+          return;
         }
         await renderCalendar();
         const selected = document.querySelector(".day-cell.selected");
@@ -5039,6 +5123,62 @@ function openAddEventModal(presetDate, presetCategory) {
     } catch (e) {
       alert("Não deu: " + (e.message || e));
       setBusy("#save-encounter", false);
+    }
+  });
+}
+
+// edita título/data(s)/categoria de um encontro já criado — mesmo pra quem não criou, mesma
+// confiança total dentro do casal já usada em apagar. Mostra o seletor de categoria só pra
+// "evento" (planejado não tem categoria); não mexe em "yearly" aqui, fica como estava.
+function openEditEventModal(entry) {
+  const isEvento = entry.kind === "evento";
+  let category = entry.category || "outro";
+  openModal(`
+    <h3 class="modal-title">✏️ Editar ${isEvento ? "evento" : "encontro"}</h3>
+    ${isEvento ? `
+      <label class="field-label">Tipo</label>
+      <div class="row" id="event-cats" style="gap:8px; flex-wrap:wrap;">
+        ${Object.entries(EVENT_CATEGORIES).map(([id, c]) => `
+          <button type="button" class="btn ${id === category ? "btn-primary" : "btn-secondary"} btn-sm" data-cat="${id}" style="flex:1 1 40%;">${c.emoji} ${c.label}</button>
+        `).join("")}
+      </div>
+    ` : ""}
+    <label class="field-label">Título</label>
+    <input type="text" id="edit-title" maxlength="80" value="${escapeHTML(entry.title || "")}" />
+    <label class="field-label">Data de início</label>
+    <input type="date" id="edit-start" value="${entry.start_date}" />
+    <label class="field-label">Data final (se durar mais de um dia)</label>
+    <input type="date" id="edit-end" value="${entry.end_date || ""}" />
+    <button class="btn btn-primary btn-block" style="margin-top:16px;" id="save-edit-encounter">Salvar</button>
+  `);
+  $("#event-cats")?.querySelectorAll("[data-cat]").forEach((b) => {
+    b.addEventListener("click", () => {
+      category = b.dataset.cat;
+      $("#event-cats").querySelectorAll("[data-cat]").forEach((x) => {
+        x.className = `btn ${x.dataset.cat === category ? "btn-primary" : "btn-secondary"} btn-sm`;
+      });
+    });
+  });
+  $("#save-edit-encounter").addEventListener("click", async () => {
+    const title = $("#edit-title").value.trim();
+    if (!title) { alert("Dá um título :)"); return; }
+    if (!$("#edit-start").value) { alert("Escolhe a data de início."); return; }
+    const start = parseISODate($("#edit-start").value);
+    const endVal = $("#edit-end").value;
+    if (endVal && parseISODate(endVal) < start) { alert("A data final não pode ser antes da inicial."); return; }
+    setBusy("#save-edit-encounter", true);
+    try {
+      await db.updateEncounter(entry.id, {
+        title, startDate: start, endDate: endVal ? parseISODate(endVal) : null,
+        category: isEvento ? category : undefined,
+      });
+      closeModal();
+      State.calendarMonth = startOfMonth(start);
+      await renderCalendar();
+      showDayDetail(toISODate(start));
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#save-edit-encounter", false);
     }
   });
 }
@@ -6725,7 +6865,7 @@ async function renderShopGames() {
         <div class="rm-ic cards" style="width:48px; height:48px;">${ROOM_GAME_ICON.cartas}</div>
         <div style="flex:1;">
           <div class="card-title" style="font-size:15px; margin-bottom:0;">Jogar a dois</div>
-          <div class="hint-text" style="margin:0;">Cartas e Stop · crie uma sala e chame seu par</div>
+          <div class="hint-text" style="margin:0;">${GAME_LABEL.cartas} e ${GAME_LABEL.stop} · crie uma sala e chame seu par</div>
         </div>
       </div>
     </div>
@@ -7449,7 +7589,7 @@ const HOME_META = {
   moodstrip: { t: "Humor dos últimos 7 dias", d: "Faixa com o emoji de humor de cada dia da semana, de vocês dois", nw: true },
   goal: { t: "Meta de encontros do mês", d: "Card com a meta, o progresso e a moeda por encontro" },
   next: { t: "Próximo encontro", d: "Card com o próximo encontro combinado" },
-  recharge: { t: "Fim de semana de recarregar", d: "Card, botões no calendário e recusar convite sem custo" },
+  recharge: { t: "Dias de recarregar a bateria", d: "Contador no card do beijo, aviso de regras e recusar convite sem custo" },
   mood: { t: "Humor de hoje", d: "Como cada um está hoje", nw: true },
   together: { t: "Dias juntos", d: "Contador desde a data que vocês escolherem", nw: true },
   special: { t: "Próxima data especial", d: "Aniversário de namoro e outras datas que vocês criaram", nw: true },

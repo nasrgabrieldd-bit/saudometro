@@ -215,6 +215,20 @@ export const CHANGELOG = [
     title: "Stop: mais categorias, rodada picante e moedas",
     text: "Agora o pool de categorias clássicas é maior (Cor, País, Profissão, Marca e Fruta entraram no sorteio). No modo casal, dá pra ligar uma rodada picante só pra vocês dois no final da partida. O placar de quem tá na frente aparece entre as rodadas, só quem criou a sala avança pra próxima, e no final todo mundo ganha moedas de participação (e um bônus extra pra quem venceu).",
   },
+  {
+    id: "editar-encontros-recarga-flexivel-2026-10",
+    tag: "casal",
+    emoji: "🔋",
+    title: "Editar encontros e recarga da bateria sob medida",
+    text: "Agora dá pra editar título e data de qualquer encontro já marcado (seu ou do seu par), sem precisar apagar e criar de novo. E a recarga da bateria deixou de ser só sexta-sábado-domingo: quem precisa escolhe a data e quantos dias, o outro precisa aceitar, e enquanto estiver ativa aparece um contador regressivo embaixo do cronômetro do beijo e um aviso lembrando pra ir mais de boa nessa fase.",
+  },
+  {
+    id: "capiverso-capistop-2026-10",
+    tag: "geral",
+    emoji: "🦫",
+    title: "Cartas e Stop ganharam nome e carinha novos",
+    text: "O jogo de Cartas (estilo Uno) agora é o Capiverso, e o Stop virou o Capistop — ícone próprio de capivara, igual o Capibatman, em vez do emoji genérico de antes.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
