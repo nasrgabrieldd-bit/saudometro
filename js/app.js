@@ -2645,15 +2645,8 @@ async function renderFriendsShop() {
         </div>
       </div>
     </div>
-    <div class="card" id="btn-open-game-hub" style="cursor:pointer;">
-      <div class="row" style="align-items:center; gap:10px;">
-        <div class="rm-ic cards" style="width:48px; height:48px;">${ROOM_GAME_ICON.cartas}</div>
-        <div style="flex:1;">
-          <div class="card-title" style="font-size:15px; margin-bottom:0;">Jogar com amigos</div>
-          <div class="hint-text" style="margin:0;">${GAME_LABEL.cartas} e ${GAME_LABEL.stop} · crie uma sala e chame a turma</div>
-        </div>
-      </div>
-    </div>
+    ${multiplayerGameCardHTML("cartas", "btn-open-capiverso-friends", "fique sem cartas antes dos outros")}
+    ${multiplayerGameCardHTML("stop", "btn-open-capistop-friends", "uma letra, pouco tempo, muitas respostas")}
 
     ${Object.entries(FRIEND_PERK_CATEGORIES).map(([catId, cat]) => `
       <div class="section-title">${cat.emoji} ${cat.label}</div>
@@ -2683,7 +2676,8 @@ async function renderFriendsShop() {
     ` : ""}
   `;
   $("#btn-open-star-battle-friends").addEventListener("click", () => renderStarBattleGame("amigos"));
-  $("#btn-open-game-hub").addEventListener("click", () => renderGameHub("amigos"));
+  $("#btn-open-capiverso-friends").addEventListener("click", () => renderGameHub("amigos", "cartas"));
+  $("#btn-open-capistop-friends").addEventListener("click", () => renderGameHub("amigos", "stop"));
   $("#friends-new-perk-btn").addEventListener("click", openNewCustomPerkModal);
   view.querySelectorAll("[data-redeem]").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -2841,7 +2835,10 @@ function closeRoomChannels() {
   State.roomView = null;
 }
 
-async function renderGameHub(ctx) {
+// preselectedGame ("cartas"/"stop"): pulado o "escolha o jogo" e vai direto pra tela de
+// criar/entrar na sala daquele jogo — usado quando Capiverso/Capistop já aparecem como cards
+// separados na Lojinha, em vez de um hub combinado. Continua checando sala ativa primeiro.
+async function renderGameHub(ctx, preselectedGame) {
   if (ctx) State.roomCtx = ctx;
   const view = roomViewEl();
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
@@ -2872,6 +2869,18 @@ async function renderGameHub(ctx) {
       return;
     }
   } catch (e) { /* sem sala ativa: segue pro hub normal */ }
+
+  if (preselectedGame) {
+    view.innerHTML = `
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+        <button class="btn btn-ghost btn-sm" id="btn-gamehub-back" style="flex:none; padding:9px 12px;">← Voltar</button>
+        <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">${gameIconImg(preselectedGame, 22)} ${GAME_LABEL[preselectedGame]}</h2>
+      </div>
+    `;
+    $("#btn-gamehub-back").addEventListener("click", () => roomBack());
+    openGameChoiceModal(preselectedGame);
+    return;
+  }
 
   view.innerHTML = `
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
@@ -6848,6 +6857,22 @@ async function renderShopHub() {
   });
 }
 
+// card de jogo multiplayer (Capiverso/Capistop) no mesmo estilo do card do Capibatman — usado
+// tanto no modo casal quanto na turma. btnId precisa ser único na tela.
+function multiplayerGameCardHTML(gameType, btnId, subtitle) {
+  return `
+    <div class="card" id="${btnId}" style="cursor:pointer;">
+      <div class="row" style="align-items:center; gap:10px;">
+        <img src="icons/${gameType === "cartas" ? "capiverso" : "capistop"}.png" alt="${GAME_LABEL[gameType]}" style="width:48px; height:48px; border-radius:12px; object-fit:cover; flex:none;" />
+        <div style="flex:1;">
+          <div class="card-title" style="font-size:15px; margin-bottom:0;">${GAME_LABEL[gameType]}</div>
+          <div class="hint-text" style="margin:0;">2 a 8 jogadores · ${subtitle}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 async function renderShopGames() {
   view.innerHTML = `
     ${shopSubHeader("🎮 Jogos")}
@@ -6860,19 +6885,13 @@ async function renderShopGames() {
         </div>
       </div>
     </div>
-    <div class="card" id="btn-open-game-hub-casal" style="cursor:pointer;">
-      <div class="row" style="align-items:center; gap:10px;">
-        <div class="rm-ic cards" style="width:48px; height:48px;">${ROOM_GAME_ICON.cartas}</div>
-        <div style="flex:1;">
-          <div class="card-title" style="font-size:15px; margin-bottom:0;">Jogar a dois</div>
-          <div class="hint-text" style="margin:0;">${GAME_LABEL.cartas} e ${GAME_LABEL.stop} · crie uma sala e chame seu par</div>
-        </div>
-      </div>
-    </div>
+    ${multiplayerGameCardHTML("cartas", "btn-open-capiverso-casal", "fique sem cartas antes dos outros")}
+    ${multiplayerGameCardHTML("stop", "btn-open-capistop-casal", "uma letra, pouco tempo, muitas respostas")}
   `;
   wireShopBack();
   $("#btn-open-star-battle").addEventListener("click", () => renderStarBattleGame("casal"));
-  $("#btn-open-game-hub-casal").addEventListener("click", () => renderGameHub("casal"));
+  $("#btn-open-capiverso-casal").addEventListener("click", () => renderGameHub("casal", "cartas"));
+  $("#btn-open-capistop-casal").addEventListener("click", () => renderGameHub("casal", "stop"));
 }
 
 async function renderShopPerks() {
