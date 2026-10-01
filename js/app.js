@@ -2833,10 +2833,17 @@ async function renderGameHub(ctx) {
           <div class="card-title" style="margin-top:8px;">Você tem uma partida em andamento</div>
           <p class="card-sub">Sala ${escapeHTML(active.code)} · ${active.game_type === "cartas" ? "Cartas" : "STOP"}</p>
           <button class="btn btn-block" style="margin-top:10px; ${roomBtnStyle()}" id="btn-rejoin-room">Voltar pra sala</button>
+          <button class="btn btn-ghost btn-block" style="margin-top:8px;" id="btn-leave-active-room">Sair dessa sala</button>
         </div>
       `;
       $("#btn-gamehub-back").addEventListener("click", () => roomBack());
       $("#btn-rejoin-room").addEventListener("click", () => enterRoomLobby(active.id));
+      $("#btn-leave-active-room").addEventListener("click", async () => {
+        if (!confirm("Sair dessa sala? Se a partida precisar de 2 jogadores e o outro já saiu, isso libera você pra criar ou entrar numa sala nova.")) return;
+        setBusy("#btn-leave-active-room", true);
+        try { await gameRooms.leaveRoom(active.id); } catch (e) { /* sala já pode ter sido fechada */ }
+        renderGameHub();
+      });
       return;
     }
   } catch (e) { /* sem sala ativa: segue pro hub normal */ }
@@ -3118,8 +3125,19 @@ async function renderCardMatch(room) {
   try {
     ({ match_id: matchId } = await gameRooms.startCardMatch(room.id));
   } catch (e) {
-    view.innerHTML = `<div class="card" style="text-align:center; padding:24px;"><p class="error-text">Não deu: ${escapeHTML(e.message || String(e))}</p><button class="btn btn-block" style="margin-top:10px; ${roomBtnStyle()}" id="btn-cardmatch-back">Voltar</button></div>`;
+    view.innerHTML = `
+      <div class="card" style="text-align:center; padding:24px;">
+        <p class="error-text">Não deu: ${escapeHTML(e.message || String(e))}</p>
+        <button class="btn btn-block" style="margin-top:10px; ${roomBtnStyle()}" id="btn-cardmatch-back">Voltar</button>
+        <button class="btn btn-ghost btn-block" style="margin-top:8px;" id="btn-cardmatch-leave-stuck">Sair dessa sala</button>
+      </div>`;
     $("#btn-cardmatch-back").addEventListener("click", () => { closeRoomChannels(); renderGameHub(); });
+    $("#btn-cardmatch-leave-stuck").addEventListener("click", async () => {
+      setBusy("#btn-cardmatch-leave-stuck", true);
+      try { await gameRooms.leaveRoom(room.id); } catch (err) { /* sala já pode ter sido fechada */ }
+      closeRoomChannels();
+      renderGameHub();
+    });
     return;
   }
   await renderCardMatchScreen(matchId);
@@ -3278,8 +3296,19 @@ async function renderStopMatch(room) {
   try {
     ({ match_id: matchId } = await gameRooms.startStopMatch(room.id));
   } catch (e) {
-    view.innerHTML = `<div class="card" style="text-align:center; padding:24px;"><p class="error-text">Não deu: ${escapeHTML(e.message || String(e))}</p><button class="btn btn-block" style="margin-top:10px; ${roomBtnStyle()}" id="btn-stopmatch-back">Voltar</button></div>`;
+    view.innerHTML = `
+      <div class="card" style="text-align:center; padding:24px;">
+        <p class="error-text">Não deu: ${escapeHTML(e.message || String(e))}</p>
+        <button class="btn btn-block" style="margin-top:10px; ${roomBtnStyle()}" id="btn-stopmatch-back">Voltar</button>
+        <button class="btn btn-ghost btn-block" style="margin-top:8px;" id="btn-stopmatch-leave-stuck">Sair dessa sala</button>
+      </div>`;
     $("#btn-stopmatch-back").addEventListener("click", () => { closeRoomChannels(); renderGameHub(); });
+    $("#btn-stopmatch-leave-stuck").addEventListener("click", async () => {
+      setBusy("#btn-stopmatch-leave-stuck", true);
+      try { await gameRooms.leaveRoom(room.id); } catch (err) { /* sala já pode ter sido fechada */ }
+      closeRoomChannels();
+      renderGameHub();
+    });
     return;
   }
   await renderStopMatchScreen(matchId);
