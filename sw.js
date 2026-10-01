@@ -1,5 +1,5 @@
 // bump isso a cada deploy relevante: força limpar cache velho do celular
-const CACHE_VERSION = "v76";
+const CACHE_VERSION = "v77";
 const CACHE_NAME = `saudometro-${CACHE_VERSION}`;
 
 // o "casco" do app: guardado no aparelho pra o app abrir mesmo sem internet

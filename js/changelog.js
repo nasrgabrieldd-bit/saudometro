@@ -236,6 +236,13 @@ export const CHANGELOG = [
     title: "Capistop: CEP e Apelido entraram no pool",
     text: "Saiu Cidade, entrou CEP — essa categoria é livre, não precisa começar com a letra sorteada, só precisa ser única pra valer 10 pontos. E tem uma categoria nova de \"Apelido pro namorado(a)\" (no casal) ou \"Apelido pra sogra\" (na turma), que entrou no sorteio junto com as outras.",
   },
+  {
+    id: "capistop-letras-raras-2026-10",
+    tag: "geral",
+    emoji: "🔠",
+    title: "Capistop: letras difíceis saem bem menos",
+    text: "Q, X e Z continuam podendo cair no sorteio, mas agora bem mais raramente — as outras letras saem bem mais vezes.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
