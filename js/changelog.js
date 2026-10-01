@@ -229,6 +229,13 @@ export const CHANGELOG = [
     title: "Cartas e Stop ganharam nome e carinha novos",
     text: "O jogo de Cartas (estilo Uno) agora é o Capiverso, e o Stop virou o Capistop — ícone próprio de capivara, igual o Capibatman, em vez do emoji genérico de antes.",
   },
+  {
+    id: "capistop-cep-apelido-2026-10",
+    tag: "geral",
+    emoji: "🔤",
+    title: "Capistop: CEP e Apelido entraram no pool",
+    text: "Saiu Cidade, entrou CEP — essa categoria é livre, não precisa começar com a letra sorteada, só precisa ser única pra valer 10 pontos. E tem uma categoria nova de \"Apelido pro namorado(a)\" (no casal) ou \"Apelido pra sogra\" (na turma), que entrou no sorteio junto com as outras.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";

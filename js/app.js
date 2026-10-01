@@ -3379,7 +3379,7 @@ async function renderStopAnswering(matchId, match) {
     <div class="sg-catlist">
       ${categories.map((c) => `
         <div class="sg-cat">
-          <div class="lbl">${escapeHTML(c.label)}</div>
+          <div class="lbl">${escapeHTML(c.label)}${c.freeform ? ` <span class="hint-text" style="font-weight:400;">(não precisa começar com a letra)</span>` : ""}</div>
           <input type="text" data-stop-field="${c.key}" value="${escapeHTML(draft[c.key] || "")}" placeholder="..." style="border:none; background:none; font-weight:800; font-size:16px; width:100%; color:var(--text); padding:0;" />
         </div>
       `).join("")}
@@ -3535,7 +3535,7 @@ async function renderStopResults(matchId, match) {
   for (const c of contests) if (!c.resolved) activeContestByKey.set(`${c.target_user_id}|${c.category}`, c);
   const byCategory = {};
   for (const c of categories) byCategory[c.key] = answers.filter((a) => a.category === c.key);
-  const pointsByCategory = Object.fromEntries(categories.map((c) => [c.key, stopGame.scoreCategory(byCategory[c.key], match.current_letter)]));
+  const pointsByCategory = Object.fromEntries(categories.map((c) => [c.key, stopGame.scoreCategory(byCategory[c.key], match.current_letter, c.freeform)]));
 
   view.innerHTML = `
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">

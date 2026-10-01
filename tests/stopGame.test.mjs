@@ -4,11 +4,12 @@ import assert from "node:assert/strict";
 
 import {
   ALL_CATEGORIES, CATEGORIES_SPICY, CATEGORY_LABEL, pickMatchCategories, categoriesForRound,
+  isFreeformCategory, relationalCategoryLabel,
   STOP_LETTERS, normalize, isValidAnswer, scoreCategory, scoreRound,
 } from "../js/games/stopGame.js";
 
-test("ALL_CATEGORIES: pool de 11, todas com key e label únicos", () => {
-  assert.equal(ALL_CATEGORIES.length, 11);
+test("ALL_CATEGORIES: pool de 12, todas com key e label únicos", () => {
+  assert.equal(ALL_CATEGORIES.length, 12);
   const keys = new Set();
   for (const c of ALL_CATEGORIES) {
     assert.ok(c.key);
@@ -16,6 +17,17 @@ test("ALL_CATEGORIES: pool de 11, todas com key e label únicos", () => {
     assert.equal(keys.has(c.key), false);
     keys.add(c.key);
   }
+});
+
+test("isFreeformCategory: só CEP não exige começar com a letra", () => {
+  assert.equal(isFreeformCategory("cep"), true);
+  assert.equal(isFreeformCategory("nome"), false);
+  assert.equal(isFreeformCategory("apelido_vinculo"), false);
+});
+
+test("relationalCategoryLabel: troca conforme casal ou turma", () => {
+  assert.equal(relationalCategoryLabel({ couple_id: "c1" }), "Apelido pro namorado(a)");
+  assert.equal(relationalCategoryLabel({ friend_group_id: "f1" }), "Apelido pra sogra");
 });
 
 test("CATEGORIES_SPICY: pool fixo de 6, chaves não colidem com o clássico", () => {
@@ -54,6 +66,14 @@ test("categoriesForRound: picante só na última rodada, modo casal, com a sala 
   const spicyOff = { couple_id: "c1", settings: { spicy: false } };
   const resultOff = categoriesForRound(match, spicyOff);
   assert.deepEqual(resultOff.map((c) => c.key), ["nome", "animal"]);
+});
+
+test("categoriesForRound: apelido_vinculo troca de rótulo conforme o modo", () => {
+  const match = { round_number: 1, total_rounds: 3, categories: ["apelido_vinculo"] };
+  const couple = categoriesForRound(match, { couple_id: "c1" });
+  assert.equal(couple[0].label, "Apelido pro namorado(a)");
+  const turma = categoriesForRound(match, { friend_group_id: "f1" });
+  assert.equal(turma[0].label, "Apelido pra sogra");
 });
 
 test("STOP_LETTERS: 23 letras, sem K/W/Y", () => {
@@ -115,4 +135,30 @@ test("scoreRound: soma os pontos de todas as categorias por jogador", () => {
   const total = scoreRound(answersByCategory, "M");
   assert.equal(total.get("a"), 20); // 10 (animal única) + 10 (comida única)
   assert.equal(total.get("b"), 10); // 10 (animal única) + 0 (comida inválida, não começa com M)
+});
+
+test("isValidAnswer/scoreCategory: freeform (CEP) ignora a letra, mas ainda exige não-vazio e pontua por unicidade", () => {
+  assert.equal(isValidAnswer("01310-100", "M", true), true); // não começa com M, mas é freeform
+  assert.equal(isValidAnswer("", "M", true), false); // vazio continua inválido
+
+  const answers = [
+    { user_id: "a", answer: "01310-100" },
+    { user_id: "b", answer: "01310-100" }, // repetida -> 5 cada
+    { user_id: "c", answer: "04567-000" }, // única -> 10
+    { user_id: "d", answer: "" }, // vazia -> 0
+  ];
+  const points = scoreCategory(answers, "M", true);
+  assert.equal(points.get("a"), 5);
+  assert.equal(points.get("b"), 5);
+  assert.equal(points.get("c"), 10);
+  assert.equal(points.get("d"), 0);
+});
+
+test("scoreRound: categoria freeform (cep) dentro de uma rodada mista não exige a letra", () => {
+  const answersByCategory = {
+    animal: [{ user_id: "a", answer: "Macaco" }],
+    cep: [{ user_id: "a", answer: "01310-100" }], // não começa com M, mas cep é freeform
+  };
+  const total = scoreRound(answersByCategory, "M");
+  assert.equal(total.get("a"), 20); // 10 (animal) + 10 (cep, único e válido mesmo sem começar com M)
 });
