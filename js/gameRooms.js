@@ -211,6 +211,14 @@ export async function advanceStopRound(matchId) {
   return data; // { finished }
 }
 
+// idempotente: devolve awarded=true só pra quem chamar primeiro depois da partida terminar —
+// evita conceder moeda em dobro se os dois celulares chegarem na tela de fim ao mesmo tempo
+export async function markStopCoinsAwarded(matchId) {
+  const { data, error } = await supabase.rpc("mark_stop_coins_awarded", { p_match_id: matchId });
+  if (error) throw error;
+  return data; // { awarded }
+}
+
 // RLS só devolve a própria resposta enquanto a rodada não "virou passado" — nada especial pra
 // fazer aqui além de pedir tudo, o banco já filtra sozinho. roundNumber omitido = todas as
 // rodadas já reveladas (pra somar o placar final).

@@ -3,14 +3,53 @@
 // durante a fase de resposta da rodada certa) — não tem o que trapacear, só o que exibir, por
 // isso pode ser client-side (diferente da jogada de Cartas, que muda estado compartilhado).
 
-export const CATEGORIES = [
+// pool completo de categorias clássicas: cada partida sorteia 6 delas (server-side, em
+// start_stop_match) e guarda em stop_matches.categories — fica fixo a partida toda, só a letra
+// muda a cada rodada. CATEGORIES continua existindo como alias do pool completo (usado nos
+// testes e em qualquer lugar que precise só da lista, sem depender de uma partida real).
+export const ALL_CATEGORIES = [
   { key: "nome", label: "Nome" },
   { key: "animal", label: "Animal" },
   { key: "comida", label: "Comida" },
   { key: "cidade", label: "Cidade" },
   { key: "objeto", label: "Objeto" },
   { key: "filme_serie", label: "Filme/Série" },
+  { key: "cor", label: "Cor" },
+  { key: "pais", label: "País" },
+  { key: "profissao", label: "Profissão" },
+  { key: "marca", label: "Marca" },
+  { key: "fruta", label: "Fruta" },
 ];
+export const CATEGORIES = ALL_CATEGORIES;
+export const CATEGORY_LABEL = Object.fromEntries(ALL_CATEGORIES.map((c) => [c.key, c.label]));
+
+// rodada picante: só modo casal, opt-in, sempre a última rodada da partida quando ligada —
+// pool fixo (não sorteado), tom picante-leve/flertante, não explícito
+export const CATEGORIES_SPICY = [
+  { key: "lugar_beijo", label: "Lugar pra dar um beijo" },
+  { key: "elogio_picante", label: "Elogio picante" },
+  { key: "apelido_safado", label: "Apelido safadinho" },
+  { key: "fantasia_leve", label: "Fantasia leve" },
+  { key: "peca_intima", label: "Peça íntima" },
+  { key: "programa_noite", label: "Programa pra noite" },
+];
+Object.assign(CATEGORY_LABEL, Object.fromEntries(CATEGORIES_SPICY.map((c) => [c.key, c.label])));
+
+// sorteia 6 categorias do pool completo — usado no cliente só por conveniência/testes;
+// a escolha que vale de verdade é feita no banco (start_stop_match), com a mesma regra
+export function pickMatchCategories(pool = ALL_CATEGORIES, count = 6) {
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
+
+// decide quais categorias valem pra rodada atual de uma partida: picante só na última rodada,
+// só se a sala ligou o modo picante e é uma sala de casal (nunca turma)
+export function categoriesForRound(match, room) {
+  const isSpicyRound = !!room?.settings?.spicy && !!room?.couple_id && match.round_number === match.total_rounds;
+  if (isSpicyRound) return CATEGORIES_SPICY;
+  const keys = match.categories && match.categories.length ? match.categories : ALL_CATEGORIES.map((c) => c.key);
+  return keys.map((key) => ({ key, label: CATEGORY_LABEL[key] || key }));
+}
 
 // letras raras em português (K, W, Y) ficam de fora do sorteio
 export const STOP_LETTERS = "ABCDEFGHIJLMNOPQRSTUVXZ".split("");
