@@ -208,6 +208,13 @@ export const CHANGELOG = [
     title: "Cartas mais fiel ao Uno de verdade",
     text: "Duas regras oficiais que faltavam: curinga+4 só pode ser jogado se você não tiver carta da cor atual na mão, e chegou o clássico \"UNO!\" — chame quando ficar com 1 carta, ou os outros podem te flagrar e você compra 2 de penalidade.",
   },
+  {
+    id: "stop-categorias-picante-ranking-2026-10",
+    tag: "geral",
+    emoji: "🔤",
+    title: "Stop: mais categorias, rodada picante e moedas",
+    text: "Agora o pool de categorias clássicas é maior (Cor, País, Profissão, Marca e Fruta entraram no sorteio). No modo casal, dá pra ligar uma rodada picante só pra vocês dois no final da partida. O placar de quem tá na frente aparece entre as rodadas, só quem criou a sala avança pra próxima, e no final todo mundo ganha moedas de participação (e um bônus extra pra quem venceu).",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";

@@ -2872,15 +2872,22 @@ async function renderGameHub(ctx) {
 
 function openGameChoiceModal(gameType) {
   const label = gameType === "cartas" ? "Cartas" : "STOP";
+  const showSpicyToggle = gameType === "stop" && State.roomCtx === "casal";
   openModal(`
     <h3 class="modal-title">${gameType === "cartas" ? "🃏" : "🔤"} ${label}</h3>
+    ${showSpicyToggle ? `
+      <label class="hint-text" style="display:flex; align-items:flex-start; gap:8px; text-align:left; font-size:13px; cursor:pointer; margin:4px 0 12px;">
+        <input type="checkbox" id="stop-spicy-toggle" style="margin-top:2px; flex:none;" />
+        <span>🌶️ Incluir uma rodada picante no final (só pra vocês dois)</span>
+      </label>` : ""}
     <button class="btn btn-block" style="${roomBtnStyle()}" id="btn-create-room">➕ Criar sala</button>
     <button class="btn btn-secondary btn-block" style="margin-top:8px;" id="btn-join-room">🔑 Entrar com código</button>
   `);
   $("#btn-create-room").addEventListener("click", async () => {
     setBusy("#btn-create-room", true);
     try {
-      const room = await gameRooms.createRoom(roomOwner(), gameType);
+      const settings = showSpicyToggle && $("#stop-spicy-toggle")?.checked ? { spicy: true } : {};
+      const room = await gameRooms.createRoom(roomOwner(), gameType, settings);
       closeModal();
       await enterRoomLobby(room.id);
     } catch (e) {
@@ -3266,7 +3273,7 @@ function subscribeCardMatchScreen(matchId) {
 async function renderStopMatch(room) {
   const view = roomViewEl();
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
-  State.roomView = { roomId: room.id };
+  State.roomView = { roomId: room.id, room };
   let matchId;
   try {
     ({ match_id: matchId } = await gameRooms.startStopMatch(room.id));
@@ -3291,19 +3298,23 @@ async function renderStopAnswering(matchId, match) {
   if (stopTimerHandle) { clearInterval(stopTimerHandle); stopTimerHandle = null; }
   clearStopContestTimers();
 
+  const room = State.roomView?.room;
+  const categories = stopGame.categoriesForRound(match, room);
+  const isSpicy = categories === stopGame.CATEGORIES_SPICY;
+
   const mine = await gameRooms.listStopAnswers(matchId, match.round_number).catch(() => []);
   const draft = Object.fromEntries(mine.filter((a) => a.user_id === State.userId).map((a) => [a.category, a.answer]));
 
   view.innerHTML = `
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
-      <div class="hint-text" style="margin:0; text-transform:uppercase; font-weight:800; letter-spacing:.03em;">Rodada ${match.round_number}/${match.total_rounds}</div>
+      <div class="hint-text" style="margin:0; text-transform:uppercase; font-weight:800; letter-spacing:.03em;">Rodada ${match.round_number}/${match.total_rounds}${isSpicy ? " · 🌶️ picante" : ""}</div>
       <span id="btn-stopmatch-exit" style="cursor:pointer; font-weight:800; color:${roomAccentStrong()};">SAIR ✕</span>
     </div>
     <div class="sg-hexwrap"><div class="sg-hex"><span class="letter">${escapeHTML(match.current_letter)}</span></div></div>
     <p style="text-align:center; font-weight:800; color:var(--muted); font-size:12px; margin:2px 0 10px;">A LETRA É... ${escapeHTML(match.current_letter)}</p>
-    <div class="sg-progress-row"><span id="sg-progress-count">0/${stopGame.CATEGORIES.length} preenchidos</span><span id="sg-countdown">⏱️ --:--</span></div>
+    <div class="sg-progress-row"><span id="sg-progress-count">0/${categories.length} preenchidos</span><span id="sg-countdown">⏱️ --:--</span></div>
     <div class="sg-catlist">
-      ${stopGame.CATEGORIES.map((c) => `
+      ${categories.map((c) => `
         <div class="sg-cat">
           <div class="lbl">${escapeHTML(c.label)}</div>
           <input type="text" data-stop-field="${c.key}" value="${escapeHTML(draft[c.key] || "")}" placeholder="..." style="border:none; background:none; font-weight:800; font-size:16px; width:100%; color:var(--text); padding:0;" />
@@ -3328,7 +3339,7 @@ async function renderStopAnswering(matchId, match) {
   const updateProgress = () => {
     const filled = Object.values(currentAnswers()).filter((v) => v.trim()).length;
     const el = $("#sg-progress-count");
-    if (el) el.textContent = `${filled}/${stopGame.CATEGORIES.length} preenchidos`;
+    if (el) el.textContent = `${filled}/${categories.length} preenchidos`;
   };
   updateProgress();
   view.querySelectorAll("[data-stop-field]").forEach((el) => {
@@ -3404,31 +3415,73 @@ function wireStopContestBanner(matchId, contest, isTarget) {
   stopContestTimers.set(contest.id, setInterval(tick, 1000));
 }
 
+// agrupa respostas por rodada e soma os pontos de cada jogador — usado tanto no "quem tá na
+// frente" durante a partida (rodadas já fechadas) quanto no placar final (partida inteira)
+function computeStopStandings(answers, members, match) {
+  const byRound = {};
+  for (const a of answers) {
+    byRound[a.round_number] = byRound[a.round_number] || {};
+    byRound[a.round_number][a.category] = byRound[a.round_number][a.category] || [];
+    byRound[a.round_number][a.category].push(a);
+  }
+  const total = new Map();
+  for (const [roundNum, answersByCategory] of Object.entries(byRound)) {
+    const letter = match.used_letters?.[Number(roundNum) - 1] || match.current_letter;
+    const roundScores = stopGame.scoreRound(answersByCategory, letter);
+    for (const [userId, pts] of roundScores) total.set(userId, (total.get(userId) || 0) + pts);
+  }
+  return members.map((m) => ({ ...m, points: total.get(m.user_id) || 0 })).sort((a, b) => b.points - a.points);
+}
+
+function stopStandingsHTML(standings, title) {
+  if (standings.length < 2) return "";
+  return `
+    <div class="card" style="padding:12px 14px; margin:12px 0;">
+      <div class="hint-text" style="margin:0 0 8px; text-transform:uppercase; font-weight:800; letter-spacing:.03em;">${escapeHTML(title)}</div>
+      <div class="stack" style="gap:6px;">
+        ${standings.map((r, i) => `
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:15px; flex:none;">${i === 0 ? "🥇" : i === 1 ? "🥈" : "🎮"}</span>
+            <span style="flex:1; font-weight:700;">${r.user_id === State.userId ? "Você" : escapeHTML(r.display_name || "alguém")}</span>
+            <span style="flex:none; font-weight:800; color:${roomAccentStrong()};">${r.points} pts</span>
+          </div>
+        `).join("")}
+      </div>
+    </div>`;
+}
+
 async function renderStopResults(matchId, match) {
   const view = roomViewEl();
   if (stopTimerHandle) { clearInterval(stopTimerHandle); stopTimerHandle = null; }
   clearStopContestTimers();
 
-  const [answers, members, contests] = await Promise.all([
-    gameRooms.listStopAnswers(matchId, match.round_number).catch(() => []),
+  const room = State.roomView?.room;
+  const isHost = room?.host_user_id === State.userId;
+  const categories = stopGame.categoriesForRound(match, room);
+  const isSpicy = categories === stopGame.CATEGORIES_SPICY;
+
+  const [allAnswers, members, contests] = await Promise.all([
+    gameRooms.listStopAnswers(matchId).catch(() => []), // todas as rodadas já reveladas, pro "quem tá na frente"
     roomMembers(),
     gameRooms.listStopContests(matchId, match.round_number).catch(() => []),
   ]);
+  const answers = allAnswers.filter((a) => a.round_number === match.round_number);
+  const standings = computeStopStandings(allAnswers, members, match);
   const byId = Object.fromEntries(members.map((m) => [m.user_id, m]));
   const activeContestByKey = new Map();
   for (const c of contests) if (!c.resolved) activeContestByKey.set(`${c.target_user_id}|${c.category}`, c);
   const byCategory = {};
-  for (const c of stopGame.CATEGORIES) byCategory[c.key] = answers.filter((a) => a.category === c.key);
-  const pointsByCategory = Object.fromEntries(stopGame.CATEGORIES.map((c) => [c.key, stopGame.scoreCategory(byCategory[c.key], match.current_letter)]));
+  for (const c of categories) byCategory[c.key] = answers.filter((a) => a.category === c.key);
+  const pointsByCategory = Object.fromEntries(categories.map((c) => [c.key, stopGame.scoreCategory(byCategory[c.key], match.current_letter)]));
 
   view.innerHTML = `
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
       <div>
-        <div class="hint-text" style="margin:0; text-transform:uppercase; font-weight:800; letter-spacing:.03em;">Rodada ${match.round_number}/${match.total_rounds} · Letra ${escapeHTML(match.current_letter)}</div>
+        <div class="hint-text" style="margin:0; text-transform:uppercase; font-weight:800; letter-spacing:.03em;">Rodada ${match.round_number}/${match.total_rounds} · Letra ${escapeHTML(match.current_letter)}${isSpicy ? " · 🌶️ picante" : ""}</div>
         <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0; color:${roomAccentStrong()};">Resultado</h2>
       </div>
     </div>
-    ${stopGame.CATEGORIES.map((c) => `
+    ${categories.map((c) => `
       <div class="sg-result-cat">
         <div class="lbl">${escapeHTML(c.label)}</div>
         ${byCategory[c.key].length
@@ -3453,7 +3506,10 @@ async function renderStopResults(matchId, match) {
           : `<p class="hint-text" style="margin:0;">Ninguém respondeu.</p>`}
       </div>
     `).join("")}
-    <button class="btn btn-block" style="margin-top:14px; ${roomBtnStyle()}" id="btn-stop-next-round">PRÓXIMA RODADA</button>
+    ${stopStandingsHTML(standings, "Quem tá na frente")}
+    ${isHost
+      ? `<button class="btn btn-block" style="margin-top:4px; ${roomBtnStyle()}" id="btn-stop-next-round">PRÓXIMA RODADA</button>`
+      : `<p class="hint-text" style="text-align:center; margin-top:10px;">Só ${escapeHTML(byId[room?.host_user_id]?.display_name || "quem criou a sala")} 👑 pode avançar pra próxima rodada.</p>`}
   `;
 
   for (const c of contests) if (!c.resolved) wireStopContestBanner(matchId, c, c.target_user_id === State.userId);
@@ -3464,11 +3520,34 @@ async function renderStopResults(matchId, match) {
       catch (e) { alert("Não deu: " + (e.message || e)); }
     });
   });
-  $("#btn-stop-next-round").addEventListener("click", async (e) => {
+  $("#btn-stop-next-round")?.addEventListener("click", async (e) => {
     setBusy("#btn-stop-next-round", true);
     try { await gameRooms.advanceStopRound(matchId); await renderStopMatchScreen(matchId); }
     catch (err) { alert("Não deu: " + (err.message || err)); setBusy("#btn-stop-next-round", false); }
   });
+}
+
+const STOP_COIN_PARTICIPATION = 10;
+const STOP_COIN_WINNER_BONUS = 15;
+
+// concede moedas uma vez só por partida (idempotência garantida no banco via coins_awarded) —
+// falha aqui nunca deve travar a tela de fim de jogo, moeda é bônus, não o resultado em si
+async function awardStopMatchCoins(matchId, standings, room) {
+  if (!coinsOn() || standings.length < 2 || !room) return;
+  try {
+    const { awarded } = await gameRooms.markStopCoinsAwarded(matchId);
+    if (!awarded) return; // outro cliente (ou essa mesma tela, numa reconexão) já concedeu
+    const topScore = standings[0].points;
+    for (const r of standings) {
+      const delta = STOP_COIN_PARTICIPATION + (r.points === topScore ? STOP_COIN_WINNER_BONUS : 0);
+      if (room.couple_id) {
+        const role = r.user_id === State.userId ? State.role : otherRole();
+        await db.addCoinTransaction(room.couple_id, role, delta, "Stop: partida").catch(() => {});
+      } else if (room.friend_group_id) {
+        await friends.addCoinBonus(room.friend_group_id, r.user_id, delta, "Stop: partida").catch(() => {});
+      }
+    }
+  } catch (e) { /* moeda é bônus, não trava nada */ }
 }
 
 async function renderStopFinished(matchId, match) {
@@ -3476,30 +3555,20 @@ async function renderStopFinished(matchId, match) {
   if (stopTimerHandle) { clearInterval(stopTimerHandle); stopTimerHandle = null; }
   clearStopContestTimers();
 
+  const room = State.roomView?.room;
   const [answers, members] = await Promise.all([
     gameRooms.listStopAnswers(matchId).catch(() => []),
     roomMembers(),
   ]);
-  const byId = Object.fromEntries(members.map((m) => [m.user_id, m]));
-  const byRound = {};
-  for (const a of answers) {
-    byRound[a.round_number] = byRound[a.round_number] || {};
-    byRound[a.round_number][a.category] = byRound[a.round_number][a.category] || [];
-    byRound[a.round_number][a.category].push(a);
-  }
-  const total = new Map();
-  for (const [roundNum, answersByCategory] of Object.entries(byRound)) {
-    const letter = match.used_letters?.[Number(roundNum) - 1] || match.current_letter;
-    const roundScores = stopGame.scoreRound(answersByCategory, letter);
-    for (const [userId, pts] of roundScores) total.set(userId, (total.get(userId) || 0) + pts);
-  }
-  const ranking = members.map((m) => ({ ...m, points: total.get(m.user_id) || 0 })).sort((a, b) => b.points - a.points);
+  const ranking = computeStopStandings(answers, members, match);
   const winner = ranking[0];
+  awardStopMatchCoins(matchId, ranking, room); // não espera: não deve atrasar a tela aparecendo
 
   view.innerHTML = `
     <div class="card" style="text-align:center; padding:32px 20px;">
       <div style="font-size:40px;">🏆</div>
       <div class="card-title" style="margin-top:10px;">${winner?.user_id === State.userId ? "Você venceu!" : `${escapeHTML(winner?.display_name || "alguém")} venceu!`}</div>
+      ${coinsOn() ? `<p class="hint-text" style="margin:2px 0 0;">💰 Moedas de participação (e bônus de quem ganhou) já caíram no caixa.</p>` : ""}
       <div class="stack" style="margin-top:14px; text-align:left;">
         ${ranking.map((r, i) => `
           <div class="entry-item">

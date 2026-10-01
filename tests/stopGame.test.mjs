@@ -2,14 +2,58 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { CATEGORIES, STOP_LETTERS, normalize, isValidAnswer, scoreCategory, scoreRound } from "../js/games/stopGame.js";
+import {
+  ALL_CATEGORIES, CATEGORIES_SPICY, CATEGORY_LABEL, pickMatchCategories, categoriesForRound,
+  STOP_LETTERS, normalize, isValidAnswer, scoreCategory, scoreRound,
+} from "../js/games/stopGame.js";
 
-test("CATEGORIES: 6 categorias fixas, todas com key e label", () => {
-  assert.equal(CATEGORIES.length, 6);
-  for (const c of CATEGORIES) {
+test("ALL_CATEGORIES: pool de 11, todas com key e label únicos", () => {
+  assert.equal(ALL_CATEGORIES.length, 11);
+  const keys = new Set();
+  for (const c of ALL_CATEGORIES) {
     assert.ok(c.key);
     assert.ok(c.label);
+    assert.equal(keys.has(c.key), false);
+    keys.add(c.key);
   }
+});
+
+test("CATEGORIES_SPICY: pool fixo de 6, chaves não colidem com o clássico", () => {
+  assert.equal(CATEGORIES_SPICY.length, 6);
+  const classicKeys = new Set(ALL_CATEGORIES.map((c) => c.key));
+  for (const c of CATEGORIES_SPICY) {
+    assert.ok(c.key);
+    assert.ok(c.label);
+    assert.equal(classicKeys.has(c.key), false);
+  }
+});
+
+test("CATEGORY_LABEL: resolve rótulo de qualquer chave clássica ou picante", () => {
+  assert.equal(CATEGORY_LABEL.animal, "Animal");
+  assert.equal(CATEGORY_LABEL.fantasia_leve, "Fantasia leve");
+});
+
+test("pickMatchCategories: sorteia a quantidade pedida, sem repetir", () => {
+  const picked = pickMatchCategories(ALL_CATEGORIES, 6);
+  assert.equal(picked.length, 6);
+  assert.equal(new Set(picked.map((c) => c.key)).size, 6);
+});
+
+test("categoriesForRound: picante só na última rodada, modo casal, com a sala ligada", () => {
+  const match = { round_number: 3, total_rounds: 3, categories: ["nome", "animal"] };
+  const coupleRoomSpicyOn = { couple_id: "c1", settings: { spicy: true } };
+  assert.equal(categoriesForRound(match, coupleRoomSpicyOn), CATEGORIES_SPICY);
+
+  const notLastRound = { ...match, round_number: 1 };
+  assert.notEqual(categoriesForRound(notLastRound, coupleRoomSpicyOn), CATEGORIES_SPICY);
+
+  const friendsRoom = { friend_group_id: "f1", settings: { spicy: true } };
+  const result = categoriesForRound(match, friendsRoom);
+  assert.equal(result.some((c) => c.key === "lugar_beijo"), false); // turma nunca vê picante
+
+  const spicyOff = { couple_id: "c1", settings: { spicy: false } };
+  const resultOff = categoriesForRound(match, spicyOff);
+  assert.deepEqual(resultOff.map((c) => c.key), ["nome", "animal"]);
 });
 
 test("STOP_LETTERS: 23 letras, sem K/W/Y", () => {
