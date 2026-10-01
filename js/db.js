@@ -297,6 +297,21 @@ export async function listYearlyDates(coupleId) {
   return data || [];
 }
 
+// edita título/data/categoria de um encontro já criado — disponível pros dois papéis, não só
+// pra quem criou (mesma regra de confiança total dentro do casal já usada em apagar)
+export async function updateEncounter(id, { title, startDate, endDate, category }) {
+  const patch = { title: title || "", start_date: toISODate(startDate), month: monthKey(startDate), end_date: endDate ? toISODate(endDate) : null };
+  if (category) patch.category = category;
+  const { data, error } = await supabase
+    .from("encounters")
+    .update(patch)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 export async function updateEncounterStatus(id, status) {
   const { data, error } = await supabase
     .from("encounters")
@@ -404,28 +419,58 @@ export async function saveWeeklyAnswer(coupleId, weekIndex, role, answer) {
   return { ...data, isNew };
 }
 
-// ---------- fim de semana de recarregar ----------
+// ---------- recarregar a bateria: dias escolhidos por quem precisa, parceiro precisa aceitar ----------
 
-export async function setWeekendRecharge(coupleId, weekStartISO, role, active) {
+export async function proposeRechargePeriod(coupleId, role, startDateISO, endDateISO) {
   const { data, error } = await supabase
-    .from("weekend_recharge")
-    .upsert(
-      { couple_id: coupleId, week_start: weekStartISO, role, active },
-      { onConflict: "couple_id,week_start,role" }
-    )
+    .from("recharge_periods")
+    .insert({ couple_id: coupleId, start_date: startDateISO, end_date: endDateISO, proposed_by: role, status: "pendente" })
     .select()
     .single();
   if (error) throw error;
   return data;
 }
 
-export async function getWeekendRecharge(coupleId, mk) {
+export async function respondRechargePeriod(id, accept) {
   const { data, error } = await supabase
-    .from("weekend_recharge")
+    .from("recharge_periods")
+    .update({ status: accept ? "aceito" : "recusado", responded_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function cancelRechargePeriod(id) {
+  const { error } = await supabase.from("recharge_periods").update({ status: "cancelado" }).eq("id", id);
+  if (error) throw error;
+}
+
+// a mais recente relevante: pendente, ou aceita e ainda não terminada — pra decidir o que mostrar na home
+export async function getLatestRechargePeriod(coupleId) {
+  const today = toISODate(new Date());
+  const { data, error } = await supabase
+    .from("recharge_periods")
     .select("*")
     .eq("couple_id", coupleId)
-    .gte("week_start", `${mk}-01`)
-    .lt("week_start", `${nextMonthKey(mk)}-01`);
+    .or(`status.eq.pendente,and(status.eq.aceito,end_date.gte.${today})`)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+// períodos já aceitos que tocam o mês — só pra marcar no calendário, não tem fluxo de aceite ali
+export async function getAcceptedRechargePeriodsForMonth(coupleId, mk) {
+  const { data, error } = await supabase
+    .from("recharge_periods")
+    .select("*")
+    .eq("couple_id", coupleId)
+    .eq("status", "aceito")
+    .lte("start_date", `${nextMonthKey(mk)}-01`)
+    .gte("end_date", `${mk}-01`);
   if (error) throw error;
   return data || [];
 }
@@ -893,7 +938,7 @@ export function subscribeCoupleChanges(coupleId, onChange, onSettings) {
     .channel(`couple-${coupleId}`)
     .on("postgres_changes", { event: "*", schema: "public", table: "encounters", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "moods", filter: `couple_id=eq.${coupleId}` }, onChange)
-    .on("postgres_changes", { event: "*", schema: "public", table: "weekend_recharge", filter: `couple_id=eq.${coupleId}` }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "recharge_periods", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "coin_ledger", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "couple_game_progress", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "profiles", filter: `couple_id=eq.${coupleId}` }, onChange)
