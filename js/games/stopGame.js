@@ -7,11 +7,13 @@
 // start_stop_match) e guarda em stop_matches.categories — fica fixo a partida toda, só a letra
 // muda a cada rodada. CATEGORIES continua existindo como alias do pool completo (usado nos
 // testes e em qualquer lugar que precise só da lista, sem depender de uma partida real).
+// freeform:true = não precisa começar com a letra sorteada (ex: CEP, que é só número) — ainda
+// pontua por unicidade igual as outras, só não valida o começo
 export const ALL_CATEGORIES = [
   { key: "nome", label: "Nome" },
   { key: "animal", label: "Animal" },
   { key: "comida", label: "Comida" },
-  { key: "cidade", label: "Cidade" },
+  { key: "cep", label: "CEP", freeform: true },
   { key: "objeto", label: "Objeto" },
   { key: "filme_serie", label: "Filme/Série" },
   { key: "cor", label: "Cor" },
@@ -19,9 +21,21 @@ export const ALL_CATEGORIES = [
   { key: "profissao", label: "Profissão" },
   { key: "marca", label: "Marca" },
   { key: "fruta", label: "Fruta" },
+  { key: "apelido_vinculo", label: "Apelido pro namorado(a)" }, // rótulo troca pra "Apelido pra sogra" em turma — ver relationalCategoryLabel
 ];
 export const CATEGORIES = ALL_CATEGORIES;
 export const CATEGORY_LABEL = Object.fromEntries(ALL_CATEGORIES.map((c) => [c.key, c.label]));
+const FREEFORM_KEYS = new Set(ALL_CATEGORIES.filter((c) => c.freeform).map((c) => c.key));
+export function isFreeformCategory(key) {
+  return FREEFORM_KEYS.has(key);
+}
+
+// "apelido_vinculo" muda de alvo conforme o modo: no casal pergunta sobre o namorado(a), na
+// turma vira uma piadinha sobre a sogra — mesma categoria (mesma chave, mesma pontuação),
+// só o texto mostrado muda
+export function relationalCategoryLabel(room) {
+  return room?.couple_id ? "Apelido pro namorado(a)" : "Apelido pra sogra";
+}
 
 // rodada picante: só modo casal, opt-in, sempre a última rodada da partida quando ligada —
 // pool fixo (não sorteado), tom picante-leve/flertante, não explícito
@@ -48,7 +62,11 @@ export function categoriesForRound(match, room) {
   const isSpicyRound = !!room?.settings?.spicy && !!room?.couple_id && match.round_number === match.total_rounds;
   if (isSpicyRound) return CATEGORIES_SPICY;
   const keys = match.categories && match.categories.length ? match.categories : ALL_CATEGORIES.map((c) => c.key);
-  return keys.map((key) => ({ key, label: CATEGORY_LABEL[key] || key }));
+  return keys.map((key) => ({
+    key,
+    label: key === "apelido_vinculo" ? relationalCategoryLabel(room) : (CATEGORY_LABEL[key] || key),
+    freeform: isFreeformCategory(key),
+  }));
 }
 
 // letras raras em português (K, W, Y) ficam de fora do sorteio
@@ -64,20 +82,22 @@ export function normalize(text) {
     .toLowerCase();
 }
 
-export function isValidAnswer(answer, letter) {
+// freeform=true pula a checagem de "começa com a letra" (ex: CEP) — ainda exige não-vazio
+export function isValidAnswer(answer, letter, freeform = false) {
   const n = normalize(answer);
   if (!n) return false;
+  if (freeform) return true;
   return n.startsWith(normalize(letter));
 }
 
 // answers: [{ user_id, answer, invalidated? }] de uma categoria numa rodada -> Map<user_id, pontos>
 // única resposta válida = 10, resposta válida repetida (2+ pessoas) = 5 cada, inválida/vazia/
 // contestada e invalidada pela turma = 0
-export function scoreCategory(answers, letter) {
+export function scoreCategory(answers, letter, freeform = false) {
   const points = new Map();
   const validNormalized = new Map(); // user_id -> normalized
   for (const a of answers) {
-    if (!a.invalidated && isValidAnswer(a.answer, letter)) validNormalized.set(a.user_id, normalize(a.answer));
+    if (!a.invalidated && isValidAnswer(a.answer, letter, freeform)) validNormalized.set(a.user_id, normalize(a.answer));
     else points.set(a.user_id, 0);
   }
   const countByText = new Map();
@@ -91,8 +111,8 @@ export function scoreCategory(answers, letter) {
 // answersByCategory: { categoryKey: [{ user_id, answer }] } -> Map<user_id, pontos totais da rodada>
 export function scoreRound(answersByCategory, letter) {
   const total = new Map();
-  for (const categoryAnswers of Object.values(answersByCategory)) {
-    const catPoints = scoreCategory(categoryAnswers, letter);
+  for (const [catKey, categoryAnswers] of Object.entries(answersByCategory)) {
+    const catPoints = scoreCategory(categoryAnswers, letter, isFreeformCategory(catKey));
     for (const [userId, pts] of catPoints) total.set(userId, (total.get(userId) || 0) + pts);
   }
   return total;
