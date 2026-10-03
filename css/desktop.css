@@ -1,0 +1,160 @@
+/* Layout only: the same renderers, state, services and theme tokens on every device. */
+@media (min-width: 768px) {
+  #view-container .shortcut-grid,
+  #friends-view .shortcut-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1024px) {
+  #app-shell { max-width: 1440px; min-height: 0; }
+  #screen-app, #screen-friends {
+    position: relative;
+    padding-left: 208px;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+  }
+  #screen-onboarding, #screen-setup { width: 100%; max-width: 560px; margin: auto; }
+  #screen-onboarding { overflow-y: auto; }
+  .topbar { padding: 24px 32px 18px; border-bottom: 1px solid var(--border); }
+  .topbar h1 { font-size: 28px; overflow-wrap: anywhere; }
+  .topbar > div:first-child { min-width: 0; }
+  #screen-app > .bottom-nav, #screen-friends > .bottom-nav {
+    position: absolute;
+    inset: 0 auto 0 0;
+    transform: none;
+    width: 208px;
+    max-width: none;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 8px;
+    border-top: 0;
+    border-right: 1px solid var(--border);
+    padding: 28px 16px;
+    box-shadow: none;
+    overflow-y: auto;
+  }
+  .bottom-nav::before {
+    content: "Saudômetro";
+    display: block;
+    font-family: "Baloo 2", "Nunito", sans-serif;
+    font-size: 21px;
+    font-weight: 700;
+    padding: 64px 8px 24px;
+    background: url("../icons/icon.png") 8px 0 / 48px 48px no-repeat;
+    color: var(--text);
+  }
+  .bottom-nav .nav-btn {
+    flex: 0 0 auto;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 14px 12px;
+    min-height: 48px;
+    text-align: left;
+  }
+  .bottom-nav .nav-label { font-size: 13px; }
+  #screen-app .nav-btn.active { background: var(--accent-soft); }
+  #screen-friends .nav-btn.active { background: var(--friends-accent-soft); }
+  .bottom-nav .nav-dot { top: 8px; right: 8px; }
+  .bottom-nav .nav-btn:hover { background: var(--surface-alt); }
+  #view-container, #screen-friends #friends-view {
+    width: 100%;
+    padding: 28px 32px 40px;
+    min-width: 0;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+  #view-container > *, #friends-view > * { min-width: 0; }
+  /* Only hubs use columns: editors, room screens and games keep their own flow. */
+  :is(#view-container, #friends-view)[data-layout="home"],
+  #view-container[data-layout="notes-hub"],
+  #view-container[data-layout="shop-hub"],
+  #view-container[data-layout="profile-hub"] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 22px;
+    align-content: start;
+    align-items: start;
+  }
+  :is(#view-container, #friends-view)[data-layout="home"] > .banner,
+  :is(#view-container, #friends-view)[data-layout="home"] > .mood-strip,
+  :is(#view-container, #friends-view)[data-layout="home"] > .center-note,
+  #view-container[data-layout="notes-hub"] > :is(.shortcut-grid, .section-title),
+  #view-container[data-layout="shop-hub"] > :is(.shortcut-grid, .section-title),
+  #view-container[data-layout="profile-hub"] > :is(.shortcut-grid, .section-title) {
+    grid-column: 1 / -1;
+  }
+  :is(#view-container, #friends-view)[data-layout="home"] > .card,
+  :is(#view-container, #friends-view)[data-layout="home"] > :is(#home-game-card, #home-game-card-friends) > .card,
+  #view-container[data-layout="notes-hub"] .card,
+  #view-container[data-layout="shop-hub"] > .card,
+  #view-container[data-layout="profile-hub"] > .card { margin-bottom: 0; }
+  #friends-view[data-layout="home"] > * { margin-top: 0 !important; }
+  .shortcut-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  #view-container[data-layout="shop-perks"] > .stack,
+  #view-container[data-layout="shop-custom"] > .stack {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 20px;
+  }
+  #view-container[data-layout="shop-custom"] > .stack > .btn { grid-column: 1 / -1; }
+  #view-container[data-layout="notes-history"] > .card { max-width: 900px; margin-inline: auto; }
+  /* Both calendars use their existing selected-day details and action handlers. */
+  #view-container[data-layout="calendar"], #friends-view[data-layout="roles"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr);
+    align-content: start;
+    align-items: start;
+    gap: 20px;
+  }
+  :is(#view-container, #friends-view) > .month-nav,
+  #view-container[data-layout="calendar"] > :is(.calendar-summary, .calendar-special, #cycle-section) { grid-column: 1 / -1; }
+  .calendar-board { grid-column: 1; margin-bottom: 0; }
+  #view-container[data-layout="calendar"] > #day-detail { grid-column: 2; grid-row: 3; }
+  #friends-view[data-layout="roles"] > #friends-day-detail { grid-column: 2; grid-row: 2; }
+  :is(#day-detail, #friends-day-detail) { position: sticky; top: 0; min-width: 0; }
+  .calendar-special:empty { display: none; }
+  .day-grid .day-cell { min-height: 58px; }
+  .legend { flex-wrap: wrap; }
+  .row, .entry-actions { flex-wrap: wrap; }
+  .row > *, .entry-body { min-width: 0; }
+  .flip-clock { justify-content: center; }
+  /* Preserve game dimensions/mechanics, center the play area instead of stretching it. */
+  .sbg-board { margin-inline: auto; }
+  .cg-table, .sg-banner, .sg-scorebar, .sg-entry, .rm-gamecard { max-width: 920px; margin-inline: auto; }
+  #modal-root { align-items: center; padding: 24px; }
+  .modal-sheet {
+    max-width: 640px;
+    max-height: calc(100dvh - 48px);
+    border-radius: var(--radius-lg);
+    padding: 28px;
+  }
+  #modal-sheet input, #modal-sheet textarea, #modal-sheet select { min-width: 0; max-width: 100%; }
+}
+
+@media (min-width: 1280px) {
+  #view-container .shortcut-grid, #friends-view .shortcut-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-sheet { animation: none; }
+}
+@media (min-width: 1024px) {
+  #friends-view[data-layout="shop"], #friends-view[data-layout="notes"] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 22px;
+    align-content: start;
+    align-items: start;
+  }
+  #friends-view[data-layout="shop"] > :is(.section-title, .btn),
+  #friends-view[data-layout="shop"] > .card:first-child,
+  #friends-view[data-layout="notes"] > .row { grid-column: 1 / -1; }
+  #friends-view[data-layout="shop"] > .card, #friends-view[data-layout="notes"] > .card { margin-bottom: 0; }
+  #view-container[data-layout="game"], #friends-view[data-layout="game"] { max-width: 1100px; margin-inline: auto; }
+}
+@media (min-width: 1024px) {
+  .mood-grid { flex-wrap: wrap; overflow: visible; }
+  .mood-grid .mood-btn { flex-basis: 88px; }
+}
