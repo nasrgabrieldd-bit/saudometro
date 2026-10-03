@@ -327,8 +327,8 @@ async function enterApp(profile) {
   $("#greeting-eyebrow").textContent = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
   $("#greeting-name").textContent = myDisplayName();
 
-  document.querySelectorAll(".nav-btn").forEach((btn) => {
-    btn.addEventListener("click", () => setActiveTab(btn.dataset.tab));
+  document.querySelectorAll("#screen-app .nav-btn").forEach((btn) => {
+    btn.onclick = () => setActiveTab(btn.dataset.tab);
   });
 
   if (State.unsubscribe) State.unsubscribe();
@@ -403,7 +403,11 @@ function applyInitialRoute() {
   const view = params.get("view");
   State.activeTab = tab;
   State.notesView = tab === "notes" && view ? view : "hub";
-  document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+  document.querySelectorAll('#screen-app .nav-btn').forEach((b) => {
+    const active = b.dataset.tab === tab;
+    b.classList.toggle('active', active);
+    if (active) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+  });
   renderActiveTab();
   if (window.location.search) history.replaceState(null, "", window.location.pathname);
 }
@@ -549,7 +553,11 @@ function setActiveTab(tab) {
   if (tab === "profile") State.profileView = "hub";
   if (tab === "shop") State.shopView = "hub";
   if (tab === "home") State.homeMonth = startOfMonth(new Date());
-  document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+  document.querySelectorAll('#screen-app .nav-btn').forEach((b) => {
+    const active = b.dataset.tab === tab;
+    b.classList.toggle('active', active);
+    if (active) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+  });
   renderActiveTab();
 }
 
@@ -577,6 +585,7 @@ function tickFlipClock(counterEl, diffMs) {
 function renderActiveTab() {
   if (State.activeTab === "shop" && !feat("shop")) State.activeTab = "home";
   if (!State.coupleId) return;
+  view.dataset.layout = State.activeTab;
   clearKissTimer();
   clearRechargeTimer();
   const map = { home: renderHome, calendar: renderCalendar, mood: renderMood, notes: renderNotes, shop: renderShop, profile: renderProfile };
@@ -1259,7 +1268,7 @@ async function enterFriendsMode(group) {
       </div>
     </header>
     <main id="friends-view" style="flex:1; min-height:0; padding:20px 16px 110px; overflow:auto;"></main>
-    <nav class="bottom-nav">
+    <nav class="bottom-nav" aria-label="Navegação da turma">
       ${FRIENDS_TABS.map((t) => `<button class="nav-btn" data-friends-tab="${t.tab}"><span class="nav-icon">${icon(t.icon, { size: 22 })}</span><span class="nav-label">${t.label}</span></button>`).join("")}
     </nav>
   `;
@@ -1291,7 +1300,10 @@ function setFriendsTab(tab) {
   closeRoomChannels();
   State.friendsTab = tab;
   document.querySelectorAll("[data-friends-tab]").forEach((b) => {
-    b.style.color = b.dataset.friendsTab === tab ? "var(--friends-accent-strong)" : "";
+    const active = b.dataset.friendsTab === tab;
+    b.style.color = active ? 'var(--friends-accent-strong)' : '';
+    b.classList.toggle('active', active);
+    if (active) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
   renderFriendsActiveTab();
 }
@@ -1351,6 +1363,7 @@ async function maybeAwardFriendsStreakMilestone(streak) {
 }
 
 function renderFriendsActiveTab() {
+  $("#friends-view").dataset.layout = State.friendsTab;
   const map = {
     home: renderFriendsHome,
     roles: renderFriendsRoles,
@@ -1384,6 +1397,7 @@ function renderFriendsActiveTab() {
 // scroll único estilo Instagram, em vez de duas abas separadas)
 async function renderFriendsExperiencias() {
   const view = $("#friends-view");
+  view.dataset.layout = "notes";
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const [members, posts, finds] = await Promise.all([
     friends.listGroupMembers(State.friendGroup.id),
@@ -2430,6 +2444,7 @@ async function reloadFriendsCalendar(byId) {
   State.friendsCalendarEvents = await friends.listEventsForMonth(State.friendGroup.id, monthStart, monthEnd);
   buildFriendsDayGrid(byId);
   if (State.friendsSelectedDay) showFriendsDayDetail(State.friendsSelectedDay, byId);
+  else $("#friends-day-detail").innerHTML = '<div class="card"><p class="card-sub" style="margin:0;">Selecione um dia para ver os rolês.</p></div></div>';
 }
 
 async function renderFriendsRoles() {
@@ -2460,17 +2475,18 @@ async function renderFriendsRoles() {
       <h2>${monthLabel(monthKey(month))}</h2>
       <button id="friends-next-month">${icon("chevron-right", { size: 18 })}</button>
     </div>
-    <div class="card">
+    <div class="card calendar-board">
       <div class="weekday-row"><span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span></div>
       <div class="day-grid" id="friends-day-grid"></div>
       <div class="legend">
         <span>👥 rolê</span><span>💼 trabalho</span><span>💝 data especial</span><span>📌 outro</span>
       </div>
     </div>
-    <div id="friends-day-detail"></div>
+    <div id="friends-day-detail" aria-live="polite"></div>
   `;
   buildFriendsDayGrid(byId);
   if (State.friendsSelectedDay) showFriendsDayDetail(State.friendsSelectedDay, byId);
+  else $("#friends-day-detail").innerHTML = '<div class="card"><p class="card-sub" style="margin:0;">Selecione um dia para ver os rolês.</p></div></div>';
   $("#friends-prev-month").addEventListener("click", () => {
     State.friendsCalendarMonth = addMonths(State.friendsCalendarMonth, -1);
     State.friendsSelectedDay = null;
@@ -2617,6 +2633,7 @@ function perkCardHTML(p) {
 
 async function renderFriendsShop() {
   const view = $("#friends-view");
+  view.dataset.layout = "shop";
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const [balance, redemptions, customPerks] = await Promise.all([
     friends.getGroupCoinBalance(State.friendGroup.id).catch(() => 0),
@@ -2841,6 +2858,7 @@ function closeRoomChannels() {
 async function renderGameHub(ctx, preselectedGame) {
   if (ctx) State.roomCtx = ctx;
   const view = roomViewEl();
+  view.dataset.layout = "game";
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   try {
     const active = await gameRooms.findMyActiveRoom(roomOwner(), State.userId);
@@ -2944,6 +2962,7 @@ function openGameChoiceModal(gameType) {
 
 function renderRoomJoin(gameType) {
   const view = roomViewEl();
+  view.dataset.layout = "game";
   const label = GAME_LABEL[gameType];
   view.innerHTML = `
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
@@ -2978,6 +2997,7 @@ function renderRoomJoin(gameType) {
 async function enterRoomLobby(roomId) {
   State.roomView = { roomId };
   const view = roomViewEl();
+  view.dataset.layout = "game";
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   try {
     const room = await gameRooms.getRoom(roomId);
@@ -2992,6 +3012,7 @@ async function enterRoomLobby(roomId) {
 
 async function renderRoomLobbyScreen(room) {
   const view = roomViewEl();
+  view.dataset.layout = "game";
   const [players, members] = await Promise.all([
     gameRooms.listRoomPlayers(room.id),
     roomMembers(),
@@ -3153,6 +3174,7 @@ function openColorChoiceModal() {
 
 async function renderCardMatch(room) {
   const view = roomViewEl();
+  view.dataset.layout = "game";
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   State.roomView = { roomId: room.id };
   let matchId;
@@ -3179,6 +3201,7 @@ async function renderCardMatch(room) {
 
 async function renderCardMatchScreen(matchId) {
   const view = roomViewEl();
+  view.dataset.layout = "game";
   const [match, players, hand, members] = await Promise.all([
     gameRooms.getCardMatch(matchId),
     gameRooms.listCardMatchPlayers(matchId),
@@ -3324,6 +3347,7 @@ function subscribeCardMatchScreen(matchId) {
 
 async function renderStopMatch(room) {
   const view = roomViewEl();
+  view.dataset.layout = "game";
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   State.roomView = { roomId: room.id, room };
   let matchId;
@@ -3349,6 +3373,7 @@ async function renderStopMatch(room) {
 }
 
 async function renderStopMatchScreen(matchId) {
+  roomViewEl().dataset.layout = "game";
   const match = await gameRooms.getStopMatch(matchId);
   subscribeStopMatchScreen(matchId, match);
   if (match.status === "finished") { await renderStopFinished(matchId, match); return; }
@@ -3358,6 +3383,7 @@ async function renderStopMatchScreen(matchId) {
 
 async function renderStopAnswering(matchId, match) {
   const view = roomViewEl();
+  view.dataset.layout = "game";
   if (stopTimerHandle) { clearInterval(stopTimerHandle); stopTimerHandle = null; }
   clearStopContestTimers();
 
@@ -3515,6 +3541,7 @@ function stopStandingsHTML(standings, title) {
 
 async function renderStopResults(matchId, match) {
   const view = roomViewEl();
+  view.dataset.layout = "game";
   if (stopTimerHandle) { clearInterval(stopTimerHandle); stopTimerHandle = null; }
   clearStopContestTimers();
 
@@ -3615,6 +3642,7 @@ async function awardStopMatchCoins(matchId, standings, room) {
 
 async function renderStopFinished(matchId, match) {
   const view = roomViewEl();
+  view.dataset.layout = "game";
   if (stopTimerHandle) { clearInterval(stopTimerHandle); stopTimerHandle = null; }
   clearStopContestTimers();
 
@@ -4785,7 +4813,7 @@ async function renderCalendar() {
       <button id="next-month">${icon("chevron-right", { size: 18 })}</button>
     </div>
 
-    <div class="card">
+    <div class="card calendar-summary">
       <div class="row" style="align-items:center;">
         <div>
           <div class="card-title" style="font-size:15px;">${feat("goal") ? `${happened}/${target} encontros aconteceram` : "Encontros do mês"}</div>
@@ -4800,7 +4828,7 @@ async function renderCalendar() {
       </div>
     </div>
 
-    <div class="card">
+    <div class="card calendar-board">
       <div class="weekday-row"><span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span></div>
       <div class="day-grid" id="day-grid"></div>
       <div class="legend">
@@ -4808,9 +4836,9 @@ async function renderCalendar() {
       </div>
     </div>
 
-    ${specialDatesCardHTML()}
+    <div class="calendar-special">${specialDatesCardHTML()}</div>
 
-    <div id="day-detail"></div>
+    <div id="day-detail" aria-live="polite"><div class="card"><p class="card-sub" style="margin:0;">Selecione um dia para ver os encontros.</p></div></div>
 
     <div id="cycle-section">${cycleCalendarSectionHTML(myCycle, partnerCycle)}</div>
   `;
@@ -4820,7 +4848,7 @@ async function renderCalendar() {
   view.querySelectorAll("[data-special-date]").forEach((el) => {
     el.addEventListener("click", () => {
       showDayDetail(el.dataset.specialDate);
-      $("#day-detail").scrollIntoView({ behavior: "smooth", block: "start" });
+      if (!window.matchMedia("(min-width: 1024px)").matches) $("#day-detail").scrollIntoView({ behavior: "smooth", block: "start" });
     });
   });
 
@@ -5578,6 +5606,7 @@ async function openEditProfileModal(mode) {
 
 // cabeçalho com "← Voltar" usado por toda tela dentro do hub de Recadinhos
 function subViewHeader(title) {
+  view.dataset.layout = `notes-${State.notesView}`;
   return `
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
       <button class="btn btn-ghost btn-sm" id="btn-notes-back" style="flex:none; padding:9px 12px;">← Voltar</button>
@@ -5590,6 +5619,7 @@ function wireNotesBack() {
 }
 
 function profileSubHeader(title) {
+  view.dataset.layout = 'detail';
   return `
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
       <button class="btn btn-ghost btn-sm" id="btn-profile-back" style="flex:none; padding:9px 12px;">← Voltar</button>
@@ -5602,6 +5632,7 @@ function wireProfileBack() {
 }
 
 function shopSubHeader(title) {
+  view.dataset.layout = `shop-${State.shopView}`;
   return `
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
       <button class="btn btn-ghost btn-sm" id="btn-shop-back" style="flex:none; padding:9px 12px;">← Voltar</button>
@@ -5717,6 +5748,7 @@ async function renderNotes() {
 }
 
 async function renderNotesHub() {
+  view.dataset.layout = 'notes-hub';
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const todayStr = todayISO();
 
@@ -5802,6 +5834,7 @@ ${feat("wishes") ? `      <button class="shortcut-card" data-view="wishes">
 }
 
 async function renderNotesHistory() {
+  view.dataset.layout = 'notes-history';
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const [notes, noteReactions] = await Promise.all([
     db.listRecentSweetNotes(State.coupleId, 500),
@@ -6509,6 +6542,7 @@ function starBattleHeartsHTML(livesLeft) {
 async function renderStarBattleGame(scope) {
   const isAmigos = scope === "amigos";
   const container = isAmigos ? $("#friends-view") : view;
+  container.dataset.layout = "game";
   const accentStrong = isAmigos ? "var(--friends-accent-strong)" : "var(--accent-strong)";
   const accentSoft = isAmigos ? "var(--friends-accent-soft)" : "var(--accent-soft)";
   const accentBtn = isAmigos ? "var(--friends-accent)" : "var(--accent-btn)";
@@ -6806,6 +6840,7 @@ async function renderShop() {
 }
 
 async function renderShopHub() {
+  view.dataset.layout = 'shop-hub';
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const { coins, myCoins, pending, fulfilled, customRows } = await loadShopData();
 
@@ -6874,6 +6909,7 @@ function multiplayerGameCardHTML(gameType, btnId, subtitle) {
 }
 
 async function renderShopGames() {
+  view.dataset.layout = 'shop-games';
   view.innerHTML = `
     ${shopSubHeader("🎮 Jogos")}
     <div class="card" id="btn-open-star-battle" style="cursor:pointer;">
@@ -6895,6 +6931,7 @@ async function renderShopGames() {
 }
 
 async function renderShopPerks() {
+  view.dataset.layout = 'shop-perks';
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const { redemptions, customRows, perkById, myCoins, rewardFor } = await loadShopData();
   view.innerHTML = `
@@ -6908,6 +6945,7 @@ async function renderShopPerks() {
 }
 
 async function renderShopCustom() {
+  view.dataset.layout = 'shop-custom';
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const { redemptions, customRows, customPerks, perkById, myCoins, rewardFor } = await loadShopData();
   view.innerHTML = `
@@ -7063,6 +7101,7 @@ async function renderProfile() {
 }
 
 async function renderProfileHub() {
+  view.dataset.layout = 'profile-hub';
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const moodSince = toISODate(addDays(new Date(), -60));
   const [coins, loginStreakInfo, moodHistory, googleLinked, myFriendGroups, couplePlan, alreadySubscribed] = await Promise.all([
