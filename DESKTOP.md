@@ -63,3 +63,10 @@ Use o commit/PR desktop desta branch sobre a base auditada, sem copiar a landing
 Na integração, preserve mudanças concorrentes em `app.js` e reconcilie a versão do cache com a versão mais recente do projeto. Mantenha `css/desktop.css` depois de `styles.css` e inclua-o no `SHELL`. Execute `npm test`, `npm run test:desktop` e a regressão real de login, Casal/Turma, recados, calendário, jogos, loja e moedas. Avalie o desktop e aprove esta etapa antes de iniciar o painel administrativo.
 
 Para reverter, reverta o commit desktop e incremente/reconcilie o cache para atualizar clientes, sem tocar no banco. Não dar push na main nem fazer merge/publicação automaticamente.
+
+### Prévia interativa sem login
+
+Execute `npm ci` e `npm run dev:preview`, depois abra http://127.0.0.1:5188.
+A barra superior permite alternar Casal, Turma e tema. Esta prévia usa os renderizadores e eventos do aplicativo com as mesmas respostas de demonstração dos testes desktop. Os dados ficam em memória e desaparecem ao recarregar. Não há login real, sincronização, notificações ou partidas multiplayer reais nesta prévia.
+
+O servidor escuta somente em 127.0.0.1, substitui os módulos de serviços e bloqueia conexões externas pela política CSP. Não publique este servidor. O aplicativo normal continua disponível via `npm run dev`, sem alterações no fluxo de autenticação. Para validar a navegação da prévia, com o servidor ativo execute `npm run test:preview` (ou defina `TEST_BROWSER_CHANNEL=msedge` quando não houver Chromium instalado).

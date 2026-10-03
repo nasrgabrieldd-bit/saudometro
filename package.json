@@ -5,7 +5,9 @@
   "scripts": {
     "test": "node --test tests/*.test.mjs",
     "dev": "node scripts/serve.mjs",
-    "test:desktop": "node tests/desktop-ui.mjs"
+    "test:desktop": "node tests/desktop-ui.mjs",
+    "dev:preview": "node scripts/preview-desktop.mjs",
+    "test:preview": "node tests/preview-ui.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0"
