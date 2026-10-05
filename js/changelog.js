@@ -250,6 +250,13 @@ export const CHANGELOG = [
     title: "Chegou a Capisurpresa",
     text: "Em Recadinhos (ou Experiências, na turma), toque em \"Capisurpresa\" pra criar um bilhetinho, desenho ou foto com adesivos de capivara e mandar pra alguém. Custa moedas, e some sozinha depois do tempo que você escolher — de 15 minutos a 3 horas, ou até a pessoa abrir.",
   },
+  {
+    id: "capmart-2026-10",
+    tag: "geral",
+    emoji: "🛒",
+    title: "Chegou o CapMart",
+    text: "Novo jogo na Lojinha: organize os produtos do mercadinho da capivara em trios e avance pelas 60 fases. Tem desafio diário, ajudas (desfazer, dica, tempo extra, embaralhar) e ranking pra comparar sua pontuação com seu par ou a turma.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";

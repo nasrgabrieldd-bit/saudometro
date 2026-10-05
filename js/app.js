@@ -2663,6 +2663,15 @@ async function renderFriendsShop() {
     </div>
     ${multiplayerGameCardHTML("cartas", "btn-open-capiverso-friends", "fique sem cartas antes dos outros")}
     ${multiplayerGameCardHTML("stop", "btn-open-capistop-friends", "uma letra, pouco tempo, muitas respostas")}
+    <div class="card" id="btn-open-capmart-friends" style="cursor:pointer;">
+      <div class="row" style="align-items:center; gap:10px;">
+        <img src="capmart/icons/capmart-128.svg" alt="CapMart" style="width:48px; height:48px; border-radius:12px; object-fit:cover; flex:none;" />
+        <div style="flex:1;">
+          <div class="card-title" style="font-size:15px; margin-bottom:0;">CapMart</div>
+          <div class="hint-text" style="margin:0;">Mercadinho da capivara · 60 fases de organizar trios</div>
+        </div>
+      </div>
+    </div>
 
     ${Object.entries(FRIEND_PERK_CATEGORIES).map(([catId, cat]) => `
       <div class="section-title">${cat.emoji} ${cat.label}</div>
@@ -2694,6 +2703,7 @@ async function renderFriendsShop() {
   $("#btn-open-star-battle-friends").addEventListener("click", () => renderStarBattleGame("amigos"));
   $("#btn-open-capiverso-friends").addEventListener("click", () => renderGameHub("amigos", "cartas"));
   $("#btn-open-capistop-friends").addEventListener("click", () => renderGameHub("amigos", "stop"));
+  $("#btn-open-capmart-friends").addEventListener("click", () => { window.location.href = `capmart/index.html?mode=turma&group=${State.friendGroup.id}`; });
   $("#friends-new-perk-btn").addEventListener("click", openNewCustomPerkModal);
   view.querySelectorAll("[data-redeem]").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -7476,11 +7486,21 @@ async function renderShopGames() {
     </div>
     ${multiplayerGameCardHTML("cartas", "btn-open-capiverso-casal", "fique sem cartas antes dos outros")}
     ${multiplayerGameCardHTML("stop", "btn-open-capistop-casal", "uma letra, pouco tempo, muitas respostas")}
+    <div class="card" id="btn-open-capmart-casal" style="cursor:pointer;">
+      <div class="row" style="align-items:center; gap:10px;">
+        <img src="capmart/icons/capmart-128.svg" alt="CapMart" style="width:48px; height:48px; border-radius:12px; object-fit:cover; flex:none;" />
+        <div style="flex:1;">
+          <div class="card-title" style="font-size:15px; margin-bottom:0;">CapMart</div>
+          <div class="hint-text" style="margin:0;">Mercadinho da capivara · 60 fases de organizar trios</div>
+        </div>
+      </div>
+    </div>
   `;
   wireShopBack();
   $("#btn-open-star-battle").addEventListener("click", () => renderStarBattleGame("casal"));
   $("#btn-open-capiverso-casal").addEventListener("click", () => renderGameHub("casal", "cartas"));
   $("#btn-open-capistop-casal").addEventListener("click", () => renderGameHub("casal", "stop"));
+  $("#btn-open-capmart-casal").addEventListener("click", () => { window.location.href = "capmart/index.html?mode=casal"; });
 }
 
 async function renderShopPerks() {
