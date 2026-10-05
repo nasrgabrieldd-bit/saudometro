@@ -16,7 +16,11 @@ webpush.setVapidDetails("mailto:gabriel.nasr@gutierrefilmes.com", VAPID_PUBLIC_K
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-type Msg = { title: string; body: string; path: string; excludeUserId: string | null } | null;
+// a maioria desses avisa a turma inteira (menos quem criou), com excludeUserId. A
+// Capisurpresa é diferente — é um carinho pra UMA pessoa só, não pra turma toda — por
+// isso tem targetUserId como alternativa: quando presente, ignora excludeUserId e manda
+// só pra esse usuário.
+type Msg = { title: string; body: string; path: string; excludeUserId?: string | null; targetUserId?: string | null } | null;
 
 function messageFor(table: string, type: string, record: any): Msg {
   if (table === "friend_events" && type === "INSERT") {
@@ -43,6 +47,17 @@ function messageFor(table: string, type: string, record: any): Msg {
       excludeUserId: record.from_user_id,
     };
   }
+  // só notifica quando já está disponível de verdade — ver mesmo comentário na function
+  // "notify" (casal): sem worker em segundo plano, não dá pra disparar isso na hora exata
+  // de um envio agendado, então agendadas simplesmente não notificam.
+  if (table === "capisurpresas" && type === "INSERT" && record.friend_group_id && record.status === "disponivel") {
+    return {
+      title: "Chegou um carinho 💌",
+      body: "Alguém da turma te mandou uma Capisurpresa.",
+      path: "?tab=notes&view=capisurpresa",
+      targetUserId: record.recipient_user_id,
+    };
+  }
   return null;
 }
 
@@ -57,11 +72,16 @@ Deno.serve(async (req) => {
     const msg = messageFor(table, type, record);
     if (!msg) return new Response("nothing to notify", { status: 200 });
 
-    let membersQuery = supabase.from("friend_members").select("user_id").eq("friend_group_id", record.friend_group_id);
-    if (msg.excludeUserId) membersQuery = membersQuery.neq("user_id", msg.excludeUserId);
-    const { data: members, error: memErr } = await membersQuery;
-    if (memErr) throw memErr;
-    const userIds = (members || []).map((m) => m.user_id);
+    let userIds: string[];
+    if (msg.targetUserId) {
+      userIds = [msg.targetUserId];
+    } else {
+      let membersQuery = supabase.from("friend_members").select("user_id").eq("friend_group_id", record.friend_group_id);
+      if (msg.excludeUserId) membersQuery = membersQuery.neq("user_id", msg.excludeUserId);
+      const { data: members, error: memErr } = await membersQuery;
+      if (memErr) throw memErr;
+      userIds = (members || []).map((m) => m.user_id);
+    }
     if (!userIds.length) return new Response("no recipients", { status: 200 });
 
     const { data: subs, error } = await supabase.from("friend_push_subscriptions").select("*").in("user_id", userIds);

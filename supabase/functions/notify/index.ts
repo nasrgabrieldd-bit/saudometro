@@ -199,6 +199,19 @@ function messageFor(table: string, type: string, record: any, oldRecord: any): M
     };
   }
 
+  // só notifica quando já está disponível de verdade: se foi agendada pra depois, a
+  // própria notificação ficaria errada (chegaria antes de dar pra abrir) — e como não
+  // existe nenhum worker rodando em segundo plano aqui, não tem como disparar isso certo
+  // na hora exata do agendamento, então esse caso simplesmente não notifica.
+  if (table === "capisurpresas" && type === "INSERT" && record.couple_id && record.status === "disponivel") {
+    return {
+      targetRole: record.recipient_role,
+      title: "Chegou um carinho 💌",
+      body: `${ROLE_LABEL[record.sender_role]} te mandou uma Capisurpresa.`,
+      path: "?tab=notes&view=capisurpresa",
+    };
+  }
+
   return null;
 }
 

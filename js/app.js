@@ -19,6 +19,7 @@ import { emptyGrid, markCell, revealCell, countFound, CELL_EMPTY, CELL_MARK, CEL
 import { STAR_BATTLE_LEVELS } from "./games/starBattleLevels.js";
 import * as cardGame from "./games/cardGame.js";
 import * as stopGame from "./games/stopGame.js";
+import * as capiEngine from "./games/capisurpresa.js";
 import { cycleInfo, cycleRingSVG, cycleLegendHTML, cycleTilesHTML, cycleHelpHTML, cyclePhaseName, cycleTip, cyclePhaseOnDate, averageCycleLength, CYCLE_COLORS, CYCLE_DISCLAIMER } from "./cycle.js";
 import { pickSaudadeNudge } from "./nudges.js";
 import { nameOf, genderOf, emojiOf, gen, genMixed, cleanName, setPeopleSettings, defaultEmojis, legacyPeople, feat, goalTarget, HOME_WIDGETS, homeOrder, homeWidgetOn, togetherSince, coinRule, luckyOn, perkHidden, COIN_DEFAULTS } from "./people.js";
@@ -59,6 +60,9 @@ const State = {
   friendsSelectedDay: null,
   roomView: null,
   roomCtx: null, // "casal" ou "amigos" — de onde a sala de minigame foi aberta
+  capiView: null, // tela atual da Capisurpresa aberta por cima da aba (null = fechada)
+  capiCtx: null, // "casal" ou "turma" — de onde a Capisurpresa foi aberta
+  capiEditor: null, // estado do editor em andamento: composição, seleção, undo/redo, etc.
 };
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -401,6 +405,16 @@ function applyInitialRoute() {
   const params = new URLSearchParams(window.location.search);
   const tab = params.get("tab") || "home";
   const view = params.get("view");
+  // Capisurpresa não é um notesView comum (fica por cima da aba, como as salas de
+  // minigame) — o link de notificação cai sempre no modo casal, então só faz sentido
+  // tratar aqui; o mesmo link pra quem tá em turma abre normal e a pessoa navega à mão.
+  if (tab === "notes" && view === "capisurpresa") {
+    State.activeTab = "notes";
+    document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === "notes"));
+    openCapisurpresa("casal");
+    if (window.location.search) history.replaceState(null, "", window.location.pathname);
+    return;
+  }
   State.activeTab = tab;
   State.notesView = tab === "notes" && view ? view : "hub";
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
@@ -1400,6 +1414,7 @@ async function renderFriendsExperiencias() {
     <div class="row" style="gap:8px; margin-bottom:14px;">
       <button class="btn btn-sm" style="flex:1; background:var(--friends-accent); color:var(--on-friends-accent);" id="friends-new-post-btn">+ Postar uma foto</button>
       <button class="btn btn-sm" style="flex:1; background:var(--friends-accent-soft); color:var(--friends-accent-strong);" id="friends-new-find-btn">+ Achado</button>
+      <button class="btn btn-sm" style="flex:1; background:var(--friends-accent-soft); color:var(--friends-accent-strong);" id="friends-new-capi-btn">💌 Capisurpresa</button>
     </div>
     ${items.length ? items.map((it) => it.type === "feed" ? feedCardHTML(it.data, byId) : findCardHTML(it.data, byId)).join("") : `
       <div class="card" style="text-align:center; padding:28px 20px;">
@@ -1409,6 +1424,7 @@ async function renderFriendsExperiencias() {
   `;
   $("#friends-new-post-btn").addEventListener("click", openNewFeedPostModal);
   $("#friends-new-find-btn").addEventListener("click", openNewFindModal);
+  $("#friends-new-capi-btn").addEventListener("click", () => openCapisurpresa("turma"));
 
   view.querySelectorAll(".feed-card-photo").forEach((el) => {
     const post = posts.find((p) => p.id === el.dataset.postId);
@@ -5790,13 +5806,20 @@ ${feat("wishes") ? `      <button class="shortcut-card" data-view="wishes">
         <span class="shortcut-sub">${dateIdeas.length ? `${dateIdeas.length} ideia${dateIdeas.length === 1 ? "" : "s"}` : "Adicionar ideia"}</span>
         ${dateIdeasPending ? `<span class="dot-badge" style="position:absolute; top:10px; right:10px;"></span>` : ""}
       </button>
+      <button class="shortcut-card" id="btn-open-capisurpresa">
+        <span class="shortcut-icon">💌</span>
+        <span class="shortcut-title">Capisurpresa</span>
+        <span class="shortcut-sub">Um carinho surpresa</span>
+      </button>
     </div>
   `;
 
   $("#btn-send-note")?.addEventListener("click", () => openSweetNoteModal(iSentToday));
   wireReactions();
   $("#btn-notes-history")?.addEventListener("click", () => { State.notesView = "history"; renderNotes(); });
+  $("#btn-open-capisurpresa")?.addEventListener("click", () => openCapisurpresa("casal"));
   document.querySelectorAll(".shortcut-card").forEach((btn) => {
+    if (btn.id === "btn-open-capisurpresa") return;
     btn.addEventListener("click", () => { State.notesView = btn.dataset.view; renderNotes(); });
   });
 }
@@ -6074,6 +6097,572 @@ async function renderMemoriesView() {
       respondTo(btn.dataset.id, { reply });
     });
   });
+}
+
+// ================= CAPISURPRESA (casal e turma) =================
+// Bilhete/desenho/foto com Capilovers que expira sozinho — vive dentro de Recadinhos
+// (casal) e Experiências (turma). Sobrepõe a aba atual como as salas de minigame fazem
+// (State.capiView preenchido = mostra a Capisurpresa por cima da aba; null = aba normal).
+
+function capiViewEl() { return State.capiCtx === "casal" ? view : $("#friends-view"); }
+function capiBtnStyle() { return State.capiCtx === "casal" ? "background:var(--accent-btn); color:var(--on-accent-btn);" : "background:var(--friends-accent); color:var(--on-friends-accent);"; }
+
+function openCapisurpresa(ctx) {
+  State.capiCtx = ctx;
+  State.capiView = "hub";
+  State.capiHubTab = "Modelos";
+  renderCapiHub();
+}
+function closeCapisurpresa() {
+  const ctx = State.capiCtx;
+  State.capiView = null; State.capiCtx = null; State.capiEditor = null;
+  if (ctx === "casal") renderNotes(); else renderFriendsExperiencias();
+}
+function capiHeaderHTML(title) {
+  return `
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+      <button class="btn btn-ghost btn-sm" id="btn-capi-back" style="flex:none; padding:9px 12px;">← Voltar</button>
+      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">${title}</h2>
+    </div>
+  `;
+}
+function wireCapiBack(onBack) { $("#btn-capi-back")?.addEventListener("click", onBack || closeCapisurpresa); }
+function styleScene(svg) {
+  svg.style.width = "100%"; svg.style.maxWidth = "320px"; svg.style.display = "block";
+  svg.style.margin = "0 auto"; svg.style.borderRadius = "18px"; svg.style.boxShadow = "0 2px 12px rgba(0,0,0,.14)";
+  return svg;
+}
+function isCapiRecipient(c) { return State.capiCtx === "casal" ? c.recipient_role === State.role : c.recipient_user_id === State.userId; }
+function isCapiSender(c) { return State.capiCtx === "casal" ? c.sender_role === State.role : c.sender_user_id === State.userId; }
+const CAPI_STATUS_LABEL = { agendada: "Agendada", disponivel: "Disponível", visualizada: "Visualizada", expirada: "Expirada", cancelada: "Cancelada", falha: "Falha no envio" };
+
+// ---------- hub: Modelos / Recebidas / Enviadas ----------
+
+async function renderCapiHub() {
+  const el = capiViewEl();
+  el.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const ctxParams = State.capiCtx === "casal" ? { coupleId: State.coupleId } : { friendGroupId: State.friendGroup.id };
+  const list = await db.listCapisurpresas(ctxParams).catch(() => []);
+  const received = list.filter(isCapiRecipient);
+  const sent = list.filter(isCapiSender);
+  const tab = State.capiHubTab || "Modelos";
+
+  el.innerHTML = `
+    ${capiHeaderHTML("💌 Capisurpresa")}
+    <div class="row" style="gap:8px; margin-bottom:14px;">
+      ${["Modelos", "Recebidas", "Enviadas"].map((t) => `
+        <button class="btn btn-sm" style="flex:1; ${tab === t ? capiBtnStyle() : "background:var(--surface-alt); color:var(--text);"}" data-capi-tab="${t}">${t}${t === "Recebidas" && received.some((c) => ["disponivel", "visualizada"].includes(c.status)) ? " •" : ""}</button>
+      `).join("")}
+    </div>
+    <div id="capi-hub-body"></div>
+  `;
+  wireCapiBack();
+  el.querySelectorAll("[data-capi-tab]").forEach((btn) => btn.addEventListener("click", () => { State.capiHubTab = btn.dataset.capiTab; renderCapiHub(); }));
+
+  const body = $("#capi-hub-body");
+  if (tab === "Modelos") {
+    body.innerHTML = `
+      <p class="card-sub" style="margin-bottom:12px;">Escolha um começo. O resto é com a sua criatividade.</p>
+      <div class="stack">
+        ${capiEngine.TEMPLATES.map((t) => `
+          <button class="card" data-capi-template="${t.id}" style="text-align:left; display:flex; gap:12px; align-items:center; width:100%; border:none; cursor:pointer;">
+            <div id="capi-thumb-${t.id}" style="width:64px; height:80px; flex:none; overflow:hidden; border-radius:10px;"></div>
+            <div style="flex:1; min-width:0;">
+              <div style="font-weight:800; color:var(--text);">${escapeHTML(t.name)}</div>
+              <div class="hint-text" style="margin:2px 0 0;">${escapeHTML(t.description)}</div>
+              <div class="hint-text" style="margin-top:2px;">✦ a partir de 5 moedas</div>
+            </div>
+            <span style="font-size:20px; flex:none;">${t.symbol}</span>
+          </button>
+        `).join("")}
+      </div>
+    `;
+    for (const t of capiEngine.TEMPLATES) {
+      const mount = $(`#capi-thumb-${t.id}`);
+      if (!mount) continue;
+      const svg = capiEngine.renderScene(capiEngine.createComposition(t.id), {});
+      svg.style.width = "100%"; svg.style.height = "100%"; svg.style.display = "block";
+      mount.appendChild(svg);
+    }
+    el.querySelectorAll("[data-capi-template]").forEach((btn) => btn.addEventListener("click", () => startCapiEditor(btn.dataset.capiTemplate)));
+  } else if (tab === "Recebidas") {
+    body.innerHTML = received.length ? `<div class="stack">${received.map((c) => capiListItemHTML(c, "received")).join("")}</div>`
+      : `<div class="empty-state">${icon("mail", { size: 34, className: "empty-icon" })}Nenhuma surpresa ainda.</div>`;
+    wireCapiListActions(body);
+  } else {
+    body.innerHTML = sent.length ? `<div class="stack">${sent.map((c) => capiListItemHTML(c, "sent")).join("")}</div>`
+      : `<div class="empty-state">${icon("mail", { size: 34, className: "empty-icon" })}Você ainda não mandou nenhuma.</div>`;
+    wireCapiListActions(body);
+  }
+}
+
+function capiListItemHTML(c, side) {
+  const who = side === "received" ? (State.capiCtx === "casal" ? ROLE_LABEL[c.sender_role] : "alguém da turma") : (State.capiCtx === "casal" ? ROLE_LABEL[c.recipient_role] : "um membro da turma");
+  const canOpen = side === "received" && ["disponivel", "visualizada"].includes(c.status);
+  const canCancel = side === "sent" && c.status === "agendada";
+  return `
+    <div class="card" data-capi-id="${c.id}">
+      <div class="row" style="align-items:center;">
+        <div style="flex:1;">
+          <div class="card-title" style="font-size:14px; margin-bottom:2px;">${side === "received" ? "De" : "Para"} ${escapeHTML(who)}</div>
+          <div class="entry-meta">${CAPI_STATUS_LABEL[c.status] || c.status} · 💰 ${c.cost}</div>
+          ${c.scheduled_at ? `<div class="hint-text" style="margin-top:2px;">${new Date(c.scheduled_at).toLocaleString("pt-BR")}</div>` : ""}
+        </div>
+        ${canOpen ? `<button class="btn btn-primary btn-sm" data-act="capi-open">Abrir ♡</button>` : ""}
+        ${canCancel ? `<button class="btn btn-secondary btn-sm" data-act="capi-cancel">Cancelar</button>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+function wireCapiListActions(container) {
+  container.querySelectorAll('[data-act="capi-open"]').forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      try {
+        const composition = await db.openCapisurpresa(btn.closest("[data-capi-id]").dataset.capiId);
+        showCapiOpenedModal(composition);
+        await renderCapiHub();
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        btn.disabled = false;
+      }
+    });
+  });
+  container.querySelectorAll('[data-act="capi-cancel"]').forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Cancelar esse envio e estornar a moeda?")) return;
+      btn.disabled = true;
+      try {
+        await db.cancelCapisurpresa(btn.closest("[data-capi-id]").dataset.capiId);
+        await renderCapiHub();
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+function showCapiOpenedModal(composition) {
+  openModal(`<h3 class="modal-title">Um carinho pra você ♡</h3><div id="capi-opened-mount" style="margin-top:10px;"></div>`);
+  $("#capi-opened-mount").appendChild(styleScene(capiEngine.renderScene(composition, {})));
+}
+
+// ---------- editor ----------
+
+function startCapiEditor(templateId) {
+  const composition = capiEngine.createComposition(templateId);
+  State.capiEditor = {
+    composition, selected: composition.elements[0]?.id || "",
+    history: [], future: [], tool: "Texto", drawColor: "#533e36", thickness: 4,
+    stage: "edit", duration: 30, scheduleOn: false, scheduledAt: "",
+    recipientRole: State.capiCtx === "casal" ? otherRole() : null, recipientUserId: null,
+    busy: false, operation: crypto.randomUUID(),
+  };
+  State.capiView = "editor";
+  renderCapiEditor();
+}
+
+function capiUpdate(next, record = true) {
+  const ed = State.capiEditor;
+  if (record) { ed.history = [...ed.history.slice(-49), ed.composition]; ed.future = []; }
+  ed.composition = next;
+}
+
+function refreshCapiCanvas() {
+  const mount = $("#capi-canvas-mount");
+  if (!mount) return;
+  const ed = State.capiEditor;
+  mount.innerHTML = "";
+  const svg = capiEngine.renderScene(ed.composition, {
+    interactive: ed.stage === "edit", selectedId: ed.selected, drawColor: ed.drawColor,
+    drawing: ed.stage === "edit" && ed.tool === "Desenho",
+    onSelect: (id) => { ed.selected = id; renderCapiEditor(); },
+    onMove: (id, x, y) => {
+      capiUpdate({ ...ed.composition, elements: ed.composition.elements.map((e) => e.id === id ? { ...e, x, y } : e) });
+      refreshCapiToolbar();
+      if (id === ed.selected) {
+        const xi = $("#capi-el-x"); const yi = $("#capi-el-y");
+        if (xi) xi.value = Math.round(x); if (yi) yi.value = Math.round(y);
+      }
+    },
+    onGestureStart: () => {},
+    onDraw: (points) => {
+      const e = { ...capiEngine.newElement("stroke", ""), x: 0, y: 0, w: 400, size: ed.thickness, color: ed.drawColor, points };
+      capiUpdate({ ...ed.composition, elements: [...ed.composition.elements, e] });
+      refreshCapiCanvas(); refreshCapiToolbar();
+    },
+  });
+  styleScene(svg);
+  mount.appendChild(svg);
+}
+
+function refreshCapiToolbar() {
+  const ed = State.capiEditor;
+  const undoBtn = $("#capi-undo"); const redoBtn = $("#capi-redo");
+  if (undoBtn) undoBtn.disabled = !ed.history.length;
+  if (redoBtn) redoBtn.disabled = !ed.future.length;
+}
+
+function capiSelectedEl() {
+  const ed = State.capiEditor;
+  return ed.composition.elements.find((e) => e.id === ed.selected);
+}
+
+async function renderCapiEditor() {
+  const el = capiViewEl();
+  const ed = State.capiEditor;
+  const tpl = capiEngine.TEMPLATE_BY_ID[ed.composition.template];
+
+  if (ed.stage === "preview") {
+    el.innerHTML = `
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <button class="btn btn-ghost btn-sm" id="capi-back-to-edit">← Voltar ao editor</button>
+        <h2 style="font-family:'Baloo 2', sans-serif; font-size:17px; margin:0;">Tudo pronto?</h2>
+        <span style="width:1px;"></span>
+      </div>
+      <div id="capi-canvas-mount"></div>
+      <div class="card" style="margin-top:14px;">
+        ${await capiPreviewControlsHTML()}
+      </div>
+    `;
+    refreshCapiCanvas();
+    $("#capi-back-to-edit").addEventListener("click", () => { ed.stage = "edit"; renderCapiEditor(); });
+    wireCapiPreviewControls();
+    return;
+  }
+
+  el.innerHTML = `
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; gap:8px;">
+      <button class="btn btn-ghost btn-sm" id="capi-exit-editor">← Modelos</button>
+      <h2 style="font-family:'Baloo 2', sans-serif; font-size:17px; margin:0; flex:1; text-align:center;">${escapeHTML(tpl?.name || "")}</h2>
+      <span style="width:70px;"></span>
+    </div>
+    <div id="capi-canvas-mount"></div>
+    <div class="row" style="gap:8px; margin:10px 0;">
+      <button class="btn btn-ghost btn-sm" id="capi-undo" style="flex:1;">↶ Desfazer</button>
+      <button class="btn btn-ghost btn-sm" id="capi-redo" style="flex:1;">↷ Refazer</button>
+    </div>
+    <div class="row" style="gap:6px; margin-bottom:10px;">
+      ${["Texto", "Adesivos", "Desenho", "Foto", "Fundo"].map((t) => `<button class="btn btn-sm" style="flex:1; ${ed.tool === t ? capiBtnStyle() : "background:var(--surface-alt); color:var(--text);"}" data-capi-set-tool="${t}">${t}</button>`).join("")}
+    </div>
+    <div class="card" id="capi-tool-panel">${capiToolPanelHTML()}</div>
+    ${ed.composition.elements.length ? `<div class="card" style="margin-top:10px;" id="capi-element-controls">${capiElementControlsHTML()}</div>` : ""}
+    <button class="btn btn-primary btn-block" style="margin-top:14px;" id="capi-go-preview">Ver prévia e continuar →</button>
+  `;
+  refreshCapiCanvas();
+  refreshCapiToolbar();
+  $("#capi-exit-editor").addEventListener("click", () => { State.capiView = "hub"; State.capiEditor = null; renderCapiHub(); });
+  $("#capi-undo").addEventListener("click", () => {
+    if (!ed.history.length) return;
+    ed.future = [ed.composition, ...ed.future];
+    ed.composition = ed.history[ed.history.length - 1];
+    ed.history = ed.history.slice(0, -1);
+    renderCapiEditor();
+  });
+  $("#capi-redo").addEventListener("click", () => {
+    if (!ed.future.length) return;
+    ed.history = [...ed.history, ed.composition];
+    ed.composition = ed.future[0];
+    ed.future = ed.future.slice(1);
+    renderCapiEditor();
+  });
+  el.querySelectorAll("[data-capi-set-tool]").forEach((btn) => btn.addEventListener("click", () => { ed.tool = btn.dataset.capiSetTool; renderCapiEditor(); }));
+  $("#capi-go-preview").addEventListener("click", () => { ed.stage = "preview"; renderCapiEditor(); });
+  wireCapiToolPanel();
+  wireCapiElementControls();
+}
+
+function capiToolPanelHTML() {
+  const ed = State.capiEditor;
+  const selEl = capiSelectedEl();
+  if (ed.tool === "Texto") {
+    return `
+      <h3 class="card-title" style="font-size:15px;">Palavras que abraçam</h3>
+      <button class="btn btn-secondary btn-sm" id="capi-add-text">＋ Adicionar texto</button>
+      ${selEl?.kind === "text" ? `
+        <label class="field-label" style="margin-top:10px;">Mensagem</label>
+        <textarea id="capi-text-content" rows="3" maxlength="300">${escapeHTML(selEl.content)}</textarea>
+        <label class="field-label">Fonte</label>
+        <select id="capi-text-font">
+          <option value="sans-serif" ${selEl.font === "sans-serif" ? "selected" : ""}>Clássica</option>
+          <option value="Georgia" ${selEl.font === "Georgia" ? "selected" : ""}>Literária</option>
+          <option value="cursive" ${selEl.font === "cursive" ? "selected" : ""}>Manuscrita</option>
+          <option value="monospace" ${selEl.font === "monospace" ? "selected" : ""}>Máquina de escrever</option>
+        </select>
+        <label class="field-label">Alinhamento</label>
+        <select id="capi-text-align">
+          <option value="left" ${selEl.align === "left" ? "selected" : ""}>Esquerda</option>
+          <option value="center" ${selEl.align === "center" ? "selected" : ""}>Centro</option>
+          <option value="right" ${selEl.align === "right" ? "selected" : ""}>Direita</option>
+        </select>
+        <label class="field-label">Tamanho</label>
+        <input type="range" id="capi-text-size" min="16" max="72" value="${selEl.size}" />
+        <label class="field-label">Cor</label>
+        <input type="color" id="capi-text-color" value="${selEl.color}" />
+      ` : `<p class="hint-text" style="margin-top:8px;">Selecione um texto na composição (ou adicione um novo) pra editar.</p>`}
+    `;
+  }
+  if (ed.tool === "Adesivos") {
+    return `
+      <h3 class="card-title" style="font-size:15px;">Capilovers, com amor</h3>
+      <div class="row" style="flex-wrap:wrap; gap:10px;">
+        ${capiEngine.STICKERS.map((s) => `
+          <button class="btn btn-ghost btn-sm" data-capi-add-sticker="${s.id}" style="flex:none; display:flex; flex-direction:column; align-items:center; gap:4px; padding:8px;">
+            <img src="${capiEngine.STICKER_SRC(s.id)}" alt="${escapeHTML(s.name)}" style="width:52px; height:52px; object-fit:contain;" />
+            <span style="font-size:11px;">${escapeHTML(s.name)}</span>
+          </button>
+        `).join("")}
+      </div>
+      <p class="hint-text" style="margin-top:10px;">Um toque de carinho</p>
+      <div class="row" style="flex-wrap:wrap; gap:6px;">
+        ${["♥", "✦", "★", "✿", "▰"].map((s) => `<button class="btn btn-ghost btn-sm" data-capi-add-decor="${s}" style="flex:none; font-size:18px;">${s}</button>`).join("")}
+      </div>
+    `;
+  }
+  if (ed.tool === "Desenho") {
+    return `
+      <h3 class="card-title" style="font-size:15px;">Desenhe do seu jeito</h3>
+      <p class="hint-text">Desenhe na composição com o dedo ou o mouse.</p>
+      <label class="field-label">Cor</label>
+      <input type="color" id="capi-draw-color" value="${ed.drawColor}" />
+      <label class="field-label">Espessura</label>
+      <input type="range" id="capi-draw-thickness" min="1" max="25" value="${ed.thickness}" />
+      <div class="row" style="gap:8px; margin-top:10px;">
+        <button class="btn btn-secondary btn-sm" id="capi-clear-drawing" style="flex:1;">Limpar desenho</button>
+        <button class="btn btn-secondary btn-sm" id="capi-erase-last" style="flex:1;">Borracha · último traço</button>
+      </div>
+    `;
+  }
+  if (ed.tool === "Foto") {
+    return `
+      <h3 class="card-title" style="font-size:15px;">Um pedacinho do seu dia</h3>
+      <label class="field-label">Selecionar foto</label>
+      <input type="file" id="capi-photo-input" accept="image/png,image/jpeg,image/webp" />
+      ${selEl?.kind === "photo" ? `
+        <label class="field-label" style="margin-top:10px;">Recorte central · zoom</label>
+        <input type="range" id="capi-photo-crop" min="1" max="3" step=".1" value="${selEl.crop || 1}" />
+      ` : ""}
+      <p class="hint-text" style="margin-top:8px;">PNG, JPG ou WebP, até 5 MB.</p>
+      <p class="error-text" id="capi-photo-err" hidden></p>
+    `;
+  }
+  // Fundo
+  const c = ed.composition;
+  return `
+    <h3 class="card-title" style="font-size:15px;">Escolha o clima</h3>
+    <label class="field-label">Cor de fundo</label>
+    <input type="color" id="capi-bg-color" value="${c.background}" />
+    <div class="row" style="flex-wrap:wrap; gap:8px; margin-top:8px;">
+      ${["#ff914d", "#ffe79d", "#d9d5f5", "#d7e8d8", "#f9d9de", "#fff7ed", "#363044"].map((color) => `<button data-capi-bg="${color}" style="width:30px; height:30px; border-radius:50%; border:2px solid var(--border); background:${color}; cursor:pointer;"></button>`).join("")}
+    </div>
+    ${c.template === "smile" ? `
+      <label class="field-label" style="margin-top:10px;">Expressão</label>
+      <select id="capi-expression">${capiEngine.EXPRESSIONS.map((x) => `<option ${c.expression === x ? "selected" : ""}>${x}</option>`).join("")}</select>
+    ` : ""}
+  `;
+}
+
+function wireCapiToolPanel() {
+  const ed = State.capiEditor;
+  if (ed.tool === "Texto") {
+    $("#capi-add-text")?.addEventListener("click", () => { capiAddElement("text", "Seu recadinho aqui"); });
+    $("#capi-text-content")?.addEventListener("input", (e) => capiPatchSelectedLight({ content: e.target.value }));
+    $("#capi-text-font")?.addEventListener("change", (e) => capiPatchSelectedLight({ font: e.target.value }));
+    $("#capi-text-align")?.addEventListener("change", (e) => capiPatchSelectedLight({ align: e.target.value }));
+    $("#capi-text-size")?.addEventListener("input", (e) => capiPatchSelectedLight({ size: Number(e.target.value) }));
+    $("#capi-text-color")?.addEventListener("input", (e) => capiPatchSelectedLight({ color: e.target.value }));
+  } else if (ed.tool === "Adesivos") {
+    document.querySelectorAll("[data-capi-add-sticker]").forEach((btn) => btn.addEventListener("click", () => capiAddElement("sticker", btn.dataset.capiAddSticker)));
+    document.querySelectorAll("[data-capi-add-decor]").forEach((btn) => btn.addEventListener("click", () => capiAddElement("decor", btn.dataset.capiAddDecor)));
+  } else if (ed.tool === "Desenho") {
+    $("#capi-draw-color")?.addEventListener("input", (e) => { ed.drawColor = e.target.value; refreshCapiCanvas(); });
+    $("#capi-draw-thickness")?.addEventListener("input", (e) => { ed.thickness = Number(e.target.value); });
+    $("#capi-clear-drawing")?.addEventListener("click", () => { capiUpdate({ ...ed.composition, elements: ed.composition.elements.filter((e) => e.kind !== "stroke") }); renderCapiEditor(); });
+    $("#capi-erase-last")?.addEventListener("click", () => {
+      const last = [...ed.composition.elements].reverse().find((e) => e.kind === "stroke");
+      if (last) { capiUpdate({ ...ed.composition, elements: ed.composition.elements.filter((e) => e.id !== last.id) }); renderCapiEditor(); }
+    });
+  } else if (ed.tool === "Foto") {
+    $("#capi-photo-input")?.addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const err = $("#capi-photo-err");
+      if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 5_000_000) {
+        err.hidden = false; err.textContent = "Use PNG, JPG ou WebP com até 5 MB.";
+        return;
+      }
+      err.hidden = true;
+      try {
+        const blob = await compressImage(file, 480);
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error("Não deu pra ler essa foto"));
+          reader.readAsDataURL(blob);
+        });
+        capiAddElement("photo", dataUrl);
+      } catch (e2) {
+        err.hidden = false; err.textContent = "Não deu pra usar essa foto: " + (e2.message || e2);
+      }
+    });
+    $("#capi-photo-crop")?.addEventListener("input", (e) => capiPatchSelectedLight({ crop: Number(e.target.value) }));
+  } else {
+    $("#capi-bg-color")?.addEventListener("input", (e) => { capiUpdate({ ...ed.composition, background: e.target.value }); refreshCapiCanvas(); });
+    document.querySelectorAll("[data-capi-bg]").forEach((btn) => btn.addEventListener("click", () => { capiUpdate({ ...ed.composition, background: btn.dataset.capiBg }); refreshCapiCanvas(); $("#capi-bg-color").value = btn.dataset.capiBg; }));
+    $("#capi-expression")?.addEventListener("change", (e) => { capiUpdate({ ...ed.composition, expression: e.target.value }); refreshCapiCanvas(); });
+  }
+}
+
+// atualiza um elemento sem empilhar undo a cada tecla/arraste de slider — só troca o
+// conteúdo e redesenha o SVG; o painel de controles em si não é re-renderizado (senão o
+// campo perderia o foco a cada toque)
+function capiPatchSelectedLight(partial) {
+  const ed = State.capiEditor;
+  ed.composition = { ...ed.composition, elements: ed.composition.elements.map((e) => e.id === ed.selected ? { ...e, ...partial } : e) };
+  refreshCapiCanvas();
+}
+
+function capiAddElement(kind, content) {
+  const ed = State.capiEditor;
+  const e = capiEngine.newElement(kind, content);
+  capiUpdate({ ...ed.composition, elements: [...ed.composition.elements, e] });
+  ed.selected = e.id;
+  renderCapiEditor();
+}
+
+function capiElementControlsHTML() {
+  const ed = State.capiEditor;
+  const selEl = capiSelectedEl();
+  return `
+    <label class="field-label">Elemento selecionado</label>
+    <select id="capi-select-el">
+      <option value="">Selecione</option>
+      ${ed.composition.elements.map((e, i) => `<option value="${e.id}" ${e.id === ed.selected ? "selected" : ""}>${i + 1}. ${e.kind}${e.content ? " · " + escapeHTML(String(e.content).slice(0, 20)) : ""}</option>`).join("")}
+    </select>
+    ${selEl ? `
+      <div class="row" style="gap:10px; margin-top:8px;">
+        <div style="flex:1;"><label class="field-label">X</label><input type="number" id="capi-el-x" min="0" max="400" value="${Math.round(selEl.x)}" /></div>
+        <div style="flex:1;"><label class="field-label">Y</label><input type="number" id="capi-el-y" min="0" max="500" value="${Math.round(selEl.y)}" /></div>
+      </div>
+      <label class="field-label">Largura</label>
+      <input type="range" id="capi-el-w" min="30" max="360" value="${selEl.w}" />
+      <label class="field-label">Rotação</label>
+      <input type="range" id="capi-el-rotation" min="-180" max="180" value="${selEl.rotation}" />
+      <div class="row" style="gap:6px; flex-wrap:wrap; margin-top:10px;">
+        <button class="btn btn-ghost btn-sm" id="capi-el-center">Centralizar</button>
+        <button class="btn btn-ghost btn-sm" id="capi-el-duplicate">Duplicar</button>
+        <button class="btn btn-ghost btn-sm" id="capi-el-front">Pra frente</button>
+        <button class="btn btn-ghost btn-sm" id="capi-el-back">Pra trás</button>
+        <button class="btn btn-secondary btn-sm" id="capi-el-delete">Excluir</button>
+      </div>
+    ` : ""}
+  `;
+}
+
+function wireCapiElementControls() {
+  const ed = State.capiEditor;
+  $("#capi-select-el")?.addEventListener("change", (e) => { ed.selected = e.target.value; renderCapiEditor(); });
+  $("#capi-el-x")?.addEventListener("input", (e) => capiPatchSelectedLight({ x: Math.max(0, Math.min(400, Number(e.target.value))) }));
+  $("#capi-el-y")?.addEventListener("input", (e) => capiPatchSelectedLight({ y: Math.max(0, Math.min(500, Number(e.target.value))) }));
+  $("#capi-el-w")?.addEventListener("input", (e) => capiPatchSelectedLight({ w: Number(e.target.value) }));
+  $("#capi-el-rotation")?.addEventListener("input", (e) => capiPatchSelectedLight({ rotation: Number(e.target.value) }));
+  $("#capi-el-center")?.addEventListener("click", () => { capiUpdate({ ...ed.composition, elements: ed.composition.elements.map((e) => e.id === ed.selected ? { ...e, x: 200 } : e) }); renderCapiEditor(); });
+  $("#capi-el-duplicate")?.addEventListener("click", () => {
+    const sel = capiSelectedEl();
+    if (!sel) return;
+    const copy = { ...sel, id: crypto.randomUUID(), x: Math.min(380, sel.x + 15) };
+    capiUpdate({ ...ed.composition, elements: [...ed.composition.elements, copy] });
+    ed.selected = copy.id;
+    renderCapiEditor();
+  });
+  $("#capi-el-front")?.addEventListener("click", () => { capiUpdate({ ...ed.composition, elements: [...ed.composition.elements.filter((e) => e.id !== ed.selected), capiSelectedEl()] }); renderCapiEditor(); });
+  $("#capi-el-back")?.addEventListener("click", () => { const sel = capiSelectedEl(); capiUpdate({ ...ed.composition, elements: [sel, ...ed.composition.elements.filter((e) => e.id !== ed.selected)] }); renderCapiEditor(); });
+  $("#capi-el-delete")?.addEventListener("click", () => {
+    capiUpdate({ ...ed.composition, elements: ed.composition.elements.filter((e) => e.id !== ed.selected) });
+    ed.selected = "";
+    renderCapiEditor();
+  });
+}
+
+// ---------- prévia + envio ----------
+
+async function capiPreviewControlsHTML() {
+  const ed = State.capiEditor;
+  const cost = capiEngine.price(ed.composition);
+  let recipientOptionsHTML = "";
+  let balance = 0;
+  if (State.capiCtx === "casal") {
+    const coins = await db.getCoinBalances(State.coupleId).catch(() => ({}));
+    balance = coins[State.role] || 0;
+    recipientOptionsHTML = `<p class="card-sub" style="margin:0 0 10px;">Pra ${ROLE_LABEL[otherRole()]}</p>`;
+  } else {
+    const [members, bal] = await Promise.all([
+      friends.listGroupMembers(State.friendGroup.id),
+      friends.getGroupCoinBalance(State.friendGroup.id).catch(() => 0),
+    ]);
+    balance = bal;
+    const others = members.filter((m) => m.user_id !== State.userId);
+    if (!ed.recipientUserId && others[0]) ed.recipientUserId = others[0].user_id;
+    recipientOptionsHTML = `
+      <label class="field-label">Destinatário</label>
+      <select id="capi-recipient">${others.map((m) => `<option value="${m.user_id}" ${m.user_id === ed.recipientUserId ? "selected" : ""}>${escapeHTML(m.display_name)}</option>`).join("")}</select>
+    `;
+  }
+  return `
+    ${recipientOptionsHTML}
+    <label class="field-label">Duração</label>
+    <select id="capi-duration">${capiEngine.DURATIONS.map((d) => `<option value="${d}" ${ed.duration === d ? "selected" : ""}>${capiEngine.DURATION_LABEL[d]}</option>`).join("")}</select>
+    <label class="field-label">Quando enviar</label>
+    <select id="capi-schedule-on">
+      <option value="now" ${!ed.scheduleOn ? "selected" : ""}>Enviar agora</option>
+      <option value="later" ${ed.scheduleOn ? "selected" : ""}>Programar envio</option>
+    </select>
+    ${ed.scheduleOn ? `<label class="field-label">Data e hora</label><input type="datetime-local" id="capi-scheduled-at" value="${ed.scheduledAt}" />` : ""}
+    <div class="row" style="align-items:center; justify-content:space-between; margin:14px 0;">
+      <span class="card-sub" style="margin:0;">Total do carinho</span>
+      <span class="pill pill-coin">✦ ${cost} moedas</span>
+    </div>
+    <p class="hint-text" id="capi-balance-hint">Você tem ${balance} moeda${balance === 1 ? "" : "s"}.</p>
+    <button class="btn btn-primary btn-block" id="capi-send-btn" ${balance < cost ? "disabled" : ""}>${ed.scheduleOn ? "Confirmar agendamento" : "Enviar Capisurpresa"} ♡</button>
+    <p class="error-text" id="capi-send-err" style="margin-top:8px;" hidden></p>
+  `;
+}
+
+function wireCapiPreviewControls() {
+  const ed = State.capiEditor;
+  $("#capi-recipient")?.addEventListener("change", (e) => { ed.recipientUserId = e.target.value; });
+  $("#capi-duration")?.addEventListener("change", (e) => { ed.duration = Number(e.target.value); });
+  $("#capi-schedule-on")?.addEventListener("change", (e) => { ed.scheduleOn = e.target.value === "later"; renderCapiEditor(); });
+  $("#capi-scheduled-at")?.addEventListener("change", (e) => { ed.scheduledAt = e.target.value; });
+  $("#capi-send-btn")?.addEventListener("click", sendCapiSurprise);
+}
+
+async function sendCapiSurprise() {
+  const ed = State.capiEditor;
+  const err = $("#capi-send-err");
+  err.hidden = true;
+  if (ed.scheduleOn && !ed.scheduledAt) { err.hidden = false; err.textContent = "Escolhe a data e hora."; return; }
+  try { capiEngine.validateComposition(ed.composition); } catch (e) { err.hidden = false; err.textContent = e.message; return; }
+  setBusy("#capi-send-btn", true);
+  try {
+    const scheduledAt = ed.scheduleOn && ed.scheduledAt ? new Date(ed.scheduledAt) : null;
+    await db.sendCapisurpresa({
+      mode: State.capiCtx === "casal" ? "casal" : "turma",
+      coupleId: State.capiCtx === "casal" ? State.coupleId : null,
+      friendGroupId: State.capiCtx === "turma" ? State.friendGroup.id : null,
+      recipientRole: State.capiCtx === "casal" ? ed.recipientRole : null,
+      recipientUserId: State.capiCtx === "turma" ? ed.recipientUserId : null,
+      composition: ed.composition, durationMinutes: ed.duration, scheduledAt, operation: ed.operation,
+    });
+    State.capiView = "hub"; State.capiEditor = null; State.capiHubTab = "Enviadas";
+    await renderCapiHub();
+    alert(scheduledAt ? "Surpresa agendada com carinho! 💌" : "Seu carinho já está disponível! 💌");
+  } catch (e) {
+    err.hidden = false; err.textContent = e.message || String(e);
+    setBusy("#capi-send-btn", false);
+  }
 }
 
 async function renderWishesView() {
