@@ -693,6 +693,40 @@ export async function deleteMemory(id, photoPath) {
   if (error) throw error;
 }
 
+// ---------- Capisurpresa (bilhete/desenho/foto que expira sozinho) ----------
+
+// mode: "casal" ou "turma". No casal manda pro parceiro (recipientRole); na turma manda
+// pra um membro específico (recipientUserId). scheduledAt (Date|null) = programar envio;
+// operation = chave de idempotência (gerada 1x no cliente por composição, pra reenvio por
+// falha de rede não cobrar 2x) — tudo validado e debitado no servidor (create_capisurpresa).
+export async function sendCapisurpresa({ mode, coupleId, friendGroupId, recipientRole, recipientUserId, composition, durationMinutes, scheduledAt, operation }) {
+  const { data, error } = await supabase.rpc("create_capisurpresa", {
+    p_mode: mode, p_couple_id: coupleId ?? null, p_friend_group_id: friendGroupId ?? null,
+    p_recipient_role: recipientRole ?? null, p_recipient_user_id: recipientUserId ?? null,
+    p_composition: composition, p_duration: durationMinutes,
+    p_scheduled: scheduledAt ? scheduledAt.toISOString() : null, p_operation: operation,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function listCapisurpresas({ coupleId, friendGroupId }) {
+  const { data, error } = await supabase.rpc("list_capisurpresas", { p_couple_id: coupleId ?? null, p_friend_group_id: friendGroupId ?? null });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function openCapisurpresa(id) {
+  const { data, error } = await supabase.rpc("open_capisurpresa", { p_id: id });
+  if (error) throw error;
+  return data; // composition
+}
+
+export async function cancelCapisurpresa(id) {
+  const { error } = await supabase.rpc("cancel_capisurpresa", { p_id: id });
+  if (error) throw error;
+}
+
 // ---------- fazer juntos (ideias de rolê do casal, com ranking por estrelas) ----------
 
 export async function listDateIdeas(coupleId) {

@@ -243,6 +243,13 @@ export const CHANGELOG = [
     title: "Capistop: letras difíceis saem bem menos",
     text: "Q, X e Z continuam podendo cair no sorteio, mas agora bem mais raramente — as outras letras saem bem mais vezes.",
   },
+  {
+    id: "capisurpresa-2026-10",
+    tag: "geral",
+    emoji: "💌",
+    title: "Chegou a Capisurpresa",
+    text: "Em Recadinhos (ou Experiências, na turma), toque em \"Capisurpresa\" pra criar um bilhetinho, desenho ou foto com adesivos de capivara e mandar pra alguém. Custa moedas, e some sozinha depois do tempo que você escolher — de 15 minutos a 3 horas, ou até a pessoa abrir.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
