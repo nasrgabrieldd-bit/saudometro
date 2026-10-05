@@ -1,0 +1,297 @@
+{
+  "version": "1.1.0",
+  "createdAt": "2026-10-03T17:52:46.538Z",
+  "integrationStatus": "pending",
+  "files": [
+    {
+      "path": ".gitignore",
+      "bytes": 117,
+      "sha256": "910246e1e631057dc3d8e1710e9eeba36e6dc95d089bcbd49d9ce5a091d4ee13"
+    },
+    {
+      "path": "ARCHITECTURE.md",
+      "bytes": 8287,
+      "sha256": "13b0cab0d2142c66a824bd5afc6a7f28d308784dbe920494d5303857392c4665"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "bytes": 3112,
+      "sha256": "d26989541895c7149cbfb977b9ce35e3364c1356e65aec5ff147ae3caca7d190"
+    },
+    {
+      "path": "CLAUDE_HANDOFF.md",
+      "bytes": 6068,
+      "sha256": "a8e60de03fbe452e64b55baa9413d9dafc806970576cb950e106520bd3c930e8"
+    },
+    {
+      "path": "GAME_RULES.md",
+      "bytes": 7460,
+      "sha256": "2eb5ccf644a90621f44377c8a775270417ffefa101ce1d3c6364cab4d50505be"
+    },
+    {
+      "path": "INTEGRATION_GUIDE.md",
+      "bytes": 13542,
+      "sha256": "5c26f687dadf91a9fb89898d9f2420f4371a9d550c8a5051cb1f548fb5582f71"
+    },
+    {
+      "path": "LEVELS.md",
+      "bytes": 48984,
+      "sha256": "252213e8c9b3a5aea9dced4a23470a4f3700a0a642505595927dc9ccc8453c4b"
+    },
+    {
+      "path": "README.md",
+      "bytes": 8203,
+      "sha256": "17b3030eb670d03c8357cf179fe9afab00a92abab9816b9cada8d19f2d293c89"
+    },
+    {
+      "path": "TEST_REPORT.md",
+      "bytes": 4767,
+      "sha256": "b53126077d5d8b3d8b173ddf54fc1d8b1b0283f0818045572ebe3d3260081c67"
+    },
+    {
+      "path": "index.html",
+      "bytes": 508,
+      "sha256": "a4ab3083b5f7d1e6fb28edd841ab616023135049a332fd2317c5327bbc2c197c"
+    },
+    {
+      "path": "integration/contracts.ts",
+      "bytes": 1428,
+      "sha256": "54a8e8ad0f073f1ca0d371b37dccf99a8b93a47ec84dece01eb6b1d6f0861a38"
+    },
+    {
+      "path": "integration/hostAdapter.ts",
+      "bytes": 659,
+      "sha256": "08c0ff4556f7a93d76630efc91656ada622696e68326aa9e7e4cfe9dee1d7a1e"
+    },
+    {
+      "path": "integration/index.ts",
+      "bytes": 350,
+      "sha256": "91585d52dc1940ba997194a873b666ef3d8dc31ec151aa290fe7eed49907f7a5"
+    },
+    {
+      "path": "levels.snapshot.json",
+      "bytes": 315819,
+      "sha256": "cb1e09413bb9eecdc1261eff89a1cff95247df227b9a8c50861f2bd3b00a64d5"
+    },
+    {
+      "path": "package-lock.json",
+      "bytes": 80319,
+      "sha256": "30c4f8384861a8d8b926814baa88aa1cb535f6fa1eba38c85aece08d9e7d830e"
+    },
+    {
+      "path": "package.json",
+      "bytes": 980,
+      "sha256": "25382a6e0abca569721059be7133ec280966adaedadc22493d92ba4efa477044"
+    },
+    {
+      "path": "playwright.config.ts",
+      "bytes": 1053,
+      "sha256": "38591c7eb4c4e2912b1029c6a4a193ac3ec0e237c4e5f0eacbef28a793f9ce80"
+    },
+    {
+      "path": "previews/desktop.png",
+      "bytes": 178589,
+      "sha256": "43e4f306d2139d819819a68da62a9098f75d1615ba28fc6aa56516ab2f6baab5"
+    },
+    {
+      "path": "previews/mobile.png",
+      "bytes": 123942,
+      "sha256": "42977e1d8dc5ce0fb857e134582f6c0bd76eef6fda77c99505280109076e17fc"
+    },
+    {
+      "path": "public/capivara.jpg",
+      "bytes": 44353,
+      "sha256": "0f864af14e078327ee1fa8c7ca0051b807222326a494870793d77416ee26a0cf"
+    },
+    {
+      "path": "public/icons/capmart-128.svg",
+      "bytes": 59504,
+      "sha256": "7b0d70866fd74f7080ceff38ba652b0b361515bce97d578f4e0b58f474ce33e5"
+    },
+    {
+      "path": "public/icons/capmart-256.svg",
+      "bytes": 59504,
+      "sha256": "e63796720f717a39fbf20e1086135a3168dacc2680e84ef6d6afbdf4ca42d3e3"
+    },
+    {
+      "path": "public/icons/capmart-512.svg",
+      "bytes": 59504,
+      "sha256": "a3645a5a727e091480ba043bfd560c5a609e708d08c59dbdf8718793cc428d7e"
+    },
+    {
+      "path": "public/icons/capmart-64.svg",
+      "bytes": 59502,
+      "sha256": "9a1ba88751cd29907bacb227e2add2709e0d54c23a093cf1f92d6df2a1c59f34"
+    },
+    {
+      "path": "public/mascot-assets.json",
+      "bytes": 356,
+      "sha256": "ee86933df2d6456cf7c996c7bc9e44a2d0a3af8836b163c8d4a030054b8677e8"
+    },
+    {
+      "path": "scripts/generate-levels.mjs",
+      "bytes": 3764,
+      "sha256": "b9a1099ddca0abaa0c9223b1eba70d6cf775005d9e71a2391d33e3153929801c"
+    },
+    {
+      "path": "scripts/history/README.md",
+      "bytes": 427,
+      "sha256": "97376a69a3f769798651ae56a28a58e10a31b4b630743d5358684155cb181a67"
+    },
+    {
+      "path": "scripts/history/contrast-css.mjs",
+      "bytes": 735,
+      "sha256": "023d0cd715b97d3aa96c4aba51b81c5f23a691d09b800d7948a60d2b04604d7c"
+    },
+    {
+      "path": "scripts/history/refinement-docs.mjs",
+      "bytes": 8797,
+      "sha256": "4d41a32d4fc7f5b856345d209a09ce9f31cb8604289f4895e796c59b6f5dc807"
+    },
+    {
+      "path": "scripts/history/scope-css.mjs",
+      "bytes": 557,
+      "sha256": "a516dc8da26ad7ab0eea4d2e10c00e1d2ca2e8f3cbead0ce402b59960dae6383"
+    },
+    {
+      "path": "scripts/mascot-icons.mjs",
+      "bytes": 958,
+      "sha256": "a40251cbdb9869da8929f7e18b626bdb8c1b943af32eb058b71dafac39e1f0be"
+    },
+    {
+      "path": "scripts/prepare-handoff.mjs",
+      "bytes": 2410,
+      "sha256": "ae6ed41fc326e60d0140c051de31ddcf59b0dfa7c72e9c863275c9636038acda"
+    },
+    {
+      "path": "src/components/Board.tsx",
+      "bytes": 5496,
+      "sha256": "bd5b0902873e88314009f67d49e29c4e35939665bce90b53d0db2f42ff6173c6"
+    },
+    {
+      "path": "src/components/CapMart.tsx",
+      "bytes": 27837,
+      "sha256": "83b598984d6f6cfc1391514fd33b9d098986f647c54b7136a1030db58b005e19"
+    },
+    {
+      "path": "src/components/useDialogFocus.ts",
+      "bytes": 1196,
+      "sha256": "31a85f6c2aa8a7d1acaf2a0c88e1aada2644d14743b336c41f9538c3c402f8ba"
+    },
+    {
+      "path": "src/engine/config.ts",
+      "bytes": 973,
+      "sha256": "385e04732634cdfc17bbeffcea0b25b30e6f5dae8708094f7e8a101381f0da98"
+    },
+    {
+      "path": "src/engine/game.ts",
+      "bytes": 7393,
+      "sha256": "4488b3644663114e37fbe696df37ec139a6def267604d38d63e3467f293148bf"
+    },
+    {
+      "path": "src/engine/random.ts",
+      "bytes": 394,
+      "sha256": "bc1c8518e3e5ad8dfa74a5de3ed86f010c1d695b1cb702651100fefad29ea659"
+    },
+    {
+      "path": "src/engine/replay.ts",
+      "bytes": 1708,
+      "sha256": "3d17200a841db92294e7b3ffd9116a6bfcaa8d7842e9507df6988a91c1929bd5"
+    },
+    {
+      "path": "src/engine/types.ts",
+      "bytes": 1523,
+      "sha256": "4737e8797d43538bc21f055f2d463c466f849d82177b9f21de60b08b0486a9d2"
+    },
+    {
+      "path": "src/levels/index.ts",
+      "bytes": 3657,
+      "sha256": "f46fc29c1c53e0cff06e8a5b487d6c2f91059c0d9137e2aab9fe51abc051f87f"
+    },
+    {
+      "path": "src/levels/legacy.ts",
+      "bytes": 3332,
+      "sha256": "7f94f69a571359f1c612a6d069b035fb0d9857d7bbe0f39d3b5c2d4fc6da899b"
+    },
+    {
+      "path": "src/main.tsx",
+      "bytes": 232,
+      "sha256": "fb9efa09d9653939ea3e82ef7ab4558f1cb7fae714150cfcdd4a1281b73a8325"
+    },
+    {
+      "path": "src/services/local.ts",
+      "bytes": 5493,
+      "sha256": "14efd632eff2ea3bc73e48f26dc33f771516457820757abd5fe9786345dca58b"
+    },
+    {
+      "path": "src/services/progress.ts",
+      "bytes": 833,
+      "sha256": "e64fddba671af162816ebaf59e3dbd1f6fb2fa7847a2a21005fd2693af019f73"
+    },
+    {
+      "path": "src/services/sound.ts",
+      "bytes": 632,
+      "sha256": "89a34e16d3abac2699c409928d46cf9deb9550509033800c3dfd1d00e0387c8a"
+    },
+    {
+      "path": "src/standalone.css",
+      "bytes": 41,
+      "sha256": "d52a1ccad3bfeb12be10539b79ea1d7499e86fccfc18453c2a1497cb08e6ec06"
+    },
+    {
+      "path": "src/styles.css",
+      "bytes": 22879,
+      "sha256": "58871a617de834f8ff887adb09550b5e555fc148814224e26af6b47f7053edf9"
+    },
+    {
+      "path": "src/theme.css",
+      "bytes": 10059,
+      "sha256": "052d9ba3472a0a6ec6bfb2692ba53ad1aeea0c8c6d5f74700d078b7ce38e9530"
+    },
+    {
+      "path": "tests/engine.test.ts",
+      "bytes": 6305,
+      "sha256": "9454f2bbcc0b10f24f3363e8edf8b3aadcfc4717fe124914f3c24fab48e822de"
+    },
+    {
+      "path": "tests/refinement.test.ts",
+      "bytes": 4724,
+      "sha256": "e82248d4fe12277c342d01c470fdfa453de83223dd8c28b8e218ed4827da08d9"
+    },
+    {
+      "path": "tests/replay.test.ts",
+      "bytes": 2078,
+      "sha256": "3f92e3c938384fc1fec823d9e03db9c98fd83eac490461bfcb0f6f069788b0c3"
+    },
+    {
+      "path": "tests/services.test.ts",
+      "bytes": 7535,
+      "sha256": "732ba22b6d5306c5d7c006c0257574db3023856eea16daf6648a431eec1fb7a6"
+    },
+    {
+      "path": "tests/ui/accessibility.spec.ts",
+      "bytes": 1149,
+      "sha256": "b0e070d6510dc59d674e13b99a1e36434ad2bf92285e6e7812957af345319074"
+    },
+    {
+      "path": "tests/ui/game.spec.ts",
+      "bytes": 7471,
+      "sha256": "47bcab142eddbccd9d2ca564b94f53f1b98f736e5eb63ce4bb0ba002ce327bf1"
+    },
+    {
+      "path": "tests/ui/refinement.spec.ts",
+      "bytes": 4878,
+      "sha256": "c8fe8b04060fce38b3f574235474aa8ced40d1992283ecda9c6754009a50bfd0"
+    },
+    {
+      "path": "tsconfig.json",
+      "bytes": 511,
+      "sha256": "2f53cb0bafa9acc1e6aa431837c9dfe1d9c6ad73b8e238ff82fbe0786a94a589"
+    },
+    {
+      "path": "vite.config.ts",
+      "bytes": 183,
+      "sha256": "99382f4f92354c30e10c7c0c1145921ef7755370eada054bf17d0ac2d487e482"
+    }
+  ]
+}
