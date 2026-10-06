@@ -35,6 +35,12 @@ export const MOODS = [
   { id: "fofuxa", emoji: "🐶", label: "Fofa(o) que só" },
   { id: "melosa", emoji: "🍯", label: "Melosa(o)" },
   { id: "modo_trabalho", emoji: "💻", label: "No modo trabalho" },
+  { id: "procrastinando", emoji: "🦥", label: "Procrastinando" },
+  { id: "modo_detetive", emoji: "🕵️", label: "Em modo detetive" },
+  { id: "convencida", emoji: "💅", label: "Se achando" },
+  { id: "sortuda", emoji: "🍀", label: "Com sorte hoje" },
+  { id: "dramatica", emoji: "🎭", label: "Dramática(o) hoje" },
+  { id: "modo_cientista", emoji: "🧪", label: "No modo cientista maluco" },
 ];
 
 export const MOOD_BY_ID = Object.fromEntries(MOODS.map((m) => [m.id, m]));
@@ -45,6 +51,7 @@ export const MOOD_BY_ID = Object.fromEntries(MOODS.map((m) => [m.id, m]));
 const GENERAL_ONLY_MOOD_IDS = new Set([
   "zoeira", "fominha", "cafeina", "gelada", "risada",
   "curiosa", "orgulhosa", "grogue", "determinada", "nostalgica", "modo_trabalho",
+  "procrastinando", "modo_detetive", "convencida", "sortuda", "dramatica", "modo_cientista",
 ]);
 export const PARTNER_MOODS = [
   ...MOODS.filter((m) => !GENERAL_ONLY_MOOD_IDS.has(m.id)),
