@@ -10,9 +10,9 @@ import './theme.css';
 
 const root = document.getElementById('root')!;
 
+// capmart/index.html mora um nível abaixo da raiz do app — "../" volta pro Saudômetro
 function closeToSaudometro() {
-  const mode = new URLSearchParams(window.location.search).get('mode');
-  window.location.href = mode === 'turma' ? './index.html?tab=shop' : './index.html?tab=shop';
+  window.location.href = '../index.html?tab=shop';
 }
 
 async function boot() {
@@ -20,13 +20,13 @@ async function boot() {
   if ('error' in resolved) {
     root.innerHTML = `<div style="display:flex; min-height:100vh; align-items:center; justify-content:center; padding:24px; text-align:center; font-family:system-ui, sans-serif; color:#52323c;">
       <div><p style="font-size:16px; margin-bottom:16px;">${resolved.error}</p>
-      <button onclick="window.location.href='./index.html'" style="padding:10px 18px; border-radius:999px; border:none; background:#bd2857; color:#fff; font-weight:700;">Voltar pro Saudômetro</button></div>
+      <button onclick="window.location.href='../index.html'" style="padding:10px 18px; border-radius:999px; border:none; background:#bd2857; color:#fff; font-weight:700;">Voltar pro Saudômetro</button></div>
     </div>`;
     return;
   }
   const { identity, context } = resolved;
   const services = createSupabaseServices(identity, context, undefined, closeToSaudometro);
-  createRoot(root).render(<CapMart services={services} mascotUrl="./capmart/capivara.jpg" onClose={closeToSaudometro} />);
+  createRoot(root).render(<CapMart services={services} mascotUrl="./capivara.jpg" onClose={closeToSaudometro} />);
 }
 
 boot();

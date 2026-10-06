@@ -1,14 +1,28 @@
 import type { Board, Level } from '../engine/types';
 import { shuffled } from '../engine/random';
+import { PRODUCTS } from '../engine/config';
 import { makeLevel as legacyLevel, dailyLevel as legacyDaily } from './legacy';
 export { PACKS } from './legacy';
 export const CONFIG_VERSION = 2;
+// packs 0-5 são os originais aprovados (fases 1-60): os valores pra esses índices continuam
+// idênticos aos de sempre, então as fases que já existiam não mudam em nada. Packs 6-10 são
+// novos (fases 61-110), continuando a mesma progressão (+3 trios por pack).
+const TRIOS_BASE = [0, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33];
 export function makeLevel(id: number, seed = id * 7919): Level {
   const original = legacyLevel(id, seed), pack = original.pack, n = (id - 1) % 10;
   if (pack === 0) return { ...original, configVersion: CONFIG_VERSION };
-  const trios = [0, 6, 9, 12, 15, 18][pack] + Math.floor(n / 3);
-  const rows = trios + 2, types = Math.min(12, 4 + pack + Math.floor(n / 3));
-  const palette = shuffled(Array.from({ length: 12 }, (_, i) => i), seed).slice(0, types);
+  const trios = TRIOS_BASE[pack] + Math.floor(n / 3);
+  const rows = trios + 2;
+  // packs 0-5: fórmula original intocada (fases 1-60 idênticas às de sempre). Packs 6-10:
+  // cresce além de 12 pra usar os produtos novos, até preencher o catálogo inteiro.
+  const types = pack <= 5
+    ? Math.min(12, 4 + pack + Math.floor(n / 3))
+    : Math.min(PRODUCTS.length, 12 + (pack - 5) * 3 + Math.floor(n / 3));
+  // mesmo cuidado do types acima: embaralhar um array maior com a mesma seed dá uma ordem
+  // diferente, mesmo pegando só os N primeiros depois — então packs 0-5 continuam
+  // embaralhando só os 12 produtos originais, pra gerar exatamente o mesmo tabuleiro de
+  // sempre. Só packs novos (6-10) embaralham o catálogo estendido.
+  const palette = shuffled(Array.from({ length: pack <= 5 ? 12 : PRODUCTS.length }, (_, i) => i), seed).slice(0, types);
   const inventory: (number | null)[] = Array.from({ length: trios * 3 }, (_, i) => palette[Math.floor(i / 3) % types]);
   inventory.push(...Array<number | null>(6).fill(null));
   let front = shuffled(inventory, seed + 1);
@@ -41,7 +55,7 @@ export function makeLevel(id: number, seed = id * 7919): Level {
   const base = objective.kind === 'order' ? 400 : objective.kind === 'score' ? objective.target : totalTrios * 100;
   return { ...original, configVersion: CONFIG_VERSION, board, types: new Set(all).size, seconds, moves, objective, stars: [base + 300 + Math.floor(bonus * .35), base + 300 + Math.floor(bonus * .8)], mechanics: [...original.mechanics, 'espaços estratégicos'] };
 }
-export const LEVELS = Array.from({ length: 60 }, (_, i) => makeLevel(i + 1));
+export const LEVELS = Array.from({ length: 110 }, (_, i) => makeLevel(i + 1));
 export function dailyLevel(day: string): Level { const old = legacyDaily(day); return { ...makeLevel(45, old.seed), name: old.name, dailyDay: day }; }
 export function levelForVersion(id: number, seed: number, version = 1): Level {
   if (version === 1) return legacyLevel(id, seed);

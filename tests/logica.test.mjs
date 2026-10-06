@@ -6,8 +6,8 @@ import * as people from "../js/people.js";
 import * as util from "../js/util.js";
 import { cycleInfo, averageCycleLength, cyclePhaseOnDate } from "../js/cycle.js";
 import { MOODS } from "../js/moods.js";
-import { QUESTIONS, questionForWeek } from "../js/questions.js";
-import { CHALLENGES, challengeForDay } from "../js/challenges.js";
+import { QUESTIONS, questionForWeek, weekIndexSince } from "../js/questions.js";
+import { CHALLENGES, challengeForDay, dayIndexSince } from "../js/challenges.js";
 import { PERKS, PERK_BY_ID, suggestedReward, customToPerk } from "../js/perks.js";
 import { pickSaudadeNudge } from "../js/nudges.js";
 
@@ -186,6 +186,23 @@ test("ids únicos em humores e itens da lojinha", () => {
 test("pergunta da semana e desafio do dia nunca ficam vazios (dão a volta)", () => {
   for (const i of [0, 1, QUESTIONS.length, QUESTIONS.length * 3 + 2]) assert.ok(questionForWeek(i), `pergunta ${i}`);
   for (const i of [0, 1, CHALLENGES.length, CHALLENGES.length * 3 + 2]) assert.ok(challengeForDay(i), `desafio ${i}`);
+});
+
+test("dayIndexSince: só troca na virada do dia (meia-noite local), não na hora exata da criação do casal", () => {
+  const criadoAs19h = "2026-01-01T19:30:00"; // casal criado às 19h30
+  // mesma data de calendário, só muda o horário: tem que dar o mesmo índice (0), mesmo já
+  // tendo passado 24h completas desde a criação se já virou 20h do dia seguinte
+  assert.equal(dayIndexSince(criadoAs19h, new Date("2026-01-01T19:00:00")), 0); // antes da hora de criação, mesmo dia
+  assert.equal(dayIndexSince(criadoAs19h, new Date("2026-01-01T23:59:00")), 0); // fim do mesmo dia
+  assert.equal(dayIndexSince(criadoAs19h, new Date("2026-01-02T00:01:00")), 1); // virou o dia, já é 1 mesmo que só tenham se passado minutos
+  assert.equal(dayIndexSince(criadoAs19h, new Date("2026-01-02T18:00:00")), 1); // ainda não bateu 24h completas, mas já é dia seguinte: índice 1 mesmo assim
+  assert.equal(dayIndexSince(criadoAs19h, new Date("2026-01-03T00:00:01")), 2);
+});
+
+test("weekIndexSince: conta semanas de calendário, não 7×24h exatas da hora de criação", () => {
+  const criadoAs19h = "2026-01-01T19:30:00";
+  assert.equal(weekIndexSince(criadoAs19h, new Date("2026-01-07T23:00:00")), 0); // ainda dentro dos primeiros 7 dias de calendário
+  assert.equal(weekIndexSince(criadoAs19h, new Date("2026-01-08T00:01:00")), 1); // virou a semana, mesmo sem ainda ter passado 7×24h exatas
 });
 
 test("item criado pelo casal vira item da lojinha; recompensa sugerida é ~25% do custo", () => {

@@ -255,7 +255,7 @@ export const CHANGELOG = [
     tag: "geral",
     emoji: "🛒",
     title: "Chegou o CapMart",
-    text: "Novo jogo na Lojinha: organize os produtos do mercadinho da capivara em trios e avance pelas 60 fases. Tem desafio diário, ajudas (desfazer, dica, tempo extra, embaralhar) e ranking pra comparar sua pontuação com seu par ou a turma.",
+    text: "Novo jogo na Lojinha: organize os produtos do mercadinho da capivara em trios e avance pelas 110 fases, com mais de 25 produtos diferentes. Tem desafio diário, ajudas (desfazer, dica, tempo extra, embaralhar) e ranking pra comparar sua pontuação com seu par ou a turma.",
   },
 ];
 

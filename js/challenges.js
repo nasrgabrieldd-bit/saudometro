@@ -31,10 +31,16 @@ export const CHALLENGES = [
   "Descreve como seria um dia perfeito com ele(a).",
 ];
 
+// dias de calendário (meia-noite local, igual todayISO()) desde a criação do casal — não
+// é "24h exatas desde a hora de criação", porque isso trocava o desafio no meio do dia (na
+// hora exata em que o casal foi criado) toda vez que alguém demorasse um pouco respondendo,
+// mesmo sem passar da meia-noite. Agora só troca de verdade na virada do dia.
 export function dayIndexSince(coupleCreatedAt, atDate = new Date()) {
+  const start = new Date(coupleCreatedAt);
+  const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const atDay = new Date(atDate.getFullYear(), atDate.getMonth(), atDate.getDate());
   const dayMs = 24 * 60 * 60 * 1000;
-  const diff = atDate.getTime() - new Date(coupleCreatedAt).getTime();
-  return Math.max(0, Math.floor(diff / dayMs));
+  return Math.max(0, Math.round((atDay.getTime() - startDay.getTime()) / dayMs));
 }
 
 export function challengeForDay(dayIndex) {

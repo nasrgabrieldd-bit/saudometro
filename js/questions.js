@@ -26,10 +26,16 @@ export const QUESTIONS = [
   "O que te faz sentir segura(o) numa relação?",
 ];
 
-export function weekIndexSince(coupleCreatedAt) {
-  const weekMs = 7 * 24 * 60 * 60 * 1000;
-  const diff = Date.now() - new Date(coupleCreatedAt).getTime();
-  return Math.max(0, Math.floor(diff / weekMs));
+// mesmo ajuste do desafio do dia (ver challenges.js): conta semanas de calendário a partir
+// da meia-noite local do dia de criação, não "7×24h exatas" — senão a pergunta da semana
+// também trocaria no meio do dia, na hora exata em que o casal foi criado.
+export function weekIndexSince(coupleCreatedAt, atDate = new Date()) {
+  const start = new Date(coupleCreatedAt);
+  const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const atDay = new Date(atDate.getFullYear(), atDate.getMonth(), atDate.getDate());
+  const dayMs = 24 * 60 * 60 * 1000;
+  const daysSince = Math.round((atDay.getTime() - startDay.getTime()) / dayMs);
+  return Math.max(0, Math.floor(daysSince / 7));
 }
 
 export function questionForWeek(weekIndex) {
