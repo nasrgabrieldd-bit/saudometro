@@ -1,10 +1,13 @@
 // Edge Function: compra uma ajuda (desfazer/dica/tempo/embaralhar) dentro de uma partida de
 // CapMart. Chamada pelo app via fetch com o token de sessão no header Authorization — mesmo
 // padrão de mp-create-subscription. Idempotente por requestId: reenvio por falha de rede
-// devolve a mesma resposta sem cobrar de novo. Preço nunca confia no cliente — vem de
-// RULES.costs do próprio motor do jogo (_shared/capmart/engine/config.ts).
+// devolve a mesma resposta sem cobrar de novo. Preço nunca confia no cliente — vem das
+// regras do próprio motor do jogo (os mesmos custos de _shared/capmart/engine/config.ts,
+// copiados aqui direto pra essa function não depender de nenhum outro arquivo e poder ser
+// colada inteira no painel do Supabase sem precisar do CLI).
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { RULES } from "../_shared/capmart/engine/config.ts";
+
+const COSTS: Record<string, number> = { undo: 5, hint: 10, time: 15, shuffle: 20 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -32,8 +35,8 @@ Deno.serve(async (req) => {
     const { requestId, runId, help, levelId, walletMode, coupleId, friendGroupId } = await req.json();
     if (!requestId || typeof requestId !== "string" || requestId.length > 100) return json({ error: "requestId inválido" }, 400);
     if (!runId || typeof runId !== "string") return json({ error: "runId inválido" }, 400);
-    if (!Object.hasOwn(RULES.costs, help)) return json({ error: "ajuda inválida" }, 400);
-    if (!Number.isInteger(levelId) || levelId < 1 || levelId > 60) return json({ error: "fase inválida" }, 400);
+    if (!Object.hasOwn(COSTS, help)) return json({ error: "ajuda inválida" }, 400);
+    if (!Number.isInteger(levelId) || levelId < 1 || levelId > 110) return json({ error: "fase inválida" }, 400);
     if (walletMode !== "casal" && walletMode !== "turma") return json({ error: "contexto inválido" }, 400);
 
     // idempotência: mesma requestId já processada antes -> devolve o mesmo resultado
@@ -46,7 +49,7 @@ Deno.serve(async (req) => {
       return json({ approved: existing.approved, balance });
     }
 
-    const cost = RULES.costs[help as keyof typeof RULES.costs];
+    const cost = COSTS[help];
     let role: string | null = null;
     if (walletMode === "casal") {
       if (!coupleId) return json({ error: "casal inválido" }, 400);
