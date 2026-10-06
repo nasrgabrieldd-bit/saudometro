@@ -35,14 +35,17 @@ test("PACKS/dificuldade: 11 conjuntos (os 6 originais + 5 novos)", () => {
   assert.equal(PACKS.length, 11);
 });
 
-test("cada uma das 110 fases tem solução sem ajuda, dentro dos limites de tempo/movimentos", () => {
+test("cada uma das 110 fases tem solução sem ajuda, dentro do limite de movimentos (tempo é meta, não limite)", () => {
   for (const level of LEVELS) {
     const g = solve(startGame(level));
     assert.equal(g.status, "won", `fase ${level.id} não venceu`);
     assert.equal(g.assisted, false, `fase ${level.id} usou ajuda sem precisar`);
     if (level.moves !== null) assert.ok(g.movesUsed <= level.moves, `fase ${level.id} estourou movimentos`);
-    assert.ok((g.remaining ?? 1) > 0, `fase ${level.id} estourou o tempo`);
   }
+});
+
+test("nenhuma fase tem célula vazia: toda posição do tabuleiro sempre tem um produto", () => {
+  for (const level of LEVELS) for (const row of level.board) for (const slot of row) assert.notEqual(slot.item, null, `fase ${level.id} com célula vazia`);
 });
 
 test("desafio diário: mesma data sempre dá a mesma fase; datas diferentes dão sementes diferentes", () => {
@@ -63,16 +66,19 @@ test("move: troca inválida não muda nada (devolve o mesmo estado)", () => {
   assert.equal(next, g);
 });
 
-test("applyHelp 'time': soma segundos extras só se a fase tem tempo", () => {
-  const timedLevel = LEVELS.find((l) => l.seconds !== null);
-  const g = startGame(timedLevel);
+test("applyHelp 'time': toda fase tem meta de tempo, então sempre soma segundos extras", () => {
+  const g = startGame(LEVELS[0]);
   const helped = applyHelp(g, "time");
   assert.equal(helped.remaining, g.remaining + RULES.extraSeconds);
   assert.equal(helped.assisted, true);
+});
 
-  const untimedLevel = LEVELS.find((l) => l.seconds === null);
-  const g2 = startGame(untimedLevel);
-  assert.equal(applyHelp(g2, "time"), g2); // sem tempo, "mais tempo" não faz nada
+test("tempo: passar da meta vira desconto na pontuação final, não faz perder a fase", () => {
+  const level = makeLevel(1);
+  let g = startGame(level);
+  g = tick(g, level.seconds + 500); // bem além da meta
+  assert.equal(g.status, "playing"); // tempo nunca derruba a fase sozinho
+  assert.ok(g.remaining < 0);
 });
 
 test("applyHelp 'undo': volta pro estado anterior e marca como assistido", () => {

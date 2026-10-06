@@ -7297,8 +7297,9 @@ function capMartObjectiveText(level) {
 }
 
 function capMartFormatTime(seconds) {
-  const s = Math.max(0, Math.ceil(seconds));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  const sign = seconds < 0 ? "-" : "";
+  const s = Math.ceil(Math.abs(seconds));
+  return `${sign}${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
 async function renderCapMartGame(scope) {
@@ -7366,20 +7367,30 @@ function renderCapMartPlay(scope, isAmigos, container, theme, onBack, level, unl
 
   function clearTimer() { if (timerHandle) { clearInterval(timerHandle); timerHandle = null; } }
 
+  // Tamanho da célula calculado pra o tabuleiro inteiro caber na tela de uma vez, sem rolar
+  // — fases maiores ganham prateleiras mais baixas/achatadas em vez de precisar de scroll.
+  function boardMetrics() {
+    const rows = g.board.length, gap = 4;
+    const available = Math.min(window.innerHeight * 0.36, 360);
+    const cellPx = Math.max(14, Math.min(46, Math.floor((available - (rows - 1) * gap) / rows)));
+    const fontPx = Math.max(9, Math.round(cellPx * 0.5));
+    return { gap, cellPx, fontPx, totalHeight: rows * cellPx + (rows - 1) * gap };
+  }
+
   function boardHTML(flashCleared) {
     const flashMap = new Map((flashCleared || []).map((x) => [`${x.row},${x.col}`, x.item]));
     const flashRows = new Set((flashCleared || []).map((x) => x.row));
+    const { gap, cellPx, fontPx } = boardMetrics();
     return g.board.map((row, r) => `
-      <div class="${flashRows.has(r) ? "cm-row-cleared" : ""}" style="display:grid; grid-template-columns:repeat(${row.length}, 1fr); gap:6px; margin-bottom:6px;">
+      <div class="${flashRows.has(r) ? "cm-row-cleared" : ""}" style="display:grid; grid-template-columns:repeat(${row.length}, 1fr); gap:${gap}px; margin-bottom:${gap}px;">
         ${row.map((slot, c) => {
           const flashItem = flashMap.get(`${r},${c}`);
           const isSelected = selected && selected.row === r && selected.col === c;
-          const locked = slot.unlockAt > g.matches;
-          const product = flashItem !== undefined ? capMart.PRODUCTS[flashItem] : slot.item !== null ? capMart.PRODUCTS[slot.item] : null;
+          const product = flashItem !== undefined ? capMart.PRODUCTS[flashItem] : capMart.PRODUCTS[slot.item];
           const isFlash = flashItem !== undefined;
-          return `<button data-r="${r}" data-c="${c}" ${locked || slot.item === null ? "disabled" : ""} class="${isFlash ? "cm-clearing" : ""}" style="aspect-ratio:1; min-height:40px; border-radius:9px; border:2px solid ${isSelected ? theme.accentBtn : "var(--border)"}; background:${locked ? "repeating-linear-gradient(45deg,var(--surface-alt),var(--surface-alt) 5px,var(--surface) 5px,var(--surface) 10px)" : "var(--surface)"}; display:flex; align-items:center; justify-content:center; font-size:22px; position:relative;">
-            ${locked ? `<span style="font-size:13px;">🔒</span>` : product ? product.icon : ""}
-            ${!locked && !isFlash && slot.behind.length ? `<span style="position:absolute; bottom:1px; right:3px; font-size:8px; color:var(--muted);">+${slot.behind.length}</span>` : ""}
+          return `<button data-r="${r}" data-c="${c}" class="${isFlash ? "cm-clearing" : ""}" style="height:${cellPx}px; border-radius:7px; border:2px solid ${isSelected ? theme.accentBtn : "var(--border)"}; background:var(--surface); display:flex; align-items:center; justify-content:center; font-size:${fontPx}px; position:relative;">
+            ${product.icon}
+            ${!isFlash && slot.behind.length ? `<span style="position:absolute; bottom:0px; right:2px; font-size:${Math.max(7, Math.round(fontPx * 0.4))}px; color:var(--muted);">+${slot.behind.length}</span>` : ""}
           </button>`;
         }).join("")}
       </div>
@@ -7391,7 +7402,7 @@ function renderCapMartPlay(scope, isAmigos, container, theme, onBack, level, unl
     return `
       <div class="row" style="gap:8px; text-align:center;">
         <div style="flex:1; background:var(--surface-alt); border-radius:9px; padding:6px;"><div class="hint-text" style="margin:0;">PONTOS</div><strong>${g.score}</strong></div>
-        <div style="flex:1; background:var(--surface-alt); border-radius:9px; padding:6px;"><div class="hint-text" style="margin:0;">${g.remaining === null ? "LIVRE" : "TEMPO"}</div><strong>${g.remaining === null ? "∞" : capMartFormatTime(g.remaining)}</strong></div>
+        <div style="flex:1; background:var(--surface-alt); border-radius:9px; padding:6px;"><div class="hint-text" style="margin:0;">META DE TEMPO</div><strong style="color:${g.remaining < 0 ? "var(--danger, #e05252)" : "inherit"};">${capMartFormatTime(g.remaining)}</strong></div>
         <div style="flex:1; background:var(--surface-alt); border-radius:9px; padding:6px;"><div class="hint-text" style="margin:0;">${g.level.moves ? "MOVIMENTOS" : "TROCAS"}</div><strong>${g.level.moves ? Math.max(0, g.level.moves - g.movesUsed) : g.movesUsed}</strong></div>
       </div>
       ${g.combo > 1 ? `<div class="cm-combo-badge" style="text-align:center; margin-top:6px; font-weight:800; color:${theme.accentStrong};">✦ Combo ×${g.combo}!</div>` : ""}
@@ -7409,7 +7420,7 @@ function renderCapMartPlay(scope, isAmigos, container, theme, onBack, level, unl
         <div style="font-weight:800; color:${theme.accentStrong}; text-align:center;">${capMartObjectiveText(level)}</div>
         <div id="cm-hud" style="margin-top:8px;">${hudHTML()}</div>
       </div>
-      <div class="card" id="cm-board" style="margin-top:10px; padding:10px; max-height:46vh; overflow-y:auto;">${boardHTML()}</div>
+      <div class="card" id="cm-board" style="margin-top:10px; padding:10px; max-height:${boardMetrics().totalHeight + 16}px; overflow-y:auto;">${boardHTML()}</div>
       <div class="row" style="gap:6px; margin-top:10px;">
         ${Object.keys(CAPMART_HELP_NAMES).map((h) => `<button class="btn btn-ghost btn-sm" data-help="${h}" style="flex:1; flex-direction:column; gap:2px; height:auto; padding:8px 4px;" ${capMartHelpAvailable(h) ? "" : "disabled"}>
           <span style="font-size:16px;">${CAPMART_HELP_ICONS[h]}</span>
@@ -7427,7 +7438,7 @@ function renderCapMartPlay(scope, isAmigos, container, theme, onBack, level, unl
   function capMartHelpAvailable(h) {
     if (g.status !== "playing") return false;
     if (h === "undo") return !!g.history.length;
-    if (h === "time") return g.remaining !== null;
+    if (h === "time") return true;
     if (h === "hint") return !!capMart.hint(g);
     return true;
   }
@@ -7540,17 +7551,15 @@ function renderCapMartPlay(scope, isAmigos, container, theme, onBack, level, unl
   }
 
   render();
-  if (level.seconds !== null) {
-    let previous = performance.now();
-    timerHandle = setInterval(() => {
-      const now = performance.now(), delta = (now - previous) / 1000;
-      previous = now;
-      if (g.status !== "playing") return;
-      g = capMart.tick(g, delta);
-      $("#cm-hud").innerHTML = hudHTML();
-      if (g.status !== "playing") onGameEnd();
-    }, 500);
-  }
+  let previous = performance.now();
+  timerHandle = setInterval(() => {
+    const now = performance.now(), delta = (now - previous) / 1000;
+    previous = now;
+    if (g.status !== "playing") return;
+    g = capMart.tick(g, delta);
+    $("#cm-hud").innerHTML = hudHTML();
+    if (g.status !== "playing") onGameEnd();
+  }, 500);
 }
 
 async function loadShopData() {
