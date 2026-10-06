@@ -278,6 +278,13 @@ export const CHANGELOG = [
     title: "O pop-up de ideias pra avaliar parou de insistir",
     text: "Antes, mesmo fechando no X, aquele aviso de \"ideias pra avaliar\" voltava toda vez que o app abria. Agora fechar (no X, clicando fora ou em \"ver depois\") faz ele parar de aparecer pra aquelas ideias — só avaliar de verdade ou surgir uma ideia nova traz o aviso de volta.",
   },
+  {
+    id: "convite-aceito-comemora-2026-10",
+    tag: "casal",
+    emoji: "🎉",
+    title: "Aceitar um convite agora comemora na hora",
+    text: "Antes só quem tinha mandado o convite via um aviso de comemoração (e só na próxima vez que abrisse o app). Agora quem aceita também vê a tela de \"Encontro confirmado!\" na hora, assim que toca em Aceitar.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
