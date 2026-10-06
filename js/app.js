@@ -5097,6 +5097,10 @@ function wireEntryActions() {
         } else if (act === "cancel" || act === "decline" || act === "accept") {
           const entry = State.calendarEncounters.find((e) => e.id === id);
           await respondToConvite(entry, act);
+          // quem aceita vê a comemoração na hora, não só na próxima vez que abrir o app (isso já
+          // existe pra quem mandou o convite, via maybeShowConviteAcceptedNudge no boot) — marca
+          // como visto aqui também, pra não repetir esse mesmo aviso de novo depois.
+          if (act === "accept") { markAcceptedConvitesSeen([entry.id]); celebrateConviteAccepted(entry); }
         } else if (act === "undo") {
           const entry = State.calendarEncounters.find((e) => e.id === id);
           await undoEntryStatus(entry);
@@ -5758,6 +5762,7 @@ async function renderInvites() {
         if (act === "accept" || act === "decline" || act === "cancel") {
           const entry = all.find((e) => e.id === id);
           await respondToConvite(entry, act);
+          if (act === "accept") { markAcceptedConvitesSeen([entry.id]); celebrateConviteAccepted(entry); }
         } else if (act === "happened") {
           await db.updateEncounterStatus(id, "aconteceu");
         } else if (act === "missed") {
@@ -9072,6 +9077,18 @@ async function maybeShowConviteAcceptedNudge() {
   const queue = (all || []).filter((e) => e.status === "confirmado" && !seen.has(e.id));
   if (!queue.length) return;
   return new Promise((resolve) => showNextConviteAccepted(queue, resolve));
+}
+
+// feedback na hora pra quem acabou de tocar em "Aceitar" — o aviso pro outro lado (quem mandou
+// o convite) continua vindo na próxima vez que abrir o app, via maybeShowConviteAcceptedNudge.
+function celebrateConviteAccepted(entry) {
+  openModal(`
+    <div class="sbg-celebrate" style="text-align:center; font-size:44px;">🎉</div>
+    <h3 class="modal-title" style="text-align:center;">Encontro confirmado!</h3>
+    <p class="card-sub" style="text-align:center;">${escapeHTML(entry.title) || defaultTitle(entry)} · ${escapeHTML(humanDateLong(parseISODate(entry.start_date)))}</p>
+    <button class="btn btn-primary btn-block" style="margin-top:14px;" id="btn-convite-accepted-ok">Que bom! 💗</button>
+  `);
+  $("#btn-convite-accepted-ok").addEventListener("click", closeModal);
 }
 
 function showNextConviteAccepted(queue, resolve) {
