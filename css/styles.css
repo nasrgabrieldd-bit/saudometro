@@ -1051,6 +1051,18 @@ label.field-label:first-child { margin-top: 0; }
 .rm-code-box { text-align: center; padding: 20px 14px; }
 .rm-code-chip { display: inline-block; background: linear-gradient(135deg, var(--friends-accent-soft), var(--surface)); border: 1.5px dashed var(--friends-accent); border-radius: 16px; padding: 14px 28px; box-shadow: 0 6px 16px -9px rgba(30, 50, 120, .3); }
 .rm-code { font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 34px; letter-spacing: .14em; color: var(--friends-accent-strong); }
+
+/* CapMart (jogo) */
+.cm-clearing { animation: cm-clear .32s ease forwards; }
+@keyframes cm-clear { 0% { transform: scale(1); opacity: 1; } 35% { transform: scale(1.22); opacity: 1; } 100% { transform: scale(.35); opacity: 0; } }
+.cm-row-cleared { position: relative; border-radius: 10px; animation: cm-row-flash .45s ease; }
+@keyframes cm-row-flash {
+  0% { box-shadow: 0 0 0 0 rgba(255, 196, 0, 0); background: transparent; }
+  35% { box-shadow: 0 0 0 3px rgba(255, 196, 0, .85); background: rgba(255, 210, 60, .22); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 196, 0, 0); background: transparent; }
+}
+.cm-combo-badge { display: inline-block; animation: cm-combo-pop .4s cubic-bezier(.34,1.56,.64,1); }
+@keyframes cm-combo-pop { 0% { transform: scale(.5); opacity: 0; } 60% { transform: scale(1.18); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
 .rm-code-actions { display: flex; gap: 8px; justify-content: center; margin-top: 12px; }
 .rm-code-actions button { display: flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 800; background: var(--surface); color: var(--friends-accent-strong); border: 1px solid var(--border); border-radius: 999px; padding: 7px 14px; box-shadow: 0 2px 6px -3px rgba(20, 30, 80, .25); cursor: pointer; }
 
