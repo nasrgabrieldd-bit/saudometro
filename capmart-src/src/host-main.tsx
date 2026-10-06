@@ -7,6 +7,7 @@ import { CapMart } from './components/CapMart';
 import { resolveLaunch, createSupabaseServices } from './services/supabase';
 import './styles.css';
 import './theme.css';
+import './force-mobile.css';
 
 const root = document.getElementById('root')!;
 
