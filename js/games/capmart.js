@@ -3,12 +3,12 @@
 // pensado pra se um dia virar algo maior já servir de base.
 //
 // Portado do pacote React/TypeScript original (motor aprovado, 110 fases, 25 produtos) pra
-// JS puro, sem framework — mesma mecânica (prateleiras de 3, estoque escondido atrás,
-// espaços bloqueados), mas com as fórmulas de tamanho de fase bem mais exigentes do que o
-// pacote original (que ficava fácil demais rápido demais). O tabuleiro é sempre "linhas de
-// 3" (cada prateleira só combina com ela mesma), então a dificuldade cresce em NÚMERO DE
-// PRATELEIRAS e em camadas de estoque escondido, não virando um grid quadrado tipo Candy
-// Crush — mas o efeito de "muito mais pra resolver antes de passar de fase" é o mesmo.
+// JS puro, sem framework — mesma mecânica (prateleiras de 3, estoque escondido atrás), mas
+// com as fórmulas de tamanho de fase mais exigentes do que o pacote original (que ficava
+// fácil demais rápido demais). O tabuleiro é sempre "linhas de 3" (cada prateleira só
+// combina com ela mesma) e toda célula sempre tem um produto — nada de espaço vazio decorativo
+// — então a dificuldade cresce em número de prateleiras E em camadas de estoque escondido
+// atrás de cada uma, sem o tabuleiro inteiro precisar ficar gigante pra isso.
 // A interface aqui é construída direto no app.js, igual os outros jogos. O prêmio por fase
 // segue o MESMO modelo de confiança do Capibatman: o cliente reporta "venci a fase X com Y
 // estrelas" e o app credita a moeda na hora — sem servidor validando replay. Isso é uma
@@ -50,28 +50,24 @@ export function shuffled(values, seed) {
   return a;
 }
 
-// Quanto de prateleira (trio) cada conjunto de 10 fases começa com — bem mais puxado do
-// que o pacote original (que ia de 0 a 33): a fase 1 já abre com uma prateleira de verdade
-// pra organizar, não um tabuleirinho que se resolve em 2 toques.
-const PACK_TRIOS_BASE = [10, 17, 25, 34, 45, 57, 70, 84, 100, 118, 138];
+// Quanto de prateleira (trio) cada conjunto de 10 fases começa com — a fase 1 já abre com
+// uma prateleira de verdade pra organizar (bem mais que as 3 linhas originais), mas o
+// tabuleiro inteiro ainda cabe na tela sem precisar rolar: quem cresce mais rápido é o
+// estoque escondido atrás de cada prateleira (depth, logo abaixo), não a altura visível.
+const PACK_TRIOS_BASE = [8, 12, 16, 19, 22, 24, 26, 28, 30, 32, 34];
 
 export function makeLevel(id, seed = id * 7919) {
   const pack = Math.floor((id - 1) / 10), n = (id - 1) % 10;
-  const trios = PACK_TRIOS_BASE[pack] + Math.floor(n / 2);
-  const rows = trios + 2;
+  const rows = PACK_TRIOS_BASE[pack] + Math.floor(n / 3);
   const types = pack <= 5 ? Math.min(12, 4 + pack + Math.floor(n / 3)) : Math.min(PRODUCTS.length, 12 + (pack - 5) * 3 + Math.floor(n / 3));
   const palette = shuffled(Array.from({ length: pack <= 5 ? 12 : PRODUCTS.length }, (_, i) => i), seed).slice(0, types);
-  const inventory = Array.from({ length: trios * 3 }, (_, i) => palette[Math.floor(i / 3) % types]);
-  inventory.push(...Array(6).fill(null));
-  let front = shuffled(inventory, seed + 1);
+  // cada célula da frente sempre recebe um produto de verdade — sem espaço vazio decorativo,
+  // que antes sobrava sem ícone nenhum no tabuleiro (bug reportado).
+  let front = Array.from({ length: rows * 3 }, (_, i) => palette[Math.floor(i / 3) % types]);
   for (let attempt = 0; attempt < 256; attempt++) {
-    front = shuffled(inventory, seed + 1 + attempt * 104729);
-    for (let c = rows * 3 - 3; c < rows * 3; c++) if (front[c] !== null) {
-      const gap = front.findIndex((p, i) => p === null && i < rows * 3 - 3);
-      [front[c], front[gap]] = [front[gap], front[c]];
-    }
+    front = shuffled(front, seed + 1 + attempt * 104729);
     const groups = Array.from({ length: rows }, (_, r) => front.slice(r * 3, r * 3 + 3));
-    if (!groups.some((row) => row[0] !== null && row.every((p) => p === row[0])) && !groups.slice(0, trios).some((row) => row.every((p) => p === null))) break;
+    if (!groups.some((row) => row.every((p) => p === row[0]))) break;
   }
   // camadas de estoque escondido atrás de cada prateleira: cresce junto com o pack, até 3
   // camadas nas fases finais — cada camada é uma rodada extra de "combinar 3" na mesma
@@ -79,31 +75,25 @@ export function makeLevel(id, seed = id * 7919) {
   const depth = pack === 0 ? 0 : pack <= 3 ? 1 : pack <= 7 ? 2 : 3;
   const board = Array.from({ length: rows }, (_, r) => Array.from({ length: 3 }, (_, c) => ({
     item: front[r * 3 + c],
-    behind: r < trios && front.slice(r * 3, r * 3 + 3).some((p) => p !== null) ? Array.from({ length: depth }, (_, d) => palette[(r + d + 1) % types]) : [],
+    behind: Array.from({ length: depth }, (_, d) => palette[(r + d + 1) % types]),
     unlockAt: 0,
   })));
-  if (pack >= 2) {
-    const empty = board.flat().filter((s) => s.item === null && !s.behind.length);
-    empty.slice(0, Math.min(3, empty.length)).forEach((s, i) => { s.unlockAt = 1 + i; });
-  }
-  const all = board.flat().flatMap((s) => [...(s.item === null ? [] : [s.item]), ...s.behind]);
+  const all = board.flat().flatMap((s) => [s.item, ...s.behind]);
   const totalTrios = all.length / 3, orderStock = all.filter((p) => p === palette[1]).length;
   const objective = pack >= 4 && n % 3 === 0 ? { kind: "order", product: palette[1], count: Math.min(orderStock, 6 + Math.floor(n / 3) * 3) } : pack >= 4 && n % 3 === 1 ? { kind: "score", target: Math.max(900, totalTrios * 85) } : { kind: "clear" };
-  // tempo só entra como mecânica nos packs do meio (3-5): em tabuleiros gigantes do fim do
-  // jogo, cronômetro vira punição sem graça em vez de desafio — lá a dificuldade já vem do
-  // tamanho da prateleira e das camadas escondidas.
-  const seconds = pack >= 3 && pack <= 5 && n % 2 !== 0 ? 120 + trios * 10 + depth * 20 - n * 2 : null;
-  const moves = pack >= 3 ? trios * 5 + 30 : null;
-  const bonus = (seconds ?? 0) * 3 + (moves ?? 0) * 10;
+  const moves = pack >= 3 ? rows * 5 + 30 : null;
+  // "seconds" é a meta de tempo (par), não um limite rígido: terminar mais rápido rende bônus
+  // de pontuação, passar da meta desconta — mas nunca faz perder a fase por tempo.
+  const seconds = 20 + rows * 6 + depth * 10;
+  const bonus = seconds * 3 + (moves ?? 0) * 10;
   const base = objective.kind === "order" ? 400 : objective.kind === "score" ? objective.target : totalTrios * 100;
   return {
     id, pack, seed, name: PACKS[pack], board, types: new Set(all).size, seconds, moves, objective,
     stars: [base + 300 + Math.floor(bonus * 0.35), base + 300 + Math.floor(bonus * 0.8)],
     difficulty: DIFFICULTY[pack],
     mechanics: [
-      seconds !== null ? "tempo" : "clássica",
+      "contra o tempo",
       ...(depth ? ["estoque escondido"] : []),
-      ...(pack >= 2 ? ["espaços bloqueados"] : []),
       ...(moves ? ["movimentos limitados"] : []),
       ...(objective.kind === "order" ? ["pedido especial"] : objective.kind === "score" ? ["meta de pontos"] : []),
     ],
@@ -167,9 +157,10 @@ export function hasValidMoves(g) {
 function finish(g) {
   if (objectiveMet(g)) {
     g.status = "won";
-    g.resultScore = g.score + RULES.completion + Math.floor(g.remaining ?? 0) * RULES.second + Math.max(0, (g.level.moves ?? g.movesUsed) - g.movesUsed) * RULES.move;
-  } else if (g.remaining !== null && g.remaining <= 0) { g.status = "lost"; g.reason = "O tempo acabou. Vamos tentar de novo?"; }
-  else if (g.level.moves !== null && g.movesUsed >= g.level.moves) { g.status = "lost"; g.reason = "Os movimentos acabaram. Cada troca faz diferença!"; }
+    // g.remaining pode estar negativo (passou da meta de tempo) — isso vira desconto em vez de
+    // bônus, mas o resultado nunca fica negativo.
+    g.resultScore = Math.max(0, g.score + RULES.completion + Math.floor(g.remaining) * RULES.second + Math.max(0, (g.level.moves ?? g.movesUsed) - g.movesUsed) * RULES.move);
+  } else if (g.level.moves !== null && g.movesUsed >= g.level.moves) { g.status = "lost"; g.reason = "Os movimentos acabaram. Cada troca faz diferença!"; }
   else if (!hasValidMoves(g)) { g.status = "lost"; g.reason = "Não há movimentos válidos no estoque."; }
   return g;
 }
@@ -185,7 +176,7 @@ export function move(g, m) {
 
 export function tick(g, seconds) {
   if (g.status !== "playing" || !Number.isFinite(seconds) || seconds <= 0) return g;
-  const next = { ...g, elapsed: g.elapsed + seconds, remaining: g.remaining === null ? null : Math.max(0, g.remaining - seconds), lastCleared: [] };
+  const next = { ...g, elapsed: g.elapsed + seconds, remaining: g.remaining - seconds, lastCleared: [] };
   if (next.lastMatchAt !== null && next.elapsed - next.lastMatchAt > RULES.comboSeconds) next.combo = 0;
   return finish(next);
 }
@@ -211,7 +202,7 @@ export function applyHelp(g, help) {
   if (g.status !== "playing") return g;
   if (help === "undo") { const previous = g.history.at(-1); return previous ? { ...g, ...previous, board: cloneBoard(previous.board), collected: { ...previous.collected }, history: g.history.slice(0, -1), combo: 0, lastMatchAt: null, hints: null, lastCleared: [], assisted: true } : g; }
   if (help === "hint") { const m = hint(g); return m ? { ...g, assisted: true, hints: m } : g; }
-  if (help === "time") return g.remaining === null ? g : { ...g, remaining: g.remaining + RULES.extraSeconds, assisted: true };
+  if (help === "time") return { ...g, remaining: g.remaining + RULES.extraSeconds, assisted: true };
   const board = cloneBoard(g.board), cells = board.flat().filter((s) => s.unlockAt <= g.matches && s.item !== null);
   const originalItems = cells.map((s) => s.item);
   for (let attempt = 0; attempt < 64; attempt++) {
