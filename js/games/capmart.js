@@ -3,8 +3,13 @@
 // pensado pra se um dia virar algo maior já servir de base.
 //
 // Portado do pacote React/TypeScript original (motor aprovado, 110 fases, 25 produtos) pra
-// JS puro, sem framework — mesma lógica, mesmas fórmulas de fase, só sem o editor em React
-// (a interface aqui é construída direto no app.js, igual os outros jogos). O prêmio por fase
+// JS puro, sem framework — mesma mecânica (prateleiras de 3, estoque escondido atrás,
+// espaços bloqueados), mas com as fórmulas de tamanho de fase bem mais exigentes do que o
+// pacote original (que ficava fácil demais rápido demais). O tabuleiro é sempre "linhas de
+// 3" (cada prateleira só combina com ela mesma), então a dificuldade cresce em NÚMERO DE
+// PRATELEIRAS e em camadas de estoque escondido, não virando um grid quadrado tipo Candy
+// Crush — mas o efeito de "muito mais pra resolver antes de passar de fase" é o mesmo.
+// A interface aqui é construída direto no app.js, igual os outros jogos. O prêmio por fase
 // segue o MESMO modelo de confiança do Capibatman: o cliente reporta "venci a fase X com Y
 // estrelas" e o app credita a moeda na hora — sem servidor validando replay. Isso é uma
 // simplificação deliberada em relação ao pacote original (que validava cada troca no
@@ -45,36 +50,14 @@ export function shuffled(values, seed) {
   return a;
 }
 
-function legacyLevel(id, seed = id * 7919) {
-  const pack = Math.floor((id - 1) / 10), n = (id - 1) % 10;
-  const rows = Math.min(8, 3 + Math.floor((id - 1) / 10) + (n >= 5 ? 1 : 0));
-  const types = Math.min(12, 3 + pack + Math.floor(n / 3));
-  const palette = shuffled(Array.from({ length: 12 }, (_, i) => i), seed).slice(0, types);
-  const items = shuffled(Array.from({ length: rows * 3 }, (_, i) => palette[Math.floor(i / 3) % types]), seed + 1);
-  for (let r = 0; r < rows; r++) if (items[r * 3] === items[r * 3 + 1] && items[r * 3] === items[r * 3 + 2]) {
-    const other = items.findIndex((v, i) => Math.floor(i / 3) !== r && v !== items[r * 3]);
-    [items[r * 3 + 2], items[other]] = [items[other], items[r * 3 + 2]];
-  }
-  const depth = pack >= 2 ? 1 + (pack >= 4 && n >= 4 ? 1 : 0) : 0;
-  const board = Array.from({ length: rows }, (_, r) => Array.from({ length: 3 }, (_, c) => ({ item: items[r * 3 + c], behind: Array.from({ length: depth }, (_, d) => palette[(r + d + 1) % types]), unlockAt: 0 })));
-  if (pack >= 2) board.forEach((row, r) => row.push({ item: null, behind: [], unlockAt: r % 2 === 0 ? 1 + (r % 3) : 0 }));
-  const totalTrios = rows * (depth + 1);
-  const actualTypes = new Set(board.flatMap((row) => row.flatMap((s) => [s.item, ...s.behind].filter((v) => v !== null)))).size;
-  const orderStock = board.flat().reduce((sum, s) => sum + Number(s.item === palette[1]) + s.behind.filter((p) => p === palette[1]).length, 0);
-  const objective = pack >= 4 && n % 3 === 0 ? { kind: "order", product: palette[1], count: Math.min(orderStock, 3 * (depth + 1)) } : pack >= 4 && n % 3 === 1 ? { kind: "score", target: Math.max(300, totalTrios * 75) } : { kind: "clear" };
-  const seconds = pack >= 3 && n % 2 === 0 ? null : 100 + rows * 12 + depth * 15 - n * 3;
-  const moves = pack >= 3 ? rows * 4 + 6 - Math.floor(n / 3) : null;
-  const bonus = (seconds ?? 0) * 3 + (moves ?? 0) * 10;
-  const base = objective.kind === "order" ? 250 : objective.kind === "score" ? objective.target : totalTrios * 100;
-  return { id, pack, seed, name: PACKS[pack], board, types: actualTypes, seconds, moves, objective, stars: [base + 300 + Math.floor(bonus * 0.35), base + 300 + Math.floor(bonus * 0.8)], difficulty: DIFFICULTY[pack], mechanics: [seconds !== null ? "tempo" : "clássica", ...(depth ? ["estoque escondido", "espaços bloqueados"] : []), ...(moves ? ["movimentos limitados"] : []), ...(objective.kind === "order" ? ["pedido especial"] : objective.kind === "score" ? ["meta de pontos"] : [])] };
-}
-
-const TRIOS_BASE = [0, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33];
+// Quanto de prateleira (trio) cada conjunto de 10 fases começa com — bem mais puxado do
+// que o pacote original (que ia de 0 a 33): a fase 1 já abre com uma prateleira de verdade
+// pra organizar, não um tabuleirinho que se resolve em 2 toques.
+const PACK_TRIOS_BASE = [10, 17, 25, 34, 45, 57, 70, 84, 100, 118, 138];
 
 export function makeLevel(id, seed = id * 7919) {
-  const original = legacyLevel(id, seed), pack = original.pack, n = (id - 1) % 10;
-  if (pack === 0) return original;
-  const trios = TRIOS_BASE[pack] + Math.floor(n / 3);
+  const pack = Math.floor((id - 1) / 10), n = (id - 1) % 10;
+  const trios = PACK_TRIOS_BASE[pack] + Math.floor(n / 2);
   const rows = trios + 2;
   const types = pack <= 5 ? Math.min(12, 4 + pack + Math.floor(n / 3)) : Math.min(PRODUCTS.length, 12 + (pack - 5) * 3 + Math.floor(n / 3));
   const palette = shuffled(Array.from({ length: pack <= 5 ? 12 : PRODUCTS.length }, (_, i) => i), seed).slice(0, types);
@@ -90,7 +73,10 @@ export function makeLevel(id, seed = id * 7919) {
     const groups = Array.from({ length: rows }, (_, r) => front.slice(r * 3, r * 3 + 3));
     if (!groups.some((row) => row[0] !== null && row.every((p) => p === row[0])) && !groups.slice(0, trios).some((row) => row.every((p) => p === null))) break;
   }
-  const depth = pack >= 2 ? (pack >= 4 ? 2 : 1) : 0;
+  // camadas de estoque escondido atrás de cada prateleira: cresce junto com o pack, até 3
+  // camadas nas fases finais — cada camada é uma rodada extra de "combinar 3" na mesma
+  // prateleira depois que a da frente esvazia, sem deixar o tabuleiro mais alto por isso.
+  const depth = pack === 0 ? 0 : pack <= 3 ? 1 : pack <= 7 ? 2 : 3;
   const board = Array.from({ length: rows }, (_, r) => Array.from({ length: 3 }, (_, c) => ({
     item: front[r * 3 + c],
     behind: r < trios && front.slice(r * 3, r * 3 + 3).some((p) => p !== null) ? Array.from({ length: depth }, (_, d) => palette[(r + d + 1) % types]) : [],
@@ -103,11 +89,25 @@ export function makeLevel(id, seed = id * 7919) {
   const all = board.flat().flatMap((s) => [...(s.item === null ? [] : [s.item]), ...s.behind]);
   const totalTrios = all.length / 3, orderStock = all.filter((p) => p === palette[1]).length;
   const objective = pack >= 4 && n % 3 === 0 ? { kind: "order", product: palette[1], count: Math.min(orderStock, 6 + Math.floor(n / 3) * 3) } : pack >= 4 && n % 3 === 1 ? { kind: "score", target: Math.max(900, totalTrios * 85) } : { kind: "clear" };
-  const seconds = original.seconds === null ? null : 100 + trios * 8 + depth * 12 - n * 2;
-  const moves = pack >= 3 ? trios * 4 + 12 - Math.floor(n / 3) : null;
+  // tempo só entra como mecânica nos packs do meio (3-5): em tabuleiros gigantes do fim do
+  // jogo, cronômetro vira punição sem graça em vez de desafio — lá a dificuldade já vem do
+  // tamanho da prateleira e das camadas escondidas.
+  const seconds = pack >= 3 && pack <= 5 && n % 2 !== 0 ? 120 + trios * 10 + depth * 20 - n * 2 : null;
+  const moves = pack >= 3 ? trios * 5 + 30 : null;
   const bonus = (seconds ?? 0) * 3 + (moves ?? 0) * 10;
   const base = objective.kind === "order" ? 400 : objective.kind === "score" ? objective.target : totalTrios * 100;
-  return { ...original, board, types: new Set(all).size, seconds, moves, objective, stars: [base + 300 + Math.floor(bonus * 0.35), base + 300 + Math.floor(bonus * 0.8)], mechanics: [...original.mechanics, "espaços estratégicos"] };
+  return {
+    id, pack, seed, name: PACKS[pack], board, types: new Set(all).size, seconds, moves, objective,
+    stars: [base + 300 + Math.floor(bonus * 0.35), base + 300 + Math.floor(bonus * 0.8)],
+    difficulty: DIFFICULTY[pack],
+    mechanics: [
+      seconds !== null ? "tempo" : "clássica",
+      ...(depth ? ["estoque escondido"] : []),
+      ...(pack >= 2 ? ["espaços bloqueados"] : []),
+      ...(moves ? ["movimentos limitados"] : []),
+      ...(objective.kind === "order" ? ["pedido especial"] : objective.kind === "score" ? ["meta de pontos"] : []),
+    ],
+  };
 }
 
 export const LEVELS = Array.from({ length: 110 }, (_, i) => makeLevel(i + 1));
@@ -147,7 +147,7 @@ function resolve(g, award) {
       for (const [item, cols] of groups) if (cols.length >= 3) {
         found = true; g.matches++; g.collected[item] = (g.collected[item] || 0) + 3;
         if (award) { g.combo = g.lastMatchAt !== null && g.elapsed - g.lastMatchAt <= RULES.comboSeconds ? g.combo + 1 : 1; g.score += RULES.match[Math.min(g.combo - 1, 3)]; g.lastMatchAt = g.elapsed; }
-        cols.slice(0, 3).forEach((c) => { g.lastCleared.push({ row: r, col: c }); row[c].item = null; });
+        cols.slice(0, 3).forEach((c) => { g.lastCleared.push({ row: r, col: c, item: row[c].item }); row[c].item = null; });
       }
       if (row.every((s) => s.item === null) && row.some((s) => s.behind.length)) { row.forEach((s) => { s.item = s.behind.shift() ?? null; }); found = true; }
     });

@@ -2666,7 +2666,7 @@ async function renderFriendsShop() {
     ${multiplayerGameCardHTML("stop", "btn-open-capistop-friends", "uma letra, pouco tempo, muitas respostas")}
     <div class="card" id="btn-open-capmart-friends" style="cursor:pointer;">
       <div class="row" style="align-items:center; gap:10px;">
-        <span style="font-size:34px; width:48px; height:48px; display:flex; align-items:center; justify-content:center; flex:none;">🛒</span>
+        <img src="icons/capmart-capivara.jpg" alt="CapMart" style="width:48px; height:48px; border-radius:12px; object-fit:contain; flex:none;" />
         <div style="flex:1;">
           <div class="card-title" style="font-size:15px; margin-bottom:0;">CapMart</div>
           <div class="hint-text" style="margin:0;">Mercadinho da capivara · 110 fases de organizar trios</div>
@@ -7333,7 +7333,7 @@ function renderCapMartMap(scope, isAmigos, container, theme, backFn, unlocked) {
     container.innerHTML = `
       <button class="btn btn-ghost btn-sm" id="cm-back" style="margin-bottom:10px;">← Voltar</button>
       <div class="card" style="background:${theme.accentSoft}; text-align:center; padding:14px;">
-        <div style="font-family:'Baloo 2',sans-serif; font-weight:800; font-size:17px; color:${theme.accentStrong};">🛒 CapMart</div>
+        <div style="font-family:'Baloo 2',sans-serif; font-weight:800; font-size:17px; color:${theme.accentStrong};"><img src="icons/capmart-capivara.jpg" alt="" style="width:26px; height:26px; border-radius:7px; object-fit:contain; vertical-align:-7px;" /> CapMart</div>
         <p class="hint-text" style="margin:4px 0 0;">Mercadinho da capivara · organize os produtos em trios</p>
       </div>
       <div class="row" style="gap:6px; margin:12px 0; overflow-x:auto; padding-bottom:4px;">
@@ -7366,16 +7366,20 @@ function renderCapMartPlay(scope, isAmigos, container, theme, onBack, level, unl
 
   function clearTimer() { if (timerHandle) { clearInterval(timerHandle); timerHandle = null; } }
 
-  function boardHTML() {
+  function boardHTML(flashCleared) {
+    const flashMap = new Map((flashCleared || []).map((x) => [`${x.row},${x.col}`, x.item]));
+    const flashRows = new Set((flashCleared || []).map((x) => x.row));
     return g.board.map((row, r) => `
-      <div style="display:grid; grid-template-columns:repeat(${row.length}, 1fr); gap:6px; margin-bottom:6px;">
+      <div class="${flashRows.has(r) ? "cm-row-cleared" : ""}" style="display:grid; grid-template-columns:repeat(${row.length}, 1fr); gap:6px; margin-bottom:6px;">
         ${row.map((slot, c) => {
+          const flashItem = flashMap.get(`${r},${c}`);
           const isSelected = selected && selected.row === r && selected.col === c;
           const locked = slot.unlockAt > g.matches;
-          const product = slot.item !== null ? capMart.PRODUCTS[slot.item] : null;
-          return `<button data-r="${r}" data-c="${c}" ${locked || slot.item === null ? "disabled" : ""} style="aspect-ratio:1; min-height:40px; border-radius:9px; border:2px solid ${isSelected ? theme.accentBtn : "var(--border)"}; background:${locked ? "repeating-linear-gradient(45deg,var(--surface-alt),var(--surface-alt) 5px,var(--surface) 5px,var(--surface) 10px)" : "var(--surface)"}; display:flex; align-items:center; justify-content:center; font-size:22px; position:relative;">
+          const product = flashItem !== undefined ? capMart.PRODUCTS[flashItem] : slot.item !== null ? capMart.PRODUCTS[slot.item] : null;
+          const isFlash = flashItem !== undefined;
+          return `<button data-r="${r}" data-c="${c}" ${locked || slot.item === null ? "disabled" : ""} class="${isFlash ? "cm-clearing" : ""}" style="aspect-ratio:1; min-height:40px; border-radius:9px; border:2px solid ${isSelected ? theme.accentBtn : "var(--border)"}; background:${locked ? "repeating-linear-gradient(45deg,var(--surface-alt),var(--surface-alt) 5px,var(--surface) 5px,var(--surface) 10px)" : "var(--surface)"}; display:flex; align-items:center; justify-content:center; font-size:22px; position:relative;">
             ${locked ? `<span style="font-size:13px;">🔒</span>` : product ? product.icon : ""}
-            ${!locked && slot.behind.length ? `<span style="position:absolute; bottom:1px; right:3px; font-size:8px; color:var(--muted);">+${slot.behind.length}</span>` : ""}
+            ${!locked && !isFlash && slot.behind.length ? `<span style="position:absolute; bottom:1px; right:3px; font-size:8px; color:var(--muted);">+${slot.behind.length}</span>` : ""}
           </button>`;
         }).join("")}
       </div>
@@ -7390,7 +7394,7 @@ function renderCapMartPlay(scope, isAmigos, container, theme, onBack, level, unl
         <div style="flex:1; background:var(--surface-alt); border-radius:9px; padding:6px;"><div class="hint-text" style="margin:0;">${g.remaining === null ? "LIVRE" : "TEMPO"}</div><strong>${g.remaining === null ? "∞" : capMartFormatTime(g.remaining)}</strong></div>
         <div style="flex:1; background:var(--surface-alt); border-radius:9px; padding:6px;"><div class="hint-text" style="margin:0;">${g.level.moves ? "MOVIMENTOS" : "TROCAS"}</div><strong>${g.level.moves ? Math.max(0, g.level.moves - g.movesUsed) : g.movesUsed}</strong></div>
       </div>
-      ${g.combo > 1 ? `<div style="text-align:center; margin-top:6px; font-weight:800; color:${theme.accentStrong};">✦ Combo ×${g.combo}</div>` : ""}
+      ${g.combo > 1 ? `<div class="cm-combo-badge" style="text-align:center; margin-top:6px; font-weight:800; color:${theme.accentStrong};">✦ Combo ×${g.combo}!</div>` : ""}
       ${objective.kind === "order" ? `<div class="hint-text" style="text-align:center; margin-top:6px;">Pedido: ${g.collected[objective.product] || 0} / ${objective.count} ${capMart.PRODUCTS[objective.product].icon}</div>` : ""}
     `;
   }
@@ -7405,7 +7409,7 @@ function renderCapMartPlay(scope, isAmigos, container, theme, onBack, level, unl
         <div style="font-weight:800; color:${theme.accentStrong}; text-align:center;">${capMartObjectiveText(level)}</div>
         <div id="cm-hud" style="margin-top:8px;">${hudHTML()}</div>
       </div>
-      <div class="card" id="cm-board" style="margin-top:10px; padding:10px;">${boardHTML()}</div>
+      <div class="card" id="cm-board" style="margin-top:10px; padding:10px; max-height:46vh; overflow-y:auto;">${boardHTML()}</div>
       <div class="row" style="gap:6px; margin-top:10px;">
         ${Object.keys(CAPMART_HELP_NAMES).map((h) => `<button class="btn btn-ghost btn-sm" data-help="${h}" style="flex:1; flex-direction:column; gap:2px; height:auto; padding:8px 4px;" ${capMartHelpAvailable(h) ? "" : "disabled"}>
           <span style="font-size:16px;">${CAPMART_HELP_ICONS[h]}</span>
@@ -7444,11 +7448,23 @@ function renderCapMartPlay(scope, isAmigos, container, theme, onBack, level, unl
         if (selected) {
           const before = g.matches;
           g = capMart.move(g, { from: selected, to: { row: r, col: c } });
+          const cleared = g.lastCleared;
           selected = null;
-          if (g.matches === before) $("#cm-status").textContent = "Essa troca não forma trio nenhum.";
-          else $("#cm-status").textContent = "";
-          refreshBoardAndHud();
-          if (g.status !== "playing") onGameEnd();
+          if (g.matches === before) {
+            $("#cm-status").textContent = "Essa troca não forma trio nenhum.";
+            refreshBoardAndHud();
+            if (g.status !== "playing") onGameEnd();
+          } else {
+            $("#cm-status").textContent = "";
+            busy = true;
+            $("#cm-board").innerHTML = boardHTML(cleared);
+            $("#cm-hud").innerHTML = hudHTML();
+            setTimeout(() => {
+              busy = false;
+              refreshBoardAndHud();
+              if (g.status !== "playing") onGameEnd();
+            }, 320);
+          }
         } else {
           selected = { row: r, col: c };
           refreshBoardAndHud();
@@ -7748,7 +7764,7 @@ async function renderShopGames() {
     ${multiplayerGameCardHTML("stop", "btn-open-capistop-casal", "uma letra, pouco tempo, muitas respostas")}
     <div class="card" id="btn-open-capmart-casal" style="cursor:pointer;">
       <div class="row" style="align-items:center; gap:10px;">
-        <span style="font-size:34px; width:48px; height:48px; display:flex; align-items:center; justify-content:center; flex:none;">🛒</span>
+        <img src="icons/capmart-capivara.jpg" alt="CapMart" style="width:48px; height:48px; border-radius:12px; object-fit:contain; flex:none;" />
         <div style="flex:1;">
           <div class="card-title" style="font-size:15px; margin-bottom:0;">CapMart</div>
           <div class="hint-text" style="margin:0;">Mercadinho da capivara · 110 fases de organizar trios</div>

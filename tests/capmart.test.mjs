@@ -9,7 +9,7 @@ import {
 
 function solve(game) {
   let g = game, n = 0;
-  while (g.status === "playing" && n++ < 500) {
+  while (g.status === "playing" && n++ < 20000) {
     const m = hint(g);
     if (!m) throw new Error(`Fase ${g.level.id} sem solução após ${n} trocas`);
     g = move(g, m);
