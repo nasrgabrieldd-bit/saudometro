@@ -1825,7 +1825,10 @@ function openFriendDateIdeaModal() {
   });
 }
 
-// mesmo popup do casal, mas pra turma: aparece toda vez que abrir até avaliar tudo
+const FRIEND_DATE_IDEA_DISMISSED_KEY = "friendDateIdeaNudgeDismissedV1";
+
+// mesmo popup do casal, mas pra turma. Avaliar resolve pra sempre; fechar no X ou "ver depois"
+// dispensa até aparecer uma ideia nova (não fica voltando à toa).
 async function maybeShowFriendDateIdeaNudge() {
   let ideas, ratings;
   try {
@@ -1834,10 +1837,14 @@ async function maybeShowFriendDateIdeaNudge() {
       friends.listDateIdeaRatings(State.friendGroup.id),
     ]);
   } catch (e) { return; }
-  const pending = ideas.filter((idea) => !ratings.some((r) => r.idea_id === idea.id && r.user_id === State.userId));
+  const dismissed = dismissedIdeaIds(FRIEND_DATE_IDEA_DISMISSED_KEY);
+  const pending = ideas
+    .filter((idea) => !ratings.some((r) => r.idea_id === idea.id && r.user_id === State.userId))
+    .filter((idea) => !dismissed.has(idea.id));
   if (!pending.length) return;
 
   return new Promise((resolve) => {
+    const dismissAll = () => { markIdeasDismissed(FRIEND_DATE_IDEA_DISMISSED_KEY, pending.map((i) => i.id)); closeModal(); resolve(); };
     openModal(`
       <h3 class="modal-title">🎯 Ideias pra avaliar</h3>
       <p class="card-sub">Tem ideia${pending.length === 1 ? "" : "s"} de "fazer juntos" esperando sua nota:</p>
@@ -1850,7 +1857,7 @@ async function maybeShowFriendDateIdeaNudge() {
         `).join("")}
       </div>
       <button class="btn btn-ghost btn-block" style="margin-top:10px;" id="date-idea-nudge-later">Ver depois</button>
-    `);
+    `, dismissAll);
     const finish = () => { closeModal(); resolve(); };
     $("#date-idea-nudge-list").querySelectorAll("[data-rate-idea]").forEach((row) => {
       row.querySelectorAll(".star").forEach((star) => {
@@ -1863,7 +1870,7 @@ async function maybeShowFriendDateIdeaNudge() {
         });
       });
     });
-    $("#date-idea-nudge-later").addEventListener("click", finish);
+    $("#date-idea-nudge-later").addEventListener("click", dismissAll);
   });
 }
 
@@ -7009,17 +7016,37 @@ function openDateIdeaModal() {
   });
 }
 
-// pop-up ao abrir o app com as ideias que ainda faltam sua nota — continua voltando toda vez
-// que abrir o app até você avaliar (ou apagar/ver depois não marca como resolvido, só avaliar resolve)
+// ids de ideia que a pessoa já dispensou (X ou "ver depois") nesse aparelho — pra não ficar
+// voltando toda vez que abrir o app. Avaliar sempre resolve de vez (sai de "pending" na raiz);
+// dispensar só esconde até aparecer uma ideia NOVA que ainda não foi vista.
+function dismissedIdeaIds(key) {
+  try { return new Set(JSON.parse(localStorage.getItem(key) || "[]")); } catch (e) { return new Set(); }
+}
+function markIdeasDismissed(key, ids) {
+  try {
+    const current = dismissedIdeaIds(key);
+    ids.forEach((id) => current.add(id));
+    localStorage.setItem(key, JSON.stringify([...current]));
+  } catch (e) { /* sem storage: só volta a perguntar mais vezes, não quebra nada */ }
+}
+
+const DATE_IDEA_DISMISSED_KEY = "dateIdeaNudgeDismissedV1";
+
+// pop-up ao abrir o app com as ideias que ainda faltam sua nota. Avaliar resolve pra sempre;
+// fechar no X ou "ver depois" dispensa até aparecer uma ideia nova (não fica voltando à toa).
 async function maybeShowDateIdeaNudge() {
   let ideas, ratings;
   try {
     [ideas, ratings] = await Promise.all([db.listDateIdeas(State.coupleId), db.listDateIdeaRatings(State.coupleId)]);
   } catch (e) { return; }
-  const pending = ideas.filter((idea) => !ratings.some((r) => r.idea_id === idea.id && r.role === State.role));
+  const dismissed = dismissedIdeaIds(DATE_IDEA_DISMISSED_KEY);
+  const pending = ideas
+    .filter((idea) => !ratings.some((r) => r.idea_id === idea.id && r.role === State.role))
+    .filter((idea) => !dismissed.has(idea.id));
   if (!pending.length) return;
 
   return new Promise((resolve) => {
+    const dismissAll = () => { markIdeasDismissed(DATE_IDEA_DISMISSED_KEY, pending.map((i) => i.id)); closeModal(); resolve(); };
     openModal(`
       <h3 class="modal-title">🎯 Ideias pra avaliar</h3>
       <p class="card-sub">Tem ideia${pending.length === 1 ? "" : "s"} de "fazer juntos" esperando sua nota:</p>
@@ -7032,7 +7059,7 @@ async function maybeShowDateIdeaNudge() {
         `).join("")}
       </div>
       <button class="btn btn-ghost btn-block" style="margin-top:10px;" id="date-idea-nudge-later">Ver depois em Recados</button>
-    `);
+    `, dismissAll);
     const finish = () => { closeModal(); resolve(); };
     $("#date-idea-nudge-list").querySelectorAll("[data-rate-idea]").forEach((row) => {
       row.querySelectorAll(".star").forEach((star) => {
@@ -7045,7 +7072,7 @@ async function maybeShowDateIdeaNudge() {
         });
       });
     });
-    $("#date-idea-nudge-later").addEventListener("click", finish);
+    $("#date-idea-nudge-later").addEventListener("click", dismissAll);
   });
 }
 

@@ -271,6 +271,13 @@ export const CHANGELOG = [
     title: "Mais humores engraçados e um jeito de rever o tour",
     text: "Chegaram 6 humores novos pra registrar (procrastinando, modo detetive, se achando, com sorte, dramática(o), modo cientista maluco). E agora dá pra rever aquele tour rápido de boas-vindas quando quiser — é só ir em Perfil (ou Turma) e tocar em \"Rever as boas-vindas\".",
   },
+  {
+    id: "ideia-nudge-fix-2026-10",
+    tag: "geral",
+    emoji: "🎯",
+    title: "O pop-up de ideias pra avaliar parou de insistir",
+    text: "Antes, mesmo fechando no X, aquele aviso de \"ideias pra avaliar\" voltava toda vez que o app abria. Agora fechar (no X, clicando fora ou em \"ver depois\") faz ele parar de aparecer pra aquelas ideias — só avaliar de verdade ou surgir uma ideia nova traz o aviso de volta.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
