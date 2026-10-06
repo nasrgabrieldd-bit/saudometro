@@ -148,10 +148,17 @@ function setAppCache(userId, patch) {
 
 function watchForAppUpdates() {
   if (!("serviceWorker" in navigator)) return;
+  // numa instalação limpa (primeira visita de todas) a página carrega SEM nenhum service
+  // worker no controle ainda; assim que ele termina de instalar e dá "clients.claim()" (no
+  // sw.js), o navegador dispara "controllerchange" só por ele ter assumido o controle pela
+  // primeira vez — não porque uma versão nova substituiu uma antiga. Recarregar nesse caso
+  // não atualiza nada, só interrompe quem tava bem no meio da tela de boas-vindas. Só recarrega
+  // de verdade quando JÁ existia um service worker controlando a página (atualização real).
+  const hadControllerAlready = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).catch(() => {});
   let reloaded = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (reloaded) return;
+    if (reloaded || !hadControllerAlready) return;
     reloaded = true;
     window.location.reload();
   });
