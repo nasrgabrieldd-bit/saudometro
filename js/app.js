@@ -3992,16 +3992,31 @@ async function renderFriendsPrivacy() {
 async function renderFriendsWallet() {
   const view = $("#friends-view");
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
-  const [members, balance, history] = await Promise.all([
+  const [members, balance, history, earnedByMember] = await Promise.all([
     friends.listGroupMembers(State.friendGroup.id).catch(() => []),
     friends.getGroupCoinBalance(State.friendGroup.id).catch(() => 0),
     friends.listCoinHistory(State.friendGroup.id, 30).catch(() => []),
+    friends.getCoinsEarnedByMember(State.friendGroup.id).catch(() => ({})),
   ]);
   const byId = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
+  const ranking = members.map((m) => ({ ...m, earned: earnedByMember[m.user_id] || 0 })).sort((a, b) => b.earned - a.earned);
   view.innerHTML = `
     ${friendsSettingsHeader("💰 Moedas")}
     <div class="card">
       <div class="row"><span class="pill" style="background:var(--friends-accent-soft); color:var(--friends-accent-strong);">💰 cofre da turma: ${balance}</span></div>
+    </div>
+    <div class="section-title">Quem já contribuiu</div>
+    <div class="card">
+      <div class="stack">
+        ${ranking.map((m) => `
+          <div class="entry-item">
+            ${avatarHTML(m.display_name, m.avatar_url, "width:32px; height:32px; font-size:13px; background:var(--friends-accent-soft); color:var(--friends-accent-strong);")}
+            <div class="entry-body"><div class="entry-title">${m.user_id === State.userId ? "Você" : escapeHTML(m.display_name)}</div></div>
+            <span class="pill pill-muted">💰 ${m.earned}</span>
+          </div>
+        `).join("") || '<p class="hint-text">Só você, por enquanto.</p>'}
+      </div>
+      <p class="hint-text" style="margin-top:10px; margin-bottom:0;">Total já ganho por cada um, pro cofre — o saldo em si é compartilhado por toda a turma.</p>
     </div>
     <div class="section-title">Histórico</div>
     <div class="card">
