@@ -20,6 +20,7 @@ import { STAR_BATTLE_LEVELS } from "./games/starBattleLevels.js";
 import * as cardGame from "./games/cardGame.js";
 import * as stopGame from "./games/stopGame.js";
 import * as capiEngine from "./games/capisurpresa.js";
+import * as capMart from "./games/capmart.js";
 import { cycleInfo, cycleRingSVG, cycleLegendHTML, cycleTilesHTML, cycleHelpHTML, cyclePhaseName, cycleTip, cyclePhaseOnDate, averageCycleLength, CYCLE_COLORS, CYCLE_DISCLAIMER } from "./cycle.js";
 import { pickSaudadeNudge } from "./nudges.js";
 import { nameOf, genderOf, emojiOf, gen, genMixed, cleanName, setPeopleSettings, defaultEmojis, legacyPeople, feat, goalTarget, HOME_WIDGETS, homeOrder, homeWidgetOn, togetherSince, coinRule, luckyOn, perkHidden, COIN_DEFAULTS } from "./people.js";
@@ -2665,10 +2666,10 @@ async function renderFriendsShop() {
     ${multiplayerGameCardHTML("stop", "btn-open-capistop-friends", "uma letra, pouco tempo, muitas respostas")}
     <div class="card" id="btn-open-capmart-friends" style="cursor:pointer;">
       <div class="row" style="align-items:center; gap:10px;">
-        <img src="capmart/icons/capmart-128.svg" alt="CapMart" style="width:48px; height:48px; border-radius:12px; object-fit:cover; flex:none;" />
+        <span style="font-size:34px; width:48px; height:48px; display:flex; align-items:center; justify-content:center; flex:none;">🛒</span>
         <div style="flex:1;">
           <div class="card-title" style="font-size:15px; margin-bottom:0;">CapMart</div>
-          <div class="hint-text" style="margin:0;">Mercadinho da capivara · 60 fases de organizar trios</div>
+          <div class="hint-text" style="margin:0;">Mercadinho da capivara · 110 fases de organizar trios</div>
         </div>
       </div>
     </div>
@@ -2703,7 +2704,7 @@ async function renderFriendsShop() {
   $("#btn-open-star-battle-friends").addEventListener("click", () => renderStarBattleGame("amigos"));
   $("#btn-open-capiverso-friends").addEventListener("click", () => renderGameHub("amigos", "cartas"));
   $("#btn-open-capistop-friends").addEventListener("click", () => renderGameHub("amigos", "stop"));
-  $("#btn-open-capmart-friends").addEventListener("click", () => { window.location.href = `capmart/index.html?mode=turma&group=${State.friendGroup.id}`; });
+  $("#btn-open-capmart-friends").addEventListener("click", () => renderCapMartGame("amigos"));
   $("#friends-new-perk-btn").addEventListener("click", openNewCustomPerkModal);
   view.querySelectorAll("[data-redeem]").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -7277,6 +7278,265 @@ async function renderHomeGameCard() {
   } catch (e) { /* jogo ainda não tem progresso ou deu erro de rede: só não mostra o card */ }
 }
 
+// ================= JOGOS (CapMart) =================
+// mesma ideia do Capibatman: o motor (js/games/capmart.js) não sabe nada de casal/turma/moeda.
+// Reaproveita a MESMA tabela de progresso genérica do Capibatman (couple_game_progress /
+// friend_game_progress, com game_id="capmart") e o MESMO jeito de dar moeda (earnCoins/
+// addCoinBonus direto, sem validar replay no servidor) — é o padrão de confiança que o app
+// já usa em todo canto, não só uma exceção pro CapMart.
+
+const CAPMART_GAME_ID = "capmart";
+const CAPMART_HELP_NAMES = { undo: "Desfazer", hint: "Dica", time: "+30s", shuffle: "Embaralhar" };
+const CAPMART_HELP_ICONS = { undo: "↶", hint: "💡", time: "⏱️", shuffle: "🔀" };
+
+function capMartObjectiveText(level) {
+  const o = level.objective;
+  if (o.kind === "clear") return "Organize todo o estoque";
+  if (o.kind === "order") return `Entregue ${o.count} ${capMart.PRODUCTS[o.product].icon}`;
+  return `Alcance ${o.target} pontos`;
+}
+
+function capMartFormatTime(seconds) {
+  const s = Math.max(0, Math.ceil(seconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+async function renderCapMartGame(scope) {
+  const isAmigos = scope === "amigos";
+  const container = isAmigos ? $("#friends-view") : view;
+  const theme = {
+    accentStrong: isAmigos ? "var(--friends-accent-strong)" : "var(--accent-strong)",
+    accentSoft: isAmigos ? "var(--friends-accent-soft)" : "var(--accent-soft)",
+    accentBtn: isAmigos ? "var(--friends-accent)" : "var(--accent-btn)",
+    onAccentBtn: isAmigos ? "var(--on-friends-accent)" : "var(--on-accent-btn)",
+  };
+  const backFn = isAmigos ? renderFriendsShop : renderShop;
+
+  container.innerHTML = `<div class="center-note">Carregando...</div>`;
+  let unlocked;
+  try {
+    unlocked = isAmigos
+      ? await friends.getGameProgress(State.friendGroup.id, State.userId, CAPMART_GAME_ID)
+      : await db.getGameProgress(State.coupleId, State.role, CAPMART_GAME_ID);
+  } catch (e) {
+    unlocked = 1;
+  }
+  renderCapMartMap(scope, isAmigos, container, theme, backFn, Math.max(1, Math.min(unlocked, capMart.LEVELS.length)));
+}
+
+function renderCapMartMap(scope, isAmigos, container, theme, backFn, unlocked) {
+  let pack = Math.floor((unlocked - 1) / 10);
+  renderPack();
+
+  function renderPack() {
+    const first = pack * 10, levelsInPack = capMart.LEVELS.slice(first, first + 10);
+    container.innerHTML = `
+      <button class="btn btn-ghost btn-sm" id="cm-back" style="margin-bottom:10px;">← Voltar</button>
+      <div class="card" style="background:${theme.accentSoft}; text-align:center; padding:14px;">
+        <div style="font-family:'Baloo 2',sans-serif; font-weight:800; font-size:17px; color:${theme.accentStrong};">🛒 CapMart</div>
+        <p class="hint-text" style="margin:4px 0 0;">Mercadinho da capivara · organize os produtos em trios</p>
+      </div>
+      <div class="row" style="gap:6px; margin:12px 0; overflow-x:auto; padding-bottom:4px;">
+        ${capMart.PACKS.map((name, i) => `<button class="btn btn-sm" data-pack="${i}" style="flex:none; ${i === pack ? `background:${theme.accentBtn}; color:${theme.onAccentBtn};` : "background:var(--surface-alt); color:var(--text);"}">${i + 1}. ${escapeHTML(name)}</button>`).join("")}
+      </div>
+      <div class="card">
+        <div class="card-title" style="font-size:14px;">${escapeHTML(capMart.PACKS[pack])} · ${levelsInPack[0]?.difficulty || ""}</div>
+        <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:10px; margin-top:12px;">
+          ${levelsInPack.map((l) => {
+            const locked = l.id > unlocked;
+            return `<button data-level="${l.id}" ${locked ? "disabled" : ""} style="aspect-ratio:1; border-radius:12px; border:2px solid ${l.id === unlocked ? theme.accentBtn : "var(--border)"}; background:${locked ? "var(--surface-alt)" : "var(--surface)"}; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; font-weight:800; color:${theme.accentStrong}; opacity:${locked ? ".5" : "1"};">
+              <span style="font-size:18px;">${locked ? "🔒" : l.id}</span>
+            </button>`;
+          }).join("")}
+        </div>
+      </div>
+      <p class="hint-text" style="text-align:center; margin-top:10px;">Fase ${unlocked} é a sua próxima parada.</p>
+    `;
+    $("#cm-back").addEventListener("click", () => backFn());
+    container.querySelectorAll("[data-pack]").forEach((btn) => btn.addEventListener("click", () => { pack = Number(btn.dataset.pack); renderPack(); }));
+    container.querySelectorAll("[data-level]").forEach((btn) => btn.addEventListener("click", () => renderCapMartPlay(scope, isAmigos, container, theme, () => renderCapMartMap(scope, isAmigos, container, theme, backFn, unlocked), capMart.LEVELS[Number(btn.dataset.level) - 1], unlocked)));
+  }
+}
+
+function renderCapMartPlay(scope, isAmigos, container, theme, onBack, level, unlocked) {
+  let g = capMart.startGame(level);
+  let selected = null;
+  let timerHandle = null;
+  let busy = false;
+
+  function clearTimer() { if (timerHandle) { clearInterval(timerHandle); timerHandle = null; } }
+
+  function boardHTML() {
+    return g.board.map((row, r) => `
+      <div style="display:grid; grid-template-columns:repeat(${row.length}, 1fr); gap:6px; margin-bottom:6px;">
+        ${row.map((slot, c) => {
+          const isSelected = selected && selected.row === r && selected.col === c;
+          const locked = slot.unlockAt > g.matches;
+          const product = slot.item !== null ? capMart.PRODUCTS[slot.item] : null;
+          return `<button data-r="${r}" data-c="${c}" ${locked || slot.item === null ? "disabled" : ""} style="aspect-ratio:1; min-height:40px; border-radius:9px; border:2px solid ${isSelected ? theme.accentBtn : "var(--border)"}; background:${locked ? "repeating-linear-gradient(45deg,var(--surface-alt),var(--surface-alt) 5px,var(--surface) 5px,var(--surface) 10px)" : "var(--surface)"}; display:flex; align-items:center; justify-content:center; font-size:22px; position:relative;">
+            ${locked ? `<span style="font-size:13px;">🔒</span>` : product ? product.icon : ""}
+            ${!locked && slot.behind.length ? `<span style="position:absolute; bottom:1px; right:3px; font-size:8px; color:var(--muted);">+${slot.behind.length}</span>` : ""}
+          </button>`;
+        }).join("")}
+      </div>
+    `).join("");
+  }
+
+  function hudHTML() {
+    const objective = g.level.objective;
+    return `
+      <div class="row" style="gap:8px; text-align:center;">
+        <div style="flex:1; background:var(--surface-alt); border-radius:9px; padding:6px;"><div class="hint-text" style="margin:0;">PONTOS</div><strong>${g.score}</strong></div>
+        <div style="flex:1; background:var(--surface-alt); border-radius:9px; padding:6px;"><div class="hint-text" style="margin:0;">${g.remaining === null ? "LIVRE" : "TEMPO"}</div><strong>${g.remaining === null ? "∞" : capMartFormatTime(g.remaining)}</strong></div>
+        <div style="flex:1; background:var(--surface-alt); border-radius:9px; padding:6px;"><div class="hint-text" style="margin:0;">${g.level.moves ? "MOVIMENTOS" : "TROCAS"}</div><strong>${g.level.moves ? Math.max(0, g.level.moves - g.movesUsed) : g.movesUsed}</strong></div>
+      </div>
+      ${g.combo > 1 ? `<div style="text-align:center; margin-top:6px; font-weight:800; color:${theme.accentStrong};">✦ Combo ×${g.combo}</div>` : ""}
+      ${objective.kind === "order" ? `<div class="hint-text" style="text-align:center; margin-top:6px;">Pedido: ${g.collected[objective.product] || 0} / ${objective.count} ${capMart.PRODUCTS[objective.product].icon}</div>` : ""}
+    `;
+  }
+
+  async function render() {
+    container.innerHTML = `
+      <div class="row" style="align-items:center; justify-content:space-between; margin-bottom:10px;">
+        <button class="btn btn-ghost btn-sm" id="cm-play-back">← Sair</button>
+        <span class="hint-text" style="margin:0;">Fase ${level.id} · ${escapeHTML(level.difficulty)}</span>
+      </div>
+      <div class="card" style="background:${theme.accentSoft}; padding:12px;">
+        <div style="font-weight:800; color:${theme.accentStrong}; text-align:center;">${capMartObjectiveText(level)}</div>
+        <div id="cm-hud" style="margin-top:8px;">${hudHTML()}</div>
+      </div>
+      <div class="card" id="cm-board" style="margin-top:10px; padding:10px;">${boardHTML()}</div>
+      <div class="row" style="gap:6px; margin-top:10px;">
+        ${Object.keys(CAPMART_HELP_NAMES).map((h) => `<button class="btn btn-ghost btn-sm" data-help="${h}" style="flex:1; flex-direction:column; gap:2px; height:auto; padding:8px 4px;" ${capMartHelpAvailable(h) ? "" : "disabled"}>
+          <span style="font-size:16px;">${CAPMART_HELP_ICONS[h]}</span>
+          <span style="font-size:10px;">${CAPMART_HELP_NAMES[h]}</span>
+          <span style="font-size:9px; color:var(--muted);">💰${capMart.RULES.costs[h]}</span>
+        </button>`).join("")}
+      </div>
+      <p class="hint-text" id="cm-status" style="text-align:center; margin-top:8px;"></p>
+    `;
+    $("#cm-play-back").addEventListener("click", () => { clearTimer(); onBack(); });
+    wireBoard();
+    wireHelp();
+  }
+
+  function capMartHelpAvailable(h) {
+    if (g.status !== "playing") return false;
+    if (h === "undo") return !!g.history.length;
+    if (h === "time") return g.remaining !== null;
+    if (h === "hint") return !!capMart.hint(g);
+    return true;
+  }
+
+  function refreshBoardAndHud() {
+    $("#cm-board").innerHTML = boardHTML();
+    $("#cm-hud").innerHTML = hudHTML();
+    container.querySelectorAll("[data-help]").forEach((btn) => { btn.disabled = !capMartHelpAvailable(btn.dataset.help); });
+    wireBoard();
+  }
+
+  function wireBoard() {
+    container.querySelectorAll("#cm-board [data-r]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (g.status !== "playing" || busy) return;
+        const r = Number(btn.dataset.r), c = Number(btn.dataset.c);
+        if (selected && selected.row === r && selected.col === c) { selected = null; refreshBoardAndHud(); return; }
+        if (selected) {
+          const before = g.matches;
+          g = capMart.move(g, { from: selected, to: { row: r, col: c } });
+          selected = null;
+          if (g.matches === before) $("#cm-status").textContent = "Essa troca não forma trio nenhum.";
+          else $("#cm-status").textContent = "";
+          refreshBoardAndHud();
+          if (g.status !== "playing") onGameEnd();
+        } else {
+          selected = { row: r, col: c };
+          refreshBoardAndHud();
+        }
+      });
+    });
+  }
+
+  function wireHelp() {
+    container.querySelectorAll("[data-help]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const help = btn.dataset.help;
+        if (!capMartHelpAvailable(help) || busy) return;
+        const cost = capMart.RULES.costs[help];
+        if (coinsOn()) {
+          const balance = isAmigos ? await friends.getGroupCoinBalance(State.friendGroup.id).catch(() => 0) : (await db.getCoinBalances(State.coupleId))[State.role] || 0;
+          if (balance < cost) { $("#cm-status").textContent = "Moedas insuficientes pra essa ajuda."; return; }
+          if (!confirm(`Usar ${CAPMART_HELP_NAMES[help]} por ${cost} moedas?`)) return;
+          busy = true;
+          try {
+            if (isAmigos) await friends.addCoinBonus(State.friendGroup.id, State.userId, -cost, `CapMart: ${help}`);
+            else await addCoins(State.role, -cost, `CapMart: ${help}`);
+          } catch (e) { alert("Não deu: " + (e.message || e)); busy = false; return; }
+          busy = false;
+        }
+        g = capMart.applyHelp(g, help);
+        selected = null;
+        refreshBoardAndHud();
+        if (g.status !== "playing") onGameEnd();
+      });
+    });
+  }
+
+  async function onGameEnd() {
+    clearTimer();
+    container.querySelectorAll("#cm-board [data-r]").forEach((b) => { b.style.pointerEvents = "none"; });
+    if (g.status === "lost") {
+      $("#cm-status").textContent = g.reason || "Não foi dessa vez.";
+      container.insertAdjacentHTML("beforeend", `<button class="btn btn-block" id="cm-retry" style="margin-top:10px; background:${theme.accentBtn}; color:${theme.onAccentBtn};">Tentar de novo</button>`);
+      $("#cm-retry").addEventListener("click", () => renderCapMartPlay(scope, isAmigos, container, theme, onBack, level, unlocked));
+      return;
+    }
+    const finalScore = g.resultScore ?? g.score;
+    const earnedStars = capMart.stars(finalScore, level.stars, true);
+    const reward = capMart.RULES.rewards.completion + (earnedStars === 3 ? capMart.RULES.rewards.threeStars : 0);
+    const nextLevel = Math.min(level.id + 1, capMart.LEVELS.length);
+    openModal(`
+      <div style="text-align:center;">
+        <div style="font-size:34px; letter-spacing:6px;">${"⭐".repeat(earnedStars)}${"☆".repeat(3 - earnedStars)}</div>
+        <div style="font-family:'Baloo 2',sans-serif; font-weight:800; font-size:20px; color:${theme.accentStrong}; margin-top:6px;">Fase ${level.id} completa!</div>
+        <div class="hint-text" style="margin-top:4px;">${finalScore} pontos</div>
+        <div style="margin-top:10px; font-size:17px; font-weight:800; color:${theme.accentStrong};">💰 +${reward} moedas</div>
+        <button class="btn btn-block" style="margin-top:18px; background:${theme.accentBtn}; color:${theme.onAccentBtn};" id="cm-continue">${level.id < capMart.LEVELS.length ? `OK, fase ${nextLevel}` : "OK"}</button>
+      </div>
+    `);
+    try {
+      if (level.id >= unlocked) {
+        if (isAmigos) {
+          await friends.addCoinBonus(State.friendGroup.id, State.userId, reward, `CapMart: fase ${level.id}`);
+          await friends.advanceGameProgress(State.friendGroup.id, State.userId, CAPMART_GAME_ID, nextLevel);
+        } else {
+          await earnCoins(State.role, reward, `CapMart: fase ${level.id}`);
+          await db.advanceGameProgress(State.coupleId, State.role, CAPMART_GAME_ID, nextLevel);
+        }
+        unlocked = nextLevel;
+      }
+    } catch (e) { /* sem rede: a fase continua liberada localmente até a próxima sincronização */ }
+    $("#cm-continue").addEventListener("click", () => {
+      closeModal();
+      if (level.id < capMart.LEVELS.length && level.id >= unlocked - 1) renderCapMartPlay(scope, isAmigos, container, theme, onBack, capMart.LEVELS[level.id], unlocked);
+      else onBack();
+    });
+  }
+
+  render();
+  if (level.seconds !== null) {
+    let previous = performance.now();
+    timerHandle = setInterval(() => {
+      const now = performance.now(), delta = (now - previous) / 1000;
+      previous = now;
+      if (g.status !== "playing") return;
+      g = capMart.tick(g, delta);
+      $("#cm-hud").innerHTML = hudHTML();
+      if (g.status !== "playing") onGameEnd();
+    }, 500);
+  }
+}
+
 async function loadShopData() {
   const [coins, redemptions, customRows] = await Promise.all([
     db.getCoinBalances(State.coupleId),
@@ -7488,10 +7748,10 @@ async function renderShopGames() {
     ${multiplayerGameCardHTML("stop", "btn-open-capistop-casal", "uma letra, pouco tempo, muitas respostas")}
     <div class="card" id="btn-open-capmart-casal" style="cursor:pointer;">
       <div class="row" style="align-items:center; gap:10px;">
-        <img src="capmart/icons/capmart-128.svg" alt="CapMart" style="width:48px; height:48px; border-radius:12px; object-fit:cover; flex:none;" />
+        <span style="font-size:34px; width:48px; height:48px; display:flex; align-items:center; justify-content:center; flex:none;">🛒</span>
         <div style="flex:1;">
           <div class="card-title" style="font-size:15px; margin-bottom:0;">CapMart</div>
-          <div class="hint-text" style="margin:0;">Mercadinho da capivara · 60 fases de organizar trios</div>
+          <div class="hint-text" style="margin:0;">Mercadinho da capivara · 110 fases de organizar trios</div>
         </div>
       </div>
     </div>
@@ -7500,7 +7760,7 @@ async function renderShopGames() {
   $("#btn-open-star-battle").addEventListener("click", () => renderStarBattleGame("casal"));
   $("#btn-open-capiverso-casal").addEventListener("click", () => renderGameHub("casal", "cartas"));
   $("#btn-open-capistop-casal").addEventListener("click", () => renderGameHub("casal", "stop"));
-  $("#btn-open-capmart-casal").addEventListener("click", () => { window.location.href = "capmart/index.html?mode=casal"; });
+  $("#btn-open-capmart-casal").addEventListener("click", () => renderCapMartGame("casal"));
 }
 
 async function renderShopPerks() {
