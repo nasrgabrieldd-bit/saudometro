@@ -7402,10 +7402,13 @@ function renderCapMartPlay(scope, isAmigos, container, theme, onBack, level, unl
         ${row.map((slot, c) => {
           const flashItem = flashMap.get(`${r},${c}`);
           const isSelected = selected && selected.row === r && selected.col === c;
-          const product = flashItem !== undefined ? capMart.PRODUCTS[flashItem] : capMart.PRODUCTS[slot.item];
           const isFlash = flashItem !== undefined;
-          return `<button data-r="${r}" data-c="${c}" class="${isFlash ? "cm-clearing" : ""}" style="height:${cellPx}px; border-radius:7px; border:2px solid ${isSelected ? theme.accentBtn : "var(--border)"}; background:var(--surface); display:flex; align-items:center; justify-content:center; font-size:${fontPx}px; position:relative;">
-            ${product.icon}
+          // slot.item pode ser null de verdade aqui: uma prateleira sem estoque escondido (depth 0)
+          // fica vazia pra sempre depois de combinada — não é bug, é fim de jogo daquela prateleira.
+          const itemIdx = isFlash ? flashItem : slot.item;
+          const product = itemIdx !== null ? capMart.PRODUCTS[itemIdx] : null;
+          return `<button data-r="${r}" data-c="${c}" ${product ? "" : "disabled"} class="${isFlash ? "cm-clearing" : ""}" style="height:${cellPx}px; border-radius:7px; border:2px solid ${isSelected ? theme.accentBtn : "var(--border)"}; background:var(--surface); display:flex; align-items:center; justify-content:center; font-size:${fontPx}px; position:relative; opacity:${product ? "1" : ".3"};">
+            ${product ? product.icon : ""}
             ${!isFlash && slot.behind.length ? `<span style="position:absolute; bottom:0px; right:2px; font-size:${Math.max(7, Math.round(fontPx * 0.4))}px; color:var(--muted);">+${slot.behind.length}</span>` : ""}
           </button>`;
         }).join("")}
