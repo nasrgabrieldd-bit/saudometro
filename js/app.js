@@ -698,7 +698,10 @@ function markTourSeen() {
   try { localStorage.setItem(TOUR_SEEN_KEY, "1"); } catch (e) { /* sem storage: só volta a aparecer */ }
 }
 
-function renderFeatureTour(index) {
+// onDone: pra onde ir ao terminar/pular. Padrão é a escolha de casal/turma (primeira vez,
+// sem conta ainda); quem já tem conta e só tá revendo o tour pelas Configurações passa um
+// onDone próprio que só fecha a tela e volta pra onde estava.
+function renderFeatureTour(index, onDone = renderOnboardingChoices) {
   const slide = TOUR_SLIDES[index];
   const isLast = index === TOUR_SLIDES.length - 1;
   $("#screen-onboarding").style.display = "flex";
@@ -719,11 +722,22 @@ function renderFeatureTour(index) {
       </div>` : ""}
     <button class="btn btn-primary btn-block" id="tour-next" style="margin-top:8px;">${slide.cta || "Continuar"}</button>
   `;
-  $("#tour-skip").addEventListener("click", () => { markTourSeen(); renderOnboardingChoices(); });
-  $("#tour-back")?.addEventListener("click", () => renderFeatureTour(index - 1));
+  $("#tour-skip").addEventListener("click", () => { markTourSeen(); onDone(); });
+  $("#tour-back")?.addEventListener("click", () => renderFeatureTour(index - 1, onDone));
   $("#tour-next").addEventListener("click", () => {
-    if (isLast) { markTourSeen(); renderOnboardingChoices(); }
-    else renderFeatureTour(index + 1);
+    if (isLast) { markTourSeen(); onDone(); }
+    else renderFeatureTour(index + 1, onDone);
+  });
+}
+
+// revisão do tour pelas Configurações: quem já tem conta só vê as telas e volta pra onde estava
+// (casal ou turma, o que tava aberto), sem passar pela escolha de casal/turma de novo.
+function replayFeatureTour() {
+  const cameFromFriends = $("#screen-friends").style.display !== "none";
+  $(cameFromFriends ? "#screen-friends" : "#screen-app").style.display = "none";
+  renderFeatureTour(0, () => {
+    $("#screen-onboarding").style.display = "none";
+    $(cameFromFriends ? "#screen-friends" : "#screen-app").style.display = "flex";
   });
 }
 
@@ -3805,6 +3819,11 @@ async function renderFriendsGroup() {
         <span class="shortcut-title">Notificações</span>
         <span class="shortcut-sub">${permissionState() === "unsupported" ? "Não suportado" : pushSubscribed ? "✅ Ativadas" : "Ativar agora"}</span>
       </button>
+      <button class="shortcut-card" id="btn-replay-tour-friends">
+        <span class="shortcut-icon">${icon("lightbulb", { size: 24 })}</span>
+        <span class="shortcut-title">Rever as boas-vindas</span>
+        <span class="shortcut-sub">Tour rápido do app de novo</span>
+      </button>
     </div>
 
     <div class="card" style="margin-top:14px; border-color:var(--friends-accent-soft);">
@@ -3837,6 +3856,7 @@ async function renderFriendsGroup() {
     </div>
   `;
   $("#friends-edit-group-btn").addEventListener("click", openEditGroupModal);
+  $("#btn-replay-tour-friends").addEventListener("click", replayFeatureTour);
   view.querySelectorAll("[data-friends-settings]").forEach((btn) => {
     btn.addEventListener("click", () => setFriendsTab(`friends-${btn.dataset.friendsSettings}`));
   });
@@ -8063,6 +8083,11 @@ ${coinsOn() ? `      <button class="shortcut-card" data-view="wallet">
         <span class="shortcut-title">Moedas</span>
         <span class="shortcut-sub">💰 ${(coins.gabriel || 0) + (coins.tata || 0)} no total</span>
       </button>` : ""}
+      <button class="shortcut-card" id="btn-replay-tour">
+        <span class="shortcut-icon">${icon("lightbulb", { size: 24 })}</span>
+        <span class="shortcut-title">Rever as boas-vindas</span>
+        <span class="shortcut-sub">Tour rápido do app de novo</span>
+      </button>
     </div>
 
     <p class="hint-text" style="text-align:center; margin:22px 0 4px; font-size:11px; opacity:0.45;">© 2026 Gabriel Nascimento Santos</p>
@@ -8079,11 +8104,12 @@ ${coinsOn() ? `      <button class="shortcut-card" data-view="wallet">
 
   $("#btn-edit-names")?.addEventListener("click", openNamesEditor);
   $("#btn-personalize")?.addEventListener("click", openPersonalizeModal);
+  $("#btn-replay-tour")?.addEventListener("click", replayFeatureTour);
   $("#btn-quick-friends")?.addEventListener("click", async () => {
     if (myFriendGroups.length === 1) await enterFriendsMode(myFriendGroups[0]);
     else { State.profileView = "friendsMode"; renderProfile(); }
   });
-  document.querySelectorAll(".shortcut-card").forEach((btn) => {
+  document.querySelectorAll(".shortcut-card[data-view]").forEach((btn) => {
     btn.addEventListener("click", () => { State.profileView = btn.dataset.view; renderProfile(); });
   });
 }

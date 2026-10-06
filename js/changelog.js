@@ -264,6 +264,13 @@ export const CHANGELOG = [
     title: "Calendário mais limpo, Humor reorganizado",
     text: "O Calendário não mostra mais a legenda de ícones fixa na tela — toque em \"ⓘ Legenda\" quando precisar lembrar o que cada um significa. Na aba Humor (casal), a tela agora mostra primeiro a sequência de dias seguidos registrando, depois como seu par está hoje, só então o seu próprio registro e o histórico da semana.",
   },
+  {
+    id: "humor-tour-2026-10",
+    tag: "geral",
+    emoji: "🎭",
+    title: "Mais humores engraçados e um jeito de rever o tour",
+    text: "Chegaram 6 humores novos pra registrar (procrastinando, modo detetive, se achando, com sorte, dramática(o), modo cientista maluco). E agora dá pra rever aquele tour rápido de boas-vindas quando quiser — é só ir em Perfil (ou Turma) e tocar em \"Rever as boas-vindas\".",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
