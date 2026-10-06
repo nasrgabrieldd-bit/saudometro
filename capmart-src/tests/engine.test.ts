@@ -5,9 +5,9 @@ import { RULES } from '../src/engine/config';
 import type { Game, Level } from '../src/engine/types';
 const fixture = (overrides: Partial<Level> = {}): Level => ({ ...LEVELS[0], board: [[0, 0, 1], [1, 1, 0]].map(row => row.map(item => ({ item, behind: [], unlockAt: 0 }))), seconds: 100, moves: null, objective: { kind: 'clear' }, stars: [500, 700], ...overrides });
 function solve(game: Game) { let g = game; let n = 0; while (g.status === 'playing' && n++ < 200) { const m = hint(g); if (!m) throw new Error(`Fase ${g.level.id} sem solução após ${n} trocas`); g = move(g, m); g = tick(g, .5); } return g; }
-describe('60 fases', () => {
+describe('110 fases', () => {
   it.each(LEVELS.map(l => [l.id, l] as const))('fase %i tem solução sem ajudas dentro dos limites', (_, level) => { const g = solve(startGame(level)); expect(g.status).toBe('won'); expect(g.assisted).toBe(false); expect(g.movesUsed).toBeLessThanOrEqual(level.moves ?? Infinity); expect(g.remaining ?? 1).toBeGreaterThan(0); });
-  it('configurações são distintas e determinísticas', () => { expect(new Set(LEVELS.map(l => JSON.stringify(l.board))).size).toBe(60); expect(dailyLevel('2026-10-03')).toEqual(dailyLevel('2026-10-03')); expect(dailyLevel('2026-10-03').seed).not.toBe(dailyLevel('2026-10-04').seed); });
+  it('configurações são distintas e determinísticas', () => { expect(new Set(LEVELS.map(l => JSON.stringify(l.board))).size).toBe(LEVELS.length); expect(dailyLevel('2026-10-03')).toEqual(dailyLevel('2026-10-03')); expect(dailyLevel('2026-10-03').seed).not.toBe(dailyLevel('2026-10-04').seed); });
   it.each(LEVELS.map(l => [l.id, l] as const))('fase %i permanece solucionável após reorganizar', (_, level) => { const original = startGame(level); const g = solve(applyHelp(original, 'shuffle')); expect(g.status).toBe('won'); expect(g.assisted).toBe(true); });
   it('100 desafios diários permanecem solucionáveis', () => { for (let i = 0; i < 100; i++) expect(solve(startGame(dailyLevel(`day-${i}`))).status).toBe('won'); });
 });

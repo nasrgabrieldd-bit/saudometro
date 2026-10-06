@@ -1,6 +1,8 @@
 import type { Board, Level } from '../engine/types';
 import { shuffled } from '../engine/random';
-export const PACKS = ['Portas abertas', 'Feira fresquinha', 'Segredos do estoque', 'Cada movimento conta', 'Lista de compras', 'Mercado mestre'];
+// os 6 primeiros são os originais aprovados, intocados (packs 0-5, fases 1-60 continuam
+// exatamente iguais). Os 5 de baixo são novos, pras fases 61-110.
+export const PACKS = ['Portas abertas', 'Feira fresquinha', 'Segredos do estoque', 'Cada movimento conta', 'Lista de compras', 'Mercado mestre', 'Novas prateleiras', 'Estoque gigante', 'Mercado completo', 'Desafio final', 'Lenda do mercadinho'];
 export function makeLevel(id: number, seed = id * 7919): Level {
   const pack = Math.floor((id - 1) / 10), n = (id - 1) % 10;
   const rows = Math.min(8, 3 + Math.floor((id - 1) / 10) + (n >= 5 ? 1 : 0));
@@ -24,7 +26,7 @@ export function makeLevel(id: number, seed = id * 7919): Level {
   const moves = pack >= 3 ? rows * 4 + 6 - Math.floor(n / 3) : null;
   const bonus = (seconds ?? 0) * 3 + (moves ?? 0) * 10;
   const base = objective.kind === 'order' ? 250 : objective.kind === 'score' ? objective.target : totalTrios * 100;
-  return { id, pack, seed, name: PACKS[pack], board, types: actualTypes, seconds, moves, objective, stars: [base + 300 + Math.floor(bonus * .35), base + 300 + Math.floor(bonus * .8)], difficulty: ['Suave', 'Leve', 'Moderada', 'Desafiadora', 'Difícil', 'Especialista'][pack], mechanics: [seconds !== null ? 'tempo' : 'clássica', ...(depth ? ['estoque escondido', 'espaços bloqueados'] : []), ...(moves ? ['movimentos limitados'] : []), ...(objective.kind === 'order' ? ['pedido especial'] : objective.kind === 'score' ? ['meta de pontos'] : [])] };
+  return { id, pack, seed, name: PACKS[pack], board, types: actualTypes, seconds, moves, objective, stars: [base + 300 + Math.floor(bonus * .35), base + 300 + Math.floor(bonus * .8)], difficulty: ['Suave', 'Leve', 'Moderada', 'Desafiadora', 'Difícil', 'Especialista', 'Avançada', 'Intensa', 'Extrema', 'Mestre', 'Lendária'][pack], mechanics: [seconds !== null ? 'tempo' : 'clássica', ...(depth ? ['estoque escondido', 'espaços bloqueados'] : []), ...(moves ? ['movimentos limitados'] : []), ...(objective.kind === 'order' ? ['pedido especial'] : objective.kind === 'score' ? ['meta de pontos'] : [])] };
 }
 export const LEVELS = Array.from({ length: 60 }, (_, i) => makeLevel(i + 1));
 export function dailyLevel(day: string): Level { let seed = 0; for (const ch of day) seed = (Math.imul(seed, 31) + ch.charCodeAt(0)) >>> 0; return { ...makeLevel(45, seed), name: 'Desafio diário', dailyDay: day }; }
