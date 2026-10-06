@@ -552,16 +552,6 @@ button, input, textarea, select {
 .day-cell.selected { background: var(--accent-soft); }
 .day-cell .dots { display: flex; gap: 2px; font-size: 9px; max-width: 100%; overflow: hidden; flex-wrap: wrap; justify-content: center; line-height: 1.2; }
 
-.legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 14px;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-.legend span { display: inline-flex; align-items: center; gap: 4px; }
-
 /* ---------- day detail / list items ---------- */
 
 .entry-item {

@@ -257,6 +257,13 @@ export const CHANGELOG = [
     title: "Chegou o CapMart",
     text: "Novo jogo na Lojinha: organize os produtos do mercadinho da capivara em trios e avance pelas 110 fases, com mais de 25 produtos diferentes. As prateleiras crescem rápido — bem mais desafiador do que parece no começo. Tem ajudas (desfazer, dica, +30 segundos, embaralhar) que custam moeda, e cada fase completa dá moeda de volta — igual o Capibatman.",
   },
+  {
+    id: "calendario-humor-2026-10",
+    tag: "geral",
+    emoji: "📅",
+    title: "Calendário mais limpo, Humor reorganizado",
+    text: "O Calendário não mostra mais a legenda de ícones fixa na tela — toque em \"ⓘ Legenda\" quando precisar lembrar o que cada um significa. Na aba Humor (casal), a tela agora mostra primeiro a sequência de dias seguidos registrando, depois como seu par está hoje, só então o seu próprio registro e o histórico da semana.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";

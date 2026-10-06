@@ -2478,14 +2478,20 @@ async function renderFriendsRoles() {
       <button id="friends-next-month">${icon("chevron-right", { size: 18 })}</button>
     </div>
     <div class="card">
+      <div class="row" style="align-items:center; justify-content:flex-end; margin-bottom:4px;">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-friends-calendar-legend" style="padding:3px 10px; font-size:12px;">ⓘ Legenda</button>
+      </div>
       <div class="weekday-row"><span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span></div>
       <div class="day-grid" id="friends-day-grid"></div>
-      <div class="legend">
-        <span>👥 rolê</span><span>💼 trabalho</span><span>💝 data especial</span><span>📌 outro</span>
-      </div>
     </div>
     <div id="friends-day-detail"></div>
   `;
+  $("#btn-friends-calendar-legend").addEventListener("click", () => openModal(`
+    <div class="card-title" style="margin-bottom:10px;">O que cada ícone quer dizer</div>
+    <div class="stack" style="gap:8px; font-size:14px;">
+      <div>👥 rolê</div><div>💼 trabalho</div><div>💝 data especial</div><div>📌 outro</div>
+    </div>
+  `));
   buildFriendsDayGrid(byId);
   if (State.friendsSelectedDay) showFriendsDayDetail(State.friendsSelectedDay, byId);
   $("#friends-prev-month").addEventListener("click", () => {
@@ -4828,11 +4834,11 @@ async function renderCalendar() {
     </div>
 
     <div class="card">
+      <div class="row" style="align-items:center; justify-content:flex-end; margin-bottom:4px;">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-calendar-legend" style="padding:3px 10px; font-size:12px;">ⓘ Legenda</button>
+      </div>
       <div class="weekday-row"><span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span></div>
       <div class="day-grid" id="day-grid"></div>
-      <div class="legend">
-        <span>💗 combinado</span><span>✅ aconteceu</span><span>📅 aceito</span>${feat("miss") ? "<span>🫂 saudade</span>" : ""}<span>✉️ convite</span>${feat("recharge") ? "<span>🔋 recarregando</span>" : ""}<span>💝 data especial</span><span>💞 evento casal</span><span>💼 trabalho</span><span>📌 outro</span>
-      </div>
     </div>
 
     ${specialDatesCardHTML()}
@@ -4844,6 +4850,16 @@ async function renderCalendar() {
 
   buildDayGrid();
   wireCycleSection(myCycle, partnerCycle);
+  $("#btn-calendar-legend").addEventListener("click", () => openModal(`
+    <div class="card-title" style="margin-bottom:10px;">O que cada ícone quer dizer</div>
+    <div class="stack" style="gap:8px; font-size:14px;">
+      <div>💗 combinado</div><div>✅ aconteceu</div><div>📅 aceito</div>
+      ${feat("miss") ? "<div>🫂 saudade</div>" : ""}
+      <div>✉️ convite</div>
+      ${feat("recharge") ? "<div>🔋 recarregando</div>" : ""}
+      <div>💝 data especial</div><div>💞 evento casal</div><div>💼 trabalho</div><div>📌 outro</div>
+    </div>
+  `));
   view.querySelectorAll("[data-special-date]").forEach((el) => {
     el.addEventListener("click", () => {
       showDayDetail(el.dataset.specialDate);
@@ -5255,6 +5271,36 @@ async function renderMood() {
       <div style="font-size:15px; font-weight:800; color:var(--accent-strong);">${moodStreakText}</div>
     </div>
 
+    <div class="section-title">Humor de ${ROLE_LABEL[otherRole()]} hoje</div>
+    <div class="card" id="partner-mood-tap" role="button" tabindex="0" style="cursor:pointer;">
+      ${theirs ? `
+        <div class="partner-mood-card">
+          <span class="emoji-big">${MOOD_BY_ID[theirs.mood]?.emoji || "❔"}</span>
+          <div>
+            <div class="card-title" style="font-size:15px;">${gen(MOOD_BY_ID[theirs.mood]?.label || theirs.mood, genderOf(otherRole()))}</div>
+            <div class="card-sub" style="margin-bottom:0;">${TALK_BY_ID[theirs.wants_to_talk]?.emoji || ""} ${TALK_BY_ID[theirs.wants_to_talk]?.label || ""}</div>
+            ${theirs.note ? `<div class="entry-meta" style="margin-top:6px;">"${escapeHTML(theirs.note)}"</div>` : ""}
+          </div>
+        </div>
+        ${theirs.mood_partner ? `
+          <div class="partner-mood-card" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+            <span class="emoji-big">${PARTNER_MOOD_BY_ID[theirs.mood_partner]?.emoji || "❔"}</span>
+            <div>
+              <div class="card-title" style="font-size:15px;">Com você: ${gen(PARTNER_MOOD_BY_ID[theirs.mood_partner]?.label || theirs.mood_partner, genderOf(otherRole()))}</div>
+            </div>
+          </div>
+        ` : ""}
+      ` : `<div class="empty-state"><span class="emoji">🤔</span>${ROLE_LABEL[otherRole()]} ainda não registrou o humor de hoje.</div>`}
+      <p class="hint-text" style="margin:12px 0 0; text-align:center; font-weight:800; color:var(--accent-strong);">Toque pra ver os últimos 7 dias 📅 ›</p>
+    </div>
+
+    ${moodReactions && theirs ? `
+      <div class="card react-card">
+        <div class="card-sub" style="margin-bottom:8px;">Mande um carinho pra ${ROLE_LABEL[otherRole()]}</div>
+        ${reactionBarHTML("mood", theirs.id, moodReactions)}
+      </div>` : ""}
+    ${(() => { const got = moodReactions && mine ? reactionGotHTML(mine.id, moodReactions, "ao seu humor de hoje") : ""; return got ? `<div class="card react-card">${got}</div>` : ""; })()}
+
     <div class="card">
       <div class="card-title">Como você está?</div>
       <div class="mood-grid" id="mood-grid">
@@ -5288,36 +5334,6 @@ async function renderMood() {
 
       <button class="btn btn-primary btn-block" style="margin-top:16px;" id="save-mood">Salvar humor de hoje</button>
     </div>
-
-    <div class="section-title">Humor de ${ROLE_LABEL[otherRole()]} hoje</div>
-    <div class="card" id="partner-mood-tap" role="button" tabindex="0" style="cursor:pointer;">
-      ${theirs ? `
-        <div class="partner-mood-card">
-          <span class="emoji-big">${MOOD_BY_ID[theirs.mood]?.emoji || "❔"}</span>
-          <div>
-            <div class="card-title" style="font-size:15px;">${gen(MOOD_BY_ID[theirs.mood]?.label || theirs.mood, genderOf(otherRole()))}</div>
-            <div class="card-sub" style="margin-bottom:0;">${TALK_BY_ID[theirs.wants_to_talk]?.emoji || ""} ${TALK_BY_ID[theirs.wants_to_talk]?.label || ""}</div>
-            ${theirs.note ? `<div class="entry-meta" style="margin-top:6px;">"${escapeHTML(theirs.note)}"</div>` : ""}
-          </div>
-        </div>
-        ${theirs.mood_partner ? `
-          <div class="partner-mood-card" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
-            <span class="emoji-big">${PARTNER_MOOD_BY_ID[theirs.mood_partner]?.emoji || "❔"}</span>
-            <div>
-              <div class="card-title" style="font-size:15px;">Com você: ${gen(PARTNER_MOOD_BY_ID[theirs.mood_partner]?.label || theirs.mood_partner, genderOf(otherRole()))}</div>
-            </div>
-          </div>
-        ` : ""}
-      ` : `<div class="empty-state"><span class="emoji">🤔</span>${ROLE_LABEL[otherRole()]} ainda não registrou o humor de hoje.</div>`}
-      <p class="hint-text" style="margin:12px 0 0; text-align:center; font-weight:800; color:var(--accent-strong);">Toque pra ver os últimos 7 dias 📅 ›</p>
-    </div>
-
-    ${moodReactions && theirs ? `
-      <div class="card react-card">
-        <div class="card-sub" style="margin-bottom:8px;">Mande um carinho pra ${ROLE_LABEL[otherRole()]}</div>
-        ${reactionBarHTML("mood", theirs.id, moodReactions)}
-      </div>` : ""}
-    ${(() => { const got = moodReactions && mine ? reactionGotHTML(mine.id, moodReactions, "ao seu humor de hoje") : ""; return got ? `<div class="card react-card">${got}</div>` : ""; })()}
 
     <div class="section-title">Últimos 7 dias</div>
     <div class="card">
