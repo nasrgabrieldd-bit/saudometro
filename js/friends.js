@@ -187,6 +187,16 @@ export async function addCoinBonus(friendGroupId, userId, delta, reason) {
   if (error) throw error;
 }
 
+// quanto cada integrante já ganhou pro cofre da turma, no total (só o que entrou, não o que foi
+// gasto) — pra mostrar quem tá contribuindo mais, já que o saldo em si é só um, compartilhado.
+export async function getCoinsEarnedByMember(friendGroupId) {
+  const { data, error } = await supabase.from("friend_coin_ledger").select("user_id, delta").eq("friend_group_id", friendGroupId).gt("delta", 0);
+  if (error) throw error;
+  const map = {};
+  for (const row of data || []) map[row.user_id] = (map[row.user_id] || 0) + row.delta;
+  return map;
+}
+
 // ---------- progresso em jogos (Capibatman etc.) ----------
 
 // soma quanta moeda cada membro já ganhou de um jogo específico — progresso é por pessoa

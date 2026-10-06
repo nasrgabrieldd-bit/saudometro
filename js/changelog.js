@@ -285,6 +285,13 @@ export const CHANGELOG = [
     title: "Aceitar um convite agora comemora na hora",
     text: "Antes só quem tinha mandado o convite via um aviso de comemoração (e só na próxima vez que abrisse o app). Agora quem aceita também vê a tela de \"Encontro confirmado!\" na hora, assim que toca em Aceitar.",
   },
+  {
+    id: "turma-moedas-membros-2026-10",
+    tag: "amigos",
+    emoji: "💰",
+    title: "Veja quem mais contribui pro cofre da turma",
+    text: "Em Turma → Moedas, agora tem um ranking de quanto cada integrante já ganhou pro cofre comum, além do histórico de movimentações que já existia.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
