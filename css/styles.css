@@ -936,6 +936,38 @@ label.field-label:first-child { margin-top: 0; }
   text-align: center;
 }
 .shortcut-card:active { transform: scale(0.97); }
+
+/* lista compacta (ícone + nome + descrição opcional + seta), usada em Configurações e
+   Recadinhos no lugar do grid de cartões — cabe mais atalho por tela, lê mais rápido */
+.settings-list {
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.settings-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  padding: 13px 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.settings-row:last-child { border-bottom: none; }
+.settings-row:active { background: var(--surface-alt); }
+.settings-row-icon { flex: none; width: 38px; height: 38px; border-radius: 11px; background: var(--accent-soft); color: var(--accent-strong); display: flex; align-items: center; justify-content: center; font-size: 18px; }
+.settings-row-body { flex: 1; min-width: 0; }
+.settings-row-title { font-weight: 800; font-size: 14.5px; color: var(--text); }
+.settings-row-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.settings-row-chevron { flex: none; color: var(--text-faint); }
+.settings-row-dot { position: absolute; top: 10px; right: 34px; }
+
 /* selo circular reutilizável pra um ícone ao lado de um título (ex.: carteira, seções) */
 .icon-badge {
   width: 36px;

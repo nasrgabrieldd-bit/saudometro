@@ -292,6 +292,13 @@ export const CHANGELOG = [
     title: "Veja quem mais contribui pro cofre da turma",
     text: "Em Turma → Moedas, agora tem um ranking de quanto cada integrante já ganhou pro cofre comum, além do histórico de movimentações que já existia.",
   },
+  {
+    id: "listas-compactas-2026-10",
+    tag: "casal",
+    emoji: "📋",
+    title: "Perfil e Recadinhos com listas mais enxutas",
+    text: "Os atalhos de Perfil (Configurações) e Recadinhos trocaram o grid de cartões grandes por uma lista compacta: ícone, nome, uma linha de status e uma seta — cabe mais atalho na tela e fica mais rápido de escanear.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";

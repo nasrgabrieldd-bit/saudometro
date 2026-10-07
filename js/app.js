@@ -5601,6 +5601,23 @@ function avatarHTML(name, avatarUrl, extraStyle = "") {
     : `<div class="avatar" style="${extraStyle}">${escapeHTML(initial)}</div>`;
 }
 
+// linha compacta reutilizável pra listas de atalho (Configurações, Recadinhos): ícone, nome,
+// descrição opcional e seta — no lugar do grid de cartões grandes, cabe mais por tela.
+// iconName usa o símbolo de icons.js; passe emoji em vez disso quando não tiver um lá.
+function settingsRowHTML({ iconName, emoji, title, sub, dataView, id, dot }) {
+  return `
+    <button class="settings-row" ${dataView ? `data-view="${dataView}"` : ""} ${id ? `id="${id}"` : ""}>
+      <span class="settings-row-icon">${emoji || icon(iconName, { size: 18 })}</span>
+      <span class="settings-row-body">
+        <span class="settings-row-title">${escapeHTML(title)}</span>
+        ${sub ? `<span class="settings-row-sub">${escapeHTML(sub)}</span>` : ""}
+      </span>
+      ${dot ? `<span class="dot-badge settings-row-dot"></span>` : ""}
+      <span class="settings-row-chevron">${icon("chevron-right", { size: 18 })}</span>
+    </button>
+  `;
+}
+
 // toca no avatar (casal ou amigos) pra trocar a foto de perfil; no modo casal, o nome
 // continua se editando por "Nomes e emojis" (edita os dois de uma vez, não só o seu)
 async function openEditProfileModal(mode) {
@@ -5852,46 +5869,14 @@ async function renderNotesHub() {
     </div>
 
     <div class="section-title">Atalhos</div>
-    <div class="shortcut-grid">
-${feat("daily") ? `      <button class="shortcut-card" data-view="challenge">
-        <span class="shortcut-icon">${icon("target", { size: 24 })}</span>
-        <span class="shortcut-title">Desafio do dia</span>
-        <span class="shortcut-sub">${myAnswerToday ? "Respondido ✓" : "Responder agora"}</span>
-      </button>` : ""}
-${feat("capsule") ? `      <button class="shortcut-card" data-view="capsule">
-        <span class="shortcut-icon">${icon("clock", { size: 24 })}</span>
-        <span class="shortcut-title">Cápsula do tempo</span>
-        <span class="shortcut-sub">${capsules.length ? `${capsules.length} guardada${capsules.length === 1 ? "" : "s"}` : "Nenhuma ainda"}</span>
-      </button>` : ""}
-${feat("wishes") ? `      <button class="shortcut-card" data-view="wishes">
-        <span class="shortcut-icon">${icon("gift", { size: 24 })}</span>
-        <span class="shortcut-title">Desejos secretos</span>
-        <span class="shortcut-sub">${readyRedemptions.length ? "Tem resgate revelado!" : "Ver desejos"}</span>
-        ${readyRedemptions.length ? `<span class="dot-badge" style="position:absolute; top:10px; right:10px;"></span>` : ""}
-      </button>` : ""}
-      <button class="shortcut-card" data-view="invites">
-        <span class="shortcut-icon">${icon("mail", { size: 24 })}</span>
-        <span class="shortcut-title">Convites</span>
-        <span class="shortcut-sub">${pendingInvites.length ? `${pendingInvites.length} esperando você` : "Nenhum pendente"}</span>
-        ${pendingInvites.length ? `<span class="dot-badge" style="position:absolute; top:10px; right:10px;"></span>` : ""}
-      </button>
-      <button class="shortcut-card" data-view="memories">
-        <span class="shortcut-icon">${icon("camera", { size: 24 })}</span>
-        <span class="shortcut-title">Lembrei de você</span>
-        <span class="shortcut-sub">${memories === null ? "Ver" : memoriesPending ? `${memoriesPending} nova${memoriesPending === 1 ? "" : "s"}` : "Mandar uma foto"}</span>
-        ${memoriesPending ? `<span class="dot-badge" style="position:absolute; top:10px; right:10px;"></span>` : ""}
-      </button>
-      <button class="shortcut-card" data-view="together-ideas">
-        <span class="shortcut-icon">🎯</span>
-        <span class="shortcut-title">Fazer juntos</span>
-        <span class="shortcut-sub">${dateIdeas.length ? `${dateIdeas.length} ideia${dateIdeas.length === 1 ? "" : "s"}` : "Adicionar ideia"}</span>
-        ${dateIdeasPending ? `<span class="dot-badge" style="position:absolute; top:10px; right:10px;"></span>` : ""}
-      </button>
-      <button class="shortcut-card" id="btn-open-capisurpresa">
-        <span class="shortcut-icon">💌</span>
-        <span class="shortcut-title">Capisurpresa</span>
-        <span class="shortcut-sub">Um carinho surpresa</span>
-      </button>
+    <div class="settings-list">
+${feat("daily") ? settingsRowHTML({ iconName: "target", title: "Desafio do dia", sub: myAnswerToday ? "Respondido ✓" : "Responder agora", dataView: "challenge" }) : ""}
+${feat("capsule") ? settingsRowHTML({ iconName: "clock", title: "Cápsula do tempo", sub: capsules.length ? `${capsules.length} guardada${capsules.length === 1 ? "" : "s"}` : "Nenhuma ainda", dataView: "capsule" }) : ""}
+${feat("wishes") ? settingsRowHTML({ iconName: "gift", title: "Desejos secretos", sub: readyRedemptions.length ? "Tem resgate revelado!" : "Ver desejos", dataView: "wishes", dot: !!readyRedemptions.length }) : ""}
+${settingsRowHTML({ iconName: "mail", title: "Convites", sub: pendingInvites.length ? `${pendingInvites.length} esperando você` : "Nenhum pendente", dataView: "invites", dot: !!pendingInvites.length })}
+${settingsRowHTML({ iconName: "camera", title: "Lembrei de você", sub: memories === null ? "Ver" : memoriesPending ? `${memoriesPending} nova${memoriesPending === 1 ? "" : "s"}` : "Mandar uma foto", dataView: "memories", dot: !!memoriesPending })}
+${settingsRowHTML({ emoji: "🎯", title: "Fazer juntos", sub: dateIdeas.length ? `${dateIdeas.length} ideia${dateIdeas.length === 1 ? "" : "s"}` : "Adicionar ideia", dataView: "together-ideas", dot: !!dateIdeasPending })}
+${settingsRowHTML({ emoji: "💌", title: "Capisurpresa", sub: "Um carinho surpresa", id: "btn-open-capisurpresa" })}
     </div>
   `;
 
@@ -5899,8 +5884,7 @@ ${feat("wishes") ? `      <button class="shortcut-card" data-view="wishes">
   wireReactions();
   $("#btn-notes-history")?.addEventListener("click", () => { State.notesView = "history"; renderNotes(); });
   $("#btn-open-capisurpresa")?.addEventListener("click", () => openCapisurpresa("casal"));
-  document.querySelectorAll(".shortcut-card").forEach((btn) => {
-    if (btn.id === "btn-open-capisurpresa") return;
+  document.querySelectorAll(".settings-row[data-view]").forEach((btn) => {
     btn.addEventListener("click", () => { State.notesView = btn.dataset.view; renderNotes(); });
   });
 }
@@ -8091,57 +8075,17 @@ ${googleLinked && myFriendGroups.length ? `    <button class="btn btn-block" id=
     </div>
 
     <div class="section-title">Atalhos</div>
-    <div class="shortcut-grid">
-${feat("streaks") ? `      <button class="shortcut-card" data-view="streaks">
-        <span class="shortcut-icon">${icon("flame", { size: 24 })}</span>
-        <span class="shortcut-title">Sequências</span>
-        <span class="shortcut-sub">🔥 ${loginStreak}d · 🥰 ${moodStreak}d</span>
-      </button>` : ""}
-      <button class="shortcut-card" data-view="code">
-        <span class="shortcut-icon">${icon("key", { size: 24 })}</span>
-        <span class="shortcut-title">Código do casal</span>
-        <span class="shortcut-sub">Ver e copiar</span>
-      </button>
-      <button class="shortcut-card" data-view="google">
-        <span class="shortcut-icon">${icon("lock", { size: 24 })}</span>
-        <span class="shortcut-title">Conta Google</span>
-        <span class="shortcut-sub">${googleLinked ? "✅ Ligada" : "Ligar agora"}</span>
-      </button>
-      <button class="shortcut-card" data-view="friendsMode">
-        <span class="shortcut-icon">${icon("users", { size: 24 })}</span>
-        <span class="shortcut-title">Modo Amigos</span>
-        <span class="shortcut-sub">${!googleLinked ? "Precisa do Google" : myFriendGroups.length ? `${myFriendGroups.length} turma${myFriendGroups.length === 1 ? "" : "s"}` : "Criar ou entrar"}</span>
-      </button>
-      <button class="shortcut-card" data-view="subscription">
-        <span class="shortcut-icon">${icon("credit-card", { size: 24 })}</span>
-        <span class="shortcut-title">Assinatura</span>
-        <span class="shortcut-sub">${planLabel(couplePlan)}</span>
-      </button>
-      <button class="shortcut-card" data-view="privacy">
-        <span class="shortcut-icon">${icon("shield", { size: 24 })}</span>
-        <span class="shortcut-title">Privacidade</span>
-        <span class="shortcut-sub">Seus dados e política</span>
-      </button>
-      <button class="shortcut-card" data-view="install">
-        <span class="shortcut-icon">${icon("smartphone", { size: 24 })}</span>
-        <span class="shortcut-title">Instalar no celular</span>
-        <span class="shortcut-sub">${isInstalled() ? "✅ Instalado" : "Ver passo a passo"}</span>
-      </button>
-      <button class="shortcut-card" data-view="notifications">
-        <span class="shortcut-icon">${icon("bell", { size: 24 })}</span>
-        <span class="shortcut-title">Notificações</span>
-        <span class="shortcut-sub">${pushPerm === "unsupported" ? "Não suportado" : alreadySubscribed ? "✅ Ativadas" : "Ativar agora"}</span>
-      </button>
-${coinsOn() ? `      <button class="shortcut-card" data-view="wallet">
-        <span class="shortcut-icon">${icon("wallet", { size: 24 })}</span>
-        <span class="shortcut-title">Moedas</span>
-        <span class="shortcut-sub">💰 ${(coins.gabriel || 0) + (coins.tata || 0)} no total</span>
-      </button>` : ""}
-      <button class="shortcut-card" id="btn-replay-tour">
-        <span class="shortcut-icon">${icon("lightbulb", { size: 24 })}</span>
-        <span class="shortcut-title">Rever as boas-vindas</span>
-        <span class="shortcut-sub">Tour rápido do app de novo</span>
-      </button>
+    <div class="settings-list">
+${feat("streaks") ? settingsRowHTML({ iconName: "flame", title: "Sequências", sub: `🔥 ${loginStreak}d · 🥰 ${moodStreak}d`, dataView: "streaks" }) : ""}
+${settingsRowHTML({ iconName: "key", title: "Código do casal", sub: "Ver e copiar", dataView: "code" })}
+${settingsRowHTML({ iconName: "lock", title: "Conta Google", sub: googleLinked ? "✅ Ligada" : "Ligar agora", dataView: "google" })}
+${settingsRowHTML({ iconName: "users", title: "Modo Amigos", sub: !googleLinked ? "Precisa do Google" : myFriendGroups.length ? `${myFriendGroups.length} turma${myFriendGroups.length === 1 ? "" : "s"}` : "Criar ou entrar", dataView: "friendsMode" })}
+${settingsRowHTML({ iconName: "credit-card", title: "Assinatura", sub: planLabel(couplePlan), dataView: "subscription" })}
+${settingsRowHTML({ iconName: "shield", title: "Privacidade", sub: "Seus dados e política", dataView: "privacy" })}
+${settingsRowHTML({ iconName: "smartphone", title: "Instalar no celular", sub: isInstalled() ? "✅ Instalado" : "Ver passo a passo", dataView: "install" })}
+${settingsRowHTML({ iconName: "bell", title: "Notificações", sub: pushPerm === "unsupported" ? "Não suportado" : alreadySubscribed ? "✅ Ativadas" : "Ativar agora", dataView: "notifications" })}
+${coinsOn() ? settingsRowHTML({ iconName: "wallet", title: "Moedas", sub: `💰 ${(coins.gabriel || 0) + (coins.tata || 0)} no total`, dataView: "wallet" }) : ""}
+${settingsRowHTML({ iconName: "lightbulb", title: "Rever as boas-vindas", sub: "Tour rápido do app de novo", id: "btn-replay-tour" })}
     </div>
 
     <p class="hint-text" style="text-align:center; margin:22px 0 4px; font-size:11px; opacity:0.45;">© 2026 Gabriel Nascimento Santos</p>
@@ -8163,7 +8107,7 @@ ${coinsOn() ? `      <button class="shortcut-card" data-view="wallet">
     if (myFriendGroups.length === 1) await enterFriendsMode(myFriendGroups[0]);
     else { State.profileView = "friendsMode"; renderProfile(); }
   });
-  document.querySelectorAll(".shortcut-card[data-view]").forEach((btn) => {
+  document.querySelectorAll(".settings-row[data-view]").forEach((btn) => {
     btn.addEventListener("click", () => { State.profileView = btn.dataset.view; renderProfile(); });
   });
 }
