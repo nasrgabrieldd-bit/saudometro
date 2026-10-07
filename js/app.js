@@ -5140,12 +5140,12 @@ function wireEntryActions() {
   });
 }
 
-function openAddEncounterModal(kind, presetDate) {
+function openAddEncounterModal(kind, presetDate, presetTitle) {
   const dateVal = presetDate ? toISODate(presetDate) : toISODate(new Date());
   openModal(`
     <h3 class="modal-title">${kind === "planejado" ? "💗 Novo encontro combinado" : "🫂 Novo encontro de saudade"}</h3>
     <label class="field-label">Título</label>
-    <input type="text" id="new-title" placeholder="${kind === "planejado" ? "ex: fim de semana em casa" : "ex: cafézinho rápido"}" />
+    <input type="text" id="new-title" value="${escapeHTML(presetTitle || "")}" placeholder="${kind === "planejado" ? "ex: fim de semana em casa" : "ex: cafézinho rápido"}" />
     <label class="field-label">Data de início</label>
     <input type="date" id="new-start" value="${dateVal}" />
     <label class="field-label">Data final (se durar mais de um dia)</label>
@@ -6889,6 +6889,7 @@ function dateIdeaCardHTML(idea) {
           <span style="font-size:11px; font-weight:800; color:var(--text-muted); margin-left:6px;">${idea.count ? `⭐ ${idea.avg.toFixed(1)} · ${idea.count} avaliaç${idea.count === 1 ? "ão" : "ões"}` : "Sem avaliação ainda"}</span>
         </div>
       </div>
+      <button class="btn btn-ghost btn-sm" data-schedule-idea="${idea.id}" aria-label="Marcar encontro com essa ideia" title="Marcar encontro" style="flex:none;">📅</button>
       <button class="btn btn-ghost btn-sm" data-delete-idea="${idea.id}" aria-label="Apagar ideia" style="flex:none;">🗑️</button>
     </div>
   `;
@@ -6932,6 +6933,12 @@ function wireDateIdeaCards(ranked, afterChange) {
           await afterChange();
         } catch (e) { alert("Não deu: " + (e.message || e)); }
       });
+    });
+  });
+  view.querySelectorAll("[data-schedule-idea]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idea = ranked.find((i) => i.id === btn.dataset.scheduleIdea);
+      openAddEncounterModal("planejado", null, idea.title);
     });
   });
   view.querySelectorAll("[data-delete-idea]").forEach((btn) => {
