@@ -306,6 +306,13 @@ export const CHANGELOG = [
     title: "Ideia de 'fazer juntos' agora pode virar encontro",
     text: "Em Recadinhos → Fazer juntos, cada ideia ganhou um botão 📅 que já abre o encontro combinado com o título preenchido — não precisa digitar tudo de novo.",
   },
+  {
+    id: "pergunta-semana-reformulada-2026-10",
+    tag: "casal",
+    emoji: "💭",
+    title: "Pergunta da semana ficou mais profunda",
+    text: "Trocamos algumas perguntas que repetiam tema com o desafio do dia (cheiro, música, lembrança de rir juntos) por perguntas sobre passado, medos e futuro a dois. As duas telas agora deixam claro pra que servem: desafio do dia é rápido, pergunta da semana é pra pensar com calma.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";

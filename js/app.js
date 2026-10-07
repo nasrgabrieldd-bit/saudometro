@@ -5397,6 +5397,7 @@ async function renderMood() {
 ${feat("weekly") ? `    <div class="card-tab-wrap">
       <span class="card-tab">💭 Pergunta da semana</span>
     <div class="card">
+      <p class="hint-text" style="margin:-2px 0 10px;">Diferente do desafio do dia: essa é pra ir mais fundo, sem pressa pra responder.</p>
       <div class="card-sub" style="font-size:15px; color:var(--text); font-weight:700;">${question}</div>
       <textarea id="weekly-answer" rows="3" style="margin-top:10px;" placeholder="escreve sua resposta...">${escapeHTML(myAnswer?.answer || "")}</textarea>
       <button class="btn btn-primary btn-block" style="margin-top:12px;" id="save-weekly">${myAnswer ? "Atualizar resposta" : `Responder${earnTag("weekly")}`}</button>
@@ -5938,6 +5939,7 @@ async function renderChallengeView() {
   view.innerHTML = `
     ${subViewHeader("🎯 Desafio do dia")}
     <div class="card" style="background:var(--warm-soft);">
+      <p class="hint-text" style="margin:0 0 10px;">Rapidinho, sem pensar muito — a pergunta mais profunda da semana fica na aba Humor.</p>
       <div class="card-title" style="font-size:15.5px; font-family:'Baloo 2', sans-serif;">"${todayChallenge}"</div>
       ${myAnswerToday ? `
         <div class="entry-meta" style="margin-top:8px; color:var(--text);">Você: "${escapeHTML(myAnswerToday.answer)}"</div>
