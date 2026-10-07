@@ -299,6 +299,13 @@ export const CHANGELOG = [
     title: "Perfil e Recadinhos com listas mais enxutas",
     text: "Os atalhos de Perfil (Configurações) e Recadinhos trocaram o grid de cartões grandes por uma lista compacta: ícone, nome, uma linha de status e uma seta — cabe mais atalho na tela e fica mais rápido de escanear.",
   },
+  {
+    id: "ideia-vira-encontro-2026-10",
+    tag: "casal",
+    emoji: "📅",
+    title: "Ideia de 'fazer juntos' agora pode virar encontro",
+    text: "Em Recadinhos → Fazer juntos, cada ideia ganhou um botão 📅 que já abre o encontro combinado com o título preenchido — não precisa digitar tudo de novo.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
