@@ -320,6 +320,13 @@ export const CHANGELOG = [
     title: "Jogos ganharam espaço na tela inicial",
     text: "Antes só o Capibatman aparecia na Home — Capiverso (cartas), Capistop e CapMart só apareciam 2 toques depois, dentro de Lojinha. Agora os 4 jogos têm atalho direto logo na Home.",
   },
+  {
+    id: "lojinha-promocoes-2026-10",
+    tag: "casal",
+    emoji: "🔥",
+    title: "Promoções com prazo na Lojinha",
+    text: "Agora dá pra criar uma promoção temporária em qualquer item da Lojinha (oficial ou criado por vocês): escolhe o desconto e até quando vale, pelo botão ✏️ Valor (ou ✏️ Editar, nos itens criados por vocês). O item com promoção ativa ganha um selo 🔥 e mostra o preço riscado.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";

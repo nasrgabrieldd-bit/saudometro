@@ -7684,15 +7684,28 @@ async function loadShopData() {
     const ov = perkCosts[id];
     if (Number.isInteger(ov) && ov >= 1 && ov <= 200) perkById[id] = { ...PERK_BY_ID[id], cost: ov, fulfillReward: suggestedReward(ov) };
   }
+  // promoção temporária (desconto com prazo) — vale pra item oficial ou criado por vocês;
+  // aplica em cima do custo já ajustado acima, e vence sozinha (sem precisar limpar nada,
+  // só para de contar quando "until" passa, igual outras datas do app)
+  const today = todayISO();
+  const promos = State.settings?.features?.perk_promos || {};
+  for (const [id, promo] of Object.entries(promos)) {
+    if (!perkById[id] || promo.until < today) continue;
+    const original = perkById[id].cost;
+    const discounted = Math.max(1, Math.round(original * (1 - promo.pct / 100)));
+    perkById[id] = { ...perkById[id], cost: discounted, originalCost: original, fulfillReward: suggestedReward(discounted), promoPct: promo.pct, promoUntil: promo.until };
+  }
   // item apagado depois de resgatado: usa a recompensa sugerida pelo custo que ficou registrado
   const rewardFor = (r) => perkById[r.perk_id]?.fulfillReward ?? suggestedReward(r.cost);
   return { coins, redemptions, customRows, customPerks, perkById, myCoins, pending, fulfilled, rewardFor };
 }
 
 function shopPerkCardHTML(p, myCoins) {
+  const onPromo = !!p.promoUntil;
   return `
-    <div class="card">
-      <div class="row" style="align-items:flex-start;">
+    <div class="card" style="${onPromo ? "position:relative; overflow:visible;" : ""}">
+      ${onPromo ? `<span style="position:absolute; top:-14px; left:16px; background:var(--warm); color:#4a2c07; font-size:11.5px; font-weight:800; padding:6px 12px; border-radius:999px; box-shadow:var(--shadow-tap);">🔥 -${p.promoPct}% até ${humanDateShort(parseISODate(p.promoUntil))}</span>` : ""}
+      <div class="row" style="align-items:flex-start; ${onPromo ? "margin-top:6px;" : ""}">
         <div style="flex:0 0 auto; font-size:30px;">${escapeHTML(p.emoji)}</div>
         <div style="flex:1; min-width:0;">
           <div class="card-title" style="font-size:15px;">${escapeHTML(gen(p.title, genderOf(State.role)))}</div>
@@ -7702,7 +7715,7 @@ function shopPerkCardHTML(p, myCoins) {
           ? `<button class="btn btn-ghost btn-sm" style="flex:none;" data-act="edit-perk" data-id="${p.rowId}">✏️ Editar</button>`
           : `<button class="btn btn-ghost btn-sm" style="flex:none;" data-act="edit-cost" data-id="${p.id}">✏️ Valor</button>`}
       </div>
-      <button class="btn ${myCoins >= p.cost ? "btn-warm" : "btn-secondary"} btn-block" data-act="redeem" data-perk="${p.id}" ${myCoins < p.cost ? "disabled" : ""}>Resgatar (💰 ${p.cost})</button>
+      <button class="btn ${myCoins >= p.cost ? "btn-warm" : "btn-secondary"} btn-block" data-act="redeem" data-perk="${p.id}" ${myCoins < p.cost ? "disabled" : ""}>Resgatar (${onPromo ? `<s>💰 ${p.originalCost}</s> ` : ""}💰 ${p.cost})</button>
     </div>
   `;
 }
@@ -7947,8 +7960,42 @@ async function renderShopHistory() {
   wireShopActions(redemptions, rewardFor, customRows, perkById);
 }
 
+// promoção temporária de um item da lojinha (item #5): desconto por % com prazo, guardado em
+// couple_settings.features.perk_promos (mesmo padrão do perk_costs), vale pra item oficial ou
+// criado pelo casal. Os dois campos em branco = sem promoção (ou remove a que já existe).
+function perkPromoFieldsHTML(promo) {
+  return `
+    <label class="field-label" style="margin-top:14px;">🔥 Promoção temporária (opcional)</label>
+    <div class="row" style="gap:10px;">
+      <input type="number" id="perk-promo-pct" min="1" max="90" placeholder="% de desconto" value="${promo?.pct ?? ""}" style="flex:1;" />
+      <input type="date" id="perk-promo-until" min="${todayISO()}" value="${promo?.until ?? ""}" style="flex:1;" />
+    </div>
+    <p class="hint-text" style="margin-top:4px;">Deixa os dois em branco pra não ter promoção (ou tirar uma que já existe).</p>
+  `;
+}
+
+// lê os campos acima e devolve: "remove" (os dois em branco), "invalid" (preenchimento
+// incompleto ou fora da faixa) ou { pct, until } prontos pra salvar
+function readPerkPromoPatch() {
+  const pctStr = $("#perk-promo-pct")?.value.trim();
+  const until = $("#perk-promo-until")?.value;
+  if (!pctStr && !until) return "remove";
+  const pct = parseInt(pctStr, 10);
+  if (!pct || pct < 1 || pct > 90 || !until || until < todayISO()) return "invalid";
+  return { pct, until };
+}
+
+function applyPerkPromoPatch(features, promoId, patch) {
+  const perk_promos = { ...(features.perk_promos || {}) };
+  if (patch === "remove") delete perk_promos[promoId];
+  else perk_promos[promoId] = patch;
+  return { ...features, perk_promos };
+}
+
 function openPerkModal(existing) {
   const cost0 = existing?.cost ?? 10;
+  const promoId = existing ? `custom:${existing.id}` : null;
+  const promo = promoId ? State.settings?.features?.perk_promos?.[promoId] : null;
   openModal(`
     <h3 class="modal-title">${existing ? "✏️ Editar item" : "💡 Novo item da lojinha"}</h3>
     <div class="row" style="gap:10px;">
@@ -7966,6 +8013,7 @@ function openPerkModal(existing) {
     <label class="field-label">Custo em moedas</label>
     <input type="number" id="perk-cost" min="1" max="200" value="${cost0}" />
     <p class="hint-text" id="perk-reward-hint" style="margin-top:6px;"></p>
+    ${existing ? perkPromoFieldsHTML(promo) : ""}
     <button class="btn btn-primary btn-block" style="margin-top:16px;" id="save-perk">Salvar</button>
     ${existing ? `<button class="btn btn-danger btn-block" style="margin-top:8px;" id="delete-perk">🗑️ Apagar item</button>` : ""}
   `);
@@ -7979,6 +8027,8 @@ function openPerkModal(existing) {
     const cost = parseInt($("#perk-cost").value, 10);
     if (!title) { alert("Dá um nome pro item :)"); return; }
     if (!cost || cost < 1 || cost > 200) { alert("O custo tem que ser entre 1 e 200 moedas."); return; }
+    const promoPatch = existing ? readPerkPromoPatch() : null;
+    if (promoPatch === "invalid") { alert("Preenche o desconto (1 a 90%) e uma data válida, ou deixa os dois em branco."); return; }
     setBusy("#save-perk", true);
     try {
       await db.saveCustomPerk({
@@ -7986,6 +8036,10 @@ function openPerkModal(existing) {
         emoji: $("#perk-emoji").value.trim() || "🎁", title,
         description: $("#perk-desc").value.trim(), cost, fulfillReward: suggestedReward(cost),
       });
+      if (promoPatch) {
+        State.settings = await db.updateCoupleFeatures(State.coupleId, (f) => applyPerkPromoPatch(f, promoId, promoPatch));
+        setPeopleSettings(State.settings);
+      }
       closeModal();
       await renderShop();
     } catch (e) {
@@ -8009,22 +8063,27 @@ function openPerkModal(existing) {
 // pra itens criados por vocês, a edição completa já é pelo botão "✏️ Editar" (openPerkModal).
 function openPerkCostModal(perk) {
   const base = PERK_BY_ID[perk.id];
-  const isCustomValue = perk.cost !== base.cost;
+  const currentCost = perk.originalCost ?? perk.cost; // sem o desconto de uma promoção ativa, se houver
+  const isCustomValue = currentCost !== base.cost;
+  const promo = State.settings?.features?.perk_promos?.[perk.id];
   openModal(`
     <h3 class="modal-title">✏️ Valor deste item</h3>
     <p class="card-sub">${perk.emoji} ${escapeHTML(gen(perk.title, genderOf(State.role)))}</p>
     <p class="hint-text">Isso só muda pro seu casal, outros casais continuam vendo o valor padrão (${base.cost}).</p>
     <label class="field-label">Custo em moedas</label>
-    <input type="number" id="perk-cost-value" min="1" max="200" value="${perk.cost}" />
-    <button class="btn btn-primary btn-block" style="margin-top:16px;" id="save-perk-cost">Salvar</button>
+    <input type="number" id="perk-cost-value" min="1" max="200" value="${currentCost}" />
     ${isCustomValue ? `<button class="btn btn-ghost btn-block" style="margin-top:8px;" id="reset-perk-cost">Voltar ao valor padrão (${base.cost})</button>` : ""}
+    ${perkPromoFieldsHTML(promo)}
+    <button class="btn btn-primary btn-block" style="margin-top:16px;" id="save-perk-cost">Salvar</button>
   `);
   $("#save-perk-cost").addEventListener("click", async () => {
     const cost = parseInt($("#perk-cost-value").value, 10);
     if (!cost || cost < 1 || cost > 200) { alert("O custo tem que ser entre 1 e 200 moedas."); return; }
+    const promoPatch = readPerkPromoPatch();
+    if (promoPatch === "invalid") { alert("Preenche o desconto (1 a 90%) e uma data válida, ou deixa os dois em branco."); return; }
     setBusy("#save-perk-cost", true);
     try {
-      State.settings = await db.updateCoupleFeatures(State.coupleId, (f) => ({ ...f, perk_costs: { ...(f.perk_costs || {}), [perk.id]: cost } }));
+      State.settings = await db.updateCoupleFeatures(State.coupleId, (f) => applyPerkPromoPatch({ ...f, perk_costs: { ...(f.perk_costs || {}), [perk.id]: cost } }, perk.id, promoPatch));
       setPeopleSettings(State.settings);
       closeModal();
       await renderShop();
