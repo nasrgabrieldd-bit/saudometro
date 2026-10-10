@@ -7327,6 +7327,15 @@ async function renderStarBattleGame(scope) {
 
 // card da Home mostrando em que fase o casal está no jogo e quanto já ganhou jogando —
 // carrega depois do resto da Home (não trava o resto da tela esperando essa consulta a mais)
+// antes só o Capibatman aparecia na Home (os outros 3 jogos só apareciam 2 toques depois,
+// dentro de Lojinha > Atalhos > Jogos) — item #11, dar mais destaque aos jogos, sem mexer na
+// navegação principal (que já tem os 6 slots ocupados).
+function goToGame(renderFn, ...args) {
+  State.activeTab = "shop";
+  document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === "shop"));
+  renderFn(...args);
+}
+
 async function renderHomeGameCard() {
   const el = $("#home-game-card");
   if (!el) return;
@@ -7336,27 +7345,37 @@ async function renderHomeGameCard() {
       db.getGameCoinsEarnedByRole(State.coupleId, "Capibatman"),
     ]);
     el.innerHTML = `
-      <div class="card" id="home-game-card-inner" style="cursor:pointer;">
-        <div class="row" style="align-items:center; gap:10px;">
-          <img src="icons/capivarinhas.jpg" alt="" style="width:40px; height:40px; border-radius:10px; object-fit:cover; flex:none;" />
-          <div class="card-title" style="font-size:14px; margin-bottom:0;">Capibatman</div>
-        </div>
-        <div class="row" style="gap:8px; margin-top:10px;">
-          <div style="flex:1; text-align:center; background:var(--accent-soft); border-radius:10px; padding:8px;">
-            <div style="font-weight:800; font-size:13px; color:var(--accent-strong);">${ROLE_LABEL.gabriel}</div>
-            <div class="hint-text" style="margin:0;">Fase ${levels.gabriel} · 💰${coins.gabriel || 0}</div>
-          </div>
-          <div style="flex:1; text-align:center; background:var(--accent-soft); border-radius:10px; padding:8px;">
-            <div style="font-weight:800; font-size:13px; color:var(--accent-strong);">${ROLE_LABEL.tata}</div>
-            <div class="hint-text" style="margin:0;">Fase ${levels.tata} · 💰${coins.tata || 0}</div>
-          </div>
-        </div>
+      <div class="section-title" style="margin-top:0;">🎮 Jogos</div>
+      <div class="shortcut-grid" id="home-games-grid">
+        <button class="shortcut-card" data-game="capibatman">
+          <img src="icons/capivarinhas.jpg" alt="" style="width:44px; height:44px; border-radius:50%; object-fit:cover;" />
+          <span class="shortcut-title">Capibatman</span>
+          <span class="shortcut-sub">${ROLE_LABEL.gabriel} f.${levels.gabriel} · ${ROLE_LABEL.tata} f.${levels.tata}</span>
+        </button>
+        <button class="shortcut-card" data-game="cartas">
+          <img src="icons/capiverso.png" alt="" style="width:44px; height:44px; border-radius:50%; object-fit:cover;" />
+          <span class="shortcut-title">${GAME_LABEL.cartas}</span>
+          <span class="shortcut-sub">fique sem cartas antes</span>
+        </button>
+        <button class="shortcut-card" data-game="stop">
+          <img src="icons/capistop.png" alt="" style="width:44px; height:44px; border-radius:50%; object-fit:cover;" />
+          <span class="shortcut-title">${GAME_LABEL.stop}</span>
+          <span class="shortcut-sub">uma letra, pouco tempo</span>
+        </button>
+        <button class="shortcut-card" data-game="capmart">
+          <img src="icons/capmart-capivara.jpg" alt="" style="width:44px; height:44px; border-radius:50%; object-fit:contain;" />
+          <span class="shortcut-title">CapMart</span>
+          <span class="shortcut-sub">110 fases de trios</span>
+        </button>
       </div>
     `;
-    $("#home-game-card-inner").addEventListener("click", () => {
-      State.activeTab = "shop";
-      document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === "shop"));
-      renderStarBattleGame("casal");
+    $("#home-games-grid").querySelectorAll("[data-game]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const game = btn.dataset.game;
+        if (game === "capibatman") goToGame(renderStarBattleGame, "casal");
+        else if (game === "capmart") goToGame(renderCapMartGame, "casal");
+        else goToGame(renderGameHub, "casal", game);
+      });
     });
   } catch (e) { /* jogo ainda não tem progresso ou deu erro de rede: só não mostra o card */ }
 }

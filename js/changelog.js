@@ -313,6 +313,13 @@ export const CHANGELOG = [
     title: "Pergunta da semana ficou mais profunda",
     text: "Trocamos algumas perguntas que repetiam tema com o desafio do dia (cheiro, música, lembrança de rir juntos) por perguntas sobre passado, medos e futuro a dois. As duas telas agora deixam claro pra que servem: desafio do dia é rápido, pergunta da semana é pra pensar com calma.",
   },
+  {
+    id: "jogos-destaque-home-2026-10",
+    tag: "casal",
+    emoji: "🎮",
+    title: "Jogos ganharam espaço na tela inicial",
+    text: "Antes só o Capibatman aparecia na Home — Capiverso (cartas), Capistop e CapMart só apareciam 2 toques depois, dentro de Lojinha. Agora os 4 jogos têm atalho direto logo na Home.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
