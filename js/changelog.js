@@ -327,6 +327,13 @@ export const CHANGELOG = [
     title: "Promoções com prazo na Lojinha",
     text: "Agora dá pra criar uma promoção temporária em qualquer item da Lojinha (oficial ou criado por vocês): escolhe o desconto e até quando vale, pelo botão ✏️ Valor (ou ✏️ Editar, nos itens criados por vocês). O item com promoção ativa ganha um selo 🔥 e mostra o preço riscado.",
   },
+  {
+    id: "recadinho-aniversario-2026-10",
+    tag: "casal",
+    emoji: "🎂",
+    title: "Recadinho de Aniversário",
+    text: "Em Recados → Recadinho de Aniversário, dá pra escrever bilhetes com antecedência, cada um programado pra chegar num dia específico — quem recebe só enxerga o conteúdo quando o dia chega, e ganha uma notificação na hora. No dia marcado como aniversário, uma celebração aparece sozinha assim que o app abre.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";

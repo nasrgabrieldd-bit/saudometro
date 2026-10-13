@@ -199,6 +199,17 @@ function messageFor(table: string, type: string, record: any, oldRecord: any): M
     };
   }
 
+  // recadinho de aniversário: escrito com antecedência, só notifica quando o job diário
+  // (scripts/deliver-birthday-notes.mjs) marca delivered_at — é isso que vira esse UPDATE
+  if (table === "birthday_notes" && type === "UPDATE" && !oldRecord?.delivered_at && record.delivered_at) {
+    return {
+      targetRole: record.to_role,
+      title: record.title || "Recadinho de Aniversário 🎂",
+      body: "Chegou um recadinho especial pra você. Toque pra ver 💌",
+      path: "?tab=notes&view=birthday",
+    };
+  }
+
   // só notifica quando já está disponível de verdade: se foi agendada pra depois, a
   // própria notificação ficaria errada (chegaria antes de dar pra abrir) — e como não
   // existe nenhum worker rodando em segundo plano aqui, não tem como disparar isso certo

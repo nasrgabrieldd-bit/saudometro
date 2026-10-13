@@ -1,8 +1,9 @@
 name: Manutenção do banco
 
 # Todo dia: "acorda" o banco pra o Supabase gratuito não pausar por inatividade, apaga as fotos
-# de "Lembrei de você" que passaram de 30 dias, e apaga os posts temporários do feed de amigos
-# que já venceram (arquivo incluído, não só o registro, nos dois casos).
+# de "Lembrei de você" que passaram de 30 dias, apaga os posts temporários do feed de amigos
+# que já venceram (arquivo incluído, não só o registro, nos dois casos), e entrega (com
+# notificação push) os recadinhos de aniversário cujo dia chegou.
 # Todo domingo: guarda uma cópia criptografada de todos os dados (fica 90 dias na aba Actions).
 # Também dá pra rodar na mão: Actions > Manutenção do banco > Run workflow.
 on:
@@ -14,7 +15,7 @@ on:
       tarefa:
         description: "O que rodar"
         type: choice
-        options: [tudo, acordar, limpar-lembrancas, limpar-feed, backup]
+        options: [tudo, acordar, limpar-lembrancas, limpar-feed, entregar-aniversario, backup]
         default: tudo
 
 permissions:
@@ -61,6 +62,19 @@ jobs:
         env:
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: node scripts/cleanup-friend-feed.mjs
+
+  entregar-aniversario:
+    if: github.event.schedule == '17 9 * * *' || github.event_name == 'workflow_dispatch' && (inputs.tarefa == 'tudo' || inputs.tarefa == 'entregar-aniversario')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Entregar recadinhos de aniversário do dia
+        env:
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: node scripts/deliver-birthday-notes.mjs
 
   backup:
     if: github.event.schedule == '43 9 * * 0' || github.event_name == 'workflow_dispatch' && (inputs.tarefa == 'tudo' || inputs.tarefa == 'backup')

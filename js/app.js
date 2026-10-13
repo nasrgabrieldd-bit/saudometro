@@ -4514,6 +4514,7 @@ ${(() => {
   }
 
   if (feat("kiss")) maybeShowKissMilestone(daysSinceKiss, stats?.last_kiss_at);
+  maybeShowBirthdayCelebration();
 }
 
 // mostra uma animação de susto fofo quando o contador de beijo bate um múltiplo de 15 dias
@@ -5826,7 +5827,7 @@ async function renderNotes() {
     hub: renderNotesHub, history: renderNotesHistory,
     challenge: renderChallengeView, capsule: renderCapsuleView,
     wishes: renderWishesView, invites: renderInvites, memories: renderMemoriesView,
-    "together-ideas": renderTogetherIdeasView,
+    "together-ideas": renderTogetherIdeasView, birthday: renderBirthdayNotesView,
   };
   (map[State.notesView] || renderNotesHub)();
 }
@@ -5835,7 +5836,7 @@ async function renderNotesHub() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const todayStr = todayISO();
 
-  const [notes, noteReactions, todayAnswers, capsules, redemptions, invites, memories, memoryReactions, dateIdeas, dateIdeaRatings] = await Promise.all([
+  const [notes, noteReactions, todayAnswers, capsules, redemptions, invites, memories, memoryReactions, dateIdeas, dateIdeaRatings, birthdayNotes] = await Promise.all([
     db.listRecentSweetNotes(State.coupleId, 5),
     db.listReactions(State.coupleId, "note").catch(() => null), // null = recurso ainda não ativado no banco
     db.getChallengeAnswersForDay(State.coupleId, todayStr),
@@ -5846,9 +5847,17 @@ async function renderNotesHub() {
     db.listReactions(State.coupleId, "memory").catch(() => null),
     db.listDateIdeas(State.coupleId).catch(() => []),
     db.listDateIdeaRatings(State.coupleId).catch(() => []),
+    db.listBirthdayNotes(State.coupleId).catch(() => []), // [] = recurso ainda não ativado no banco
   ]);
   const memoriesPending = memories ? memories.filter((m) => m.role !== State.role && m.reply_role !== State.role && !(memoryReactions || []).some((r) => r.target_id === m.id && r.role === State.role)).length : 0;
   const dateIdeasPending = dateIdeas.filter((idea) => !dateIdeaRatings.some((r) => r.idea_id === idea.id && r.role === State.role)).length;
+  const myBirthdayNotes = birthdayNotes.filter((n) => n.from_role === State.role);
+  const visibleBirthdayNotes = birthdayNotes.filter((n) => n.to_role === State.role && n.deliver_on <= todayStr);
+  const pendingBirthdayNotes = birthdayNotes.filter((n) => n.to_role === State.role && n.deliver_on > todayStr);
+  const birthdaySub = myBirthdayNotes.length ? `${myBirthdayNotes.length} escrito${myBirthdayNotes.length === 1 ? "" : "s"}`
+    : visibleBirthdayNotes.length ? `${visibleBirthdayNotes.length} esperando você`
+    : pendingBirthdayNotes.length ? "chegando em breve..."
+    : "Criar um novo";
 
   const myLastNote = notes.find((n) => n.role === State.role);
   const iSentToday = notes.some((n) => n.role === State.role && n.created_at.slice(0, 10) === todayStr);
@@ -5871,6 +5880,7 @@ async function renderNotesHub() {
 
     <div class="section-title">Atalhos</div>
     <div class="settings-list">
+${settingsRowHTML({ emoji: "🎂", title: "Recadinho de Aniversário", sub: birthdaySub, dataView: "birthday", dot: visibleBirthdayNotes.some((n) => n.deliver_on === todayStr) })}
 ${feat("daily") ? settingsRowHTML({ iconName: "target", title: "Desafio do dia", sub: myAnswerToday ? "Respondido ✓" : "Responder agora", dataView: "challenge" }) : ""}
 ${feat("capsule") ? settingsRowHTML({ iconName: "clock", title: "Cápsula do tempo", sub: capsules.length ? `${capsules.length} guardada${capsules.length === 1 ? "" : "s"}` : "Nenhuma ainda", dataView: "capsule" }) : ""}
 ${feat("wishes") ? settingsRowHTML({ iconName: "gift", title: "Desejos secretos", sub: readyRedemptions.length ? "Tem resgate revelado!" : "Ver desejos", dataView: "wishes", dot: !!readyRedemptions.length }) : ""}
@@ -6020,6 +6030,139 @@ async function renderCapsuleView() {
       alert("Não deu: " + (e.message || e));
       setBusy("#btn-seal-capsule", false);
     }
+  });
+}
+
+// ---------------- Recadinho de Aniversário ----------------
+// Bilhetes escritos com antecedência (um por dia, por exemplo), cada um só visível pra quem
+// recebe a partir do dia marcado pra "chegar" (deliver_on) — mesma lógica de visibilidade já
+// usada na Cápsula do Tempo (quem escreveu sempre pode reler o que escreveu). A notificação
+// de cada um é disparada pelo job diário (scripts/deliver-birthday-notes.mjs), não na hora em
+// que o bilhete é escrito, porque não tem nada rodando em segundo plano aqui pra acertar a
+// hora exata do agendamento.
+
+function birthdayNoteItemHTML(n) {
+  const mine = n.from_role === State.role;
+  const arrived = n.deliver_on <= todayISO();
+  const canRead = mine || arrived;
+  const timing = arrived ? `Entregue em ${humanDateShort(parseISODate(n.deliver_on))}` : `Chega ${daysUntilLabel(parseISODate(n.deliver_on))}`;
+  return `
+    <div class="entry-item">
+      <div class="entry-icon">${canRead ? "🎂" : "🔒"}</div>
+      <div class="entry-body">
+        <div class="entry-title">${escapeHTML(n.title || "Recadinho de Aniversário")}</div>
+        <div class="entry-meta">${timing}</div>
+        ${canRead
+          ? `<div class="entry-meta" style="margin-top:6px; color:var(--text);">"${escapeHTML(n.message)}"</div>`
+          : `<div class="entry-meta" style="margin-top:6px; filter:blur(4px); user-select:none;">${"• ".repeat(18)}</div>`}
+        ${mine && !arrived ? `<div class="entry-actions"><button class="btn btn-ghost btn-sm" data-act="delete-birthday-note" data-id="${n.id}">🗑️ Cancelar</button></div>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+async function renderBirthdayNotesView() {
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const notes = await db.listBirthdayNotes(State.coupleId).catch(() => []);
+  const todayStr = todayISO();
+  const birthdays = State.settings?.features?.birthdays || {};
+  const targetDate = birthdays[otherRole()];
+
+  view.innerHTML = `
+    ${subViewHeader("🎂 Recadinho de Aniversário")}
+    <div class="card" style="text-align:center; background:var(--warm-soft);">
+      ${targetDate
+        ? `<div class="card-title" style="font-size:15px;">Aniversário de ${ROLE_LABEL[otherRole()]}: ${humanDateLong(parseISODate(targetDate))}</div><div class="card-sub" style="margin-bottom:0;">${daysUntilLabel(parseISODate(targetDate))}</div>`
+        : `<div class="card-sub">Ainda sem data marcada pra ${ROLE_LABEL[otherRole()]}.</div>`}
+      <div class="row" style="margin-top:10px; gap:8px; justify-content:center; align-items:center;">
+        <input type="date" id="birthday-target-date" value="${targetDate || ""}" style="flex:1; max-width:180px;" />
+        <button class="btn btn-secondary btn-sm" style="flex:none;" id="btn-save-birthday-target">Salvar data</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="font-size:15px;">Escrever um recadinho</div>
+      <label class="field-label">Título (opcional)</label>
+      <input type="text" id="birthday-note-title" maxlength="60" placeholder="Recadinho de Aniversário" />
+      <label class="field-label">Mensagem</label>
+      <textarea id="birthday-note-text" rows="3" placeholder="escreve o bilhete aqui..."></textarea>
+      <label class="field-label">Entregar em</label>
+      <input type="date" id="birthday-note-date" min="${todayStr}" value="${targetDate && targetDate >= todayStr ? targetDate : todayStr}" />
+      <button class="btn btn-primary btn-block" style="margin-top:12px;" id="btn-save-birthday-note">Programar recadinho 🎂</button>
+    </div>
+
+    <div class="card">
+      ${notes.length ? `<div class="stack">${notes.map(birthdayNoteItemHTML).join("")}</div>` : `<div class="empty-state"><span class="emoji">🎂</span>Nenhum recadinho ainda.</div>`}
+    </div>
+  `;
+
+  wireNotesBack();
+
+  $("#btn-save-birthday-target")?.addEventListener("click", async () => {
+    const date = $("#birthday-target-date").value;
+    if (!date) { alert("Escolhe uma data :)"); return; }
+    setBusy("#btn-save-birthday-target", true);
+    try {
+      State.settings = await db.updateCoupleFeatures(State.coupleId, (f) => ({ ...f, birthdays: { ...(f.birthdays || {}), [otherRole()]: date } }));
+      setPeopleSettings(State.settings);
+      await renderBirthdayNotesView();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#btn-save-birthday-target", false);
+    }
+  });
+
+  $("#btn-save-birthday-note")?.addEventListener("click", async () => {
+    const title = $("#birthday-note-title").value.trim() || "Recadinho de Aniversário";
+    const message = $("#birthday-note-text").value.trim();
+    const deliverOn = $("#birthday-note-date").value;
+    if (!message) { alert("Escreve o recadinho primeiro :)"); return; }
+    if (!deliverOn) { alert("Escolhe quando ele deve chegar :)"); return; }
+    setBusy("#btn-save-birthday-note", true);
+    try {
+      await db.createBirthdayNote(State.coupleId, State.role, otherRole(), title, message, deliverOn);
+      await renderBirthdayNotesView();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#btn-save-birthday-note", false);
+    }
+  });
+
+  view.querySelectorAll("[data-act='delete-birthday-note']").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Cancelar esse recadinho programado?")) return;
+      try {
+        await db.deleteBirthdayNote(btn.dataset.id);
+        await renderBirthdayNotesView();
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+      }
+    });
+  });
+}
+
+// celebração automática no dia: dispara uma vez (por casal+pessoa+data, guardado no aparelho)
+// quando a Home é renderizada e a data guardada em features.birthdays[State.role] é hoje
+function maybeShowBirthdayCelebration() {
+  const bday = State.settings?.features?.birthdays?.[State.role];
+  if (!bday || bday !== todayISO()) return;
+  const key = `birthdayCelebrationShown:${State.coupleId}:${State.role}:${bday}`;
+  try {
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(key, "1");
+  } catch (e) { /* sem storage: pode repetir, sem problema */ }
+
+  openModal(`
+    <div class="milestone-icon">🎂</div>
+    <h3 class="modal-title" style="text-align:center;">Feliz Aniversário!!! 🎉</h3>
+    <p class="card-sub" style="text-align:center;">Hoje é o seu dia! Separaram recadinhos especiais só pra você essa semana 💗</p>
+    <button class="btn btn-primary btn-block" style="margin-top:16px;" id="btn-birthday-ok">Ver recadinhos 🎁</button>
+  `);
+  $("#btn-birthday-ok")?.addEventListener("click", () => {
+    closeModal();
+    setActiveTab("notes");
+    State.notesView = "birthday";
+    renderNotes();
   });
 }
 
