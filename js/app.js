@@ -331,6 +331,7 @@ async function enterApp(profile) {
 
   $("#screen-onboarding").style.display = "none";
   $("#screen-app").style.display = "flex";
+  applyPartyMode();
 
   setAvatarBadge("#avatar-badge", myDisplayName(), State.profile?.avatar_url);
   $("#avatar-badge").style.cursor = "pointer";
@@ -359,6 +360,7 @@ async function enterApp(profile) {
         State.settings = await db.getCoupleSettings(State.coupleId);
         setPeopleSettings(State.settings);
         applyNavVisibility();
+        applyPartyMode();
         renderActiveTab();
       } catch (e) { /* mantém a configuração atual */ }
     }
@@ -6164,6 +6166,35 @@ function maybeShowBirthdayCelebration() {
     State.notesView = "birthday";
     renderNotes();
   });
+}
+
+// "o app muda de roupa por um dia": no dia marcado como aniversário (features.birthdays[State.role]),
+// troca a cor de destaque pra uma paleta de festa e liga o confete de fundo — chamado toda vez
+// que entra no app (enterApp) e sempre que a configuração do casal é atualizada em tempo real,
+// pra ligar/desligar sozinho conforme a data muda, sem precisar reabrir o app
+const PARTY_CONFETTI_COLORS = ["#ff3d82", "#ffd166", "#b8104f", "#ffffff", "#c99bff"];
+function applyPartyMode() {
+  const html = document.documentElement;
+  const bday = State.settings?.features?.birthdays?.[State.role];
+  if (!bday || bday !== todayISO()) {
+    html.classList.remove("party-mode");
+    $("#screen-app")?.querySelector(".party-confetti")?.remove();
+    return;
+  }
+  html.classList.add("party-mode");
+  const screenApp = $("#screen-app");
+  if (!screenApp || screenApp.querySelector(".party-confetti")) return;
+  const layer = document.createElement("div");
+  layer.className = "party-confetti";
+  for (let i = 0; i < 18; i++) {
+    const piece = document.createElement("span");
+    piece.style.left = `${Math.round(Math.random() * 100)}%`;
+    piece.style.background = PARTY_CONFETTI_COLORS[i % PARTY_CONFETTI_COLORS.length];
+    piece.style.animationDelay = `${(Math.random() * 4).toFixed(2)}s`;
+    piece.style.animationDuration = `${(5 + Math.random() * 4).toFixed(2)}s`;
+    layer.appendChild(piece);
+  }
+  screenApp.prepend(layer);
 }
 
 // ---------------- Lembrei de você ----------------

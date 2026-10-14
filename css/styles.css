@@ -878,6 +878,64 @@ label.field-label:first-child { margin-top: 0; }
   from { transform: scale(0.6); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
 }
+
+/* ---------- modo festa (dia marcado como aniversário em couple_settings.features.birthdays) ----------
+   troca só a cor de destaque (accent/warm) por uma paleta mais vibrante e liga um confete de
+   fundo — nenhum matiz novo fora dessa paleta, nada mais no app muda nesse dia */
+html.party-mode {
+  --accent: #ff3d82;
+  --accent-strong: #b8104f;
+  --accent-soft: #ffd6e8;
+  --accent-btn: #d81457;
+  --on-accent-btn: #ffffff;
+  --warm: #ffb703;
+  --warm-soft: #fff0c2;
+}
+@media (prefers-color-scheme: dark) {
+  html.party-mode:not([data-theme="light"]) {
+    --accent: #ff8fc0;
+    --accent-strong: #ffb8d9;
+    --accent-soft: #4a1030;
+    --accent-btn: #ff8fc0;
+    --on-accent-btn: #2b1226;
+    --warm: #ffd166;
+    --warm-soft: #3f2c08;
+  }
+}
+html.party-mode[data-theme="dark"] {
+  --accent: #ff8fc0;
+  --accent-strong: #ffb8d9;
+  --accent-soft: #4a1030;
+  --accent-btn: #ff8fc0;
+  --on-accent-btn: #2b1226;
+  --warm: #ffd166;
+  --warm-soft: #3f2c08;
+}
+
+#screen-app { position: relative; }
+.party-confetti {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.party-confetti span {
+  position: absolute;
+  top: -24px;
+  width: 8px;
+  height: 14px;
+  opacity: .85;
+  animation: party-confetti-fall linear infinite;
+}
+.party-confetti span:nth-child(3n) { border-radius: 50%; }
+.party-confetti span:nth-child(5n) { width: 6px; height: 6px; }
+@keyframes party-confetti-fall {
+  to { transform: translateY(120vh) rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .party-confetti span { animation: none; opacity: .35; top: 40%; }
+}
+
 .modal-close {
   position: absolute;
   top: 16px;
