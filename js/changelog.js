@@ -334,6 +334,13 @@ export const CHANGELOG = [
     title: "Recadinho de Aniversário",
     text: "Em Recados → Recadinho de Aniversário, dá pra escrever bilhetes com antecedência, cada um programado pra chegar num dia específico — quem recebe só enxerga o conteúdo quando o dia chega, e ganha uma notificação na hora. No dia marcado como aniversário, uma celebração aparece sozinha assim que o app abre.",
   },
+  {
+    id: "capmart-tutorial-2026-10",
+    tag: "geral",
+    emoji: "🧃",
+    title: "Tutorial do CapMart",
+    text: "Quem entrar no CapMart agora vê um tutorial rápido explicando como jogar (trocar produtos, juntar trios, estoque escondido, metas de tempo e movimentos) antes da primeira partida.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";

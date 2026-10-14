@@ -7547,7 +7547,36 @@ function capMartFormatTime(seconds) {
   return `${sign}${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
+const CAPMART_TUTORIAL_SEEN_KEY = "capmartTutorialSeenV1";
+
+// tutorial simples, uma vez só por aparelho (ninguém tem essa chave ainda, então aparece pra
+// todo mundo que já usa o app na primeira vez que entrar no CapMart depois deste deploy)
+function maybeShowCapMartTutorial() {
+  let seen = false;
+  try { seen = localStorage.getItem(CAPMART_TUTORIAL_SEEN_KEY) === "1"; } catch (e) { /* sem storage: mostra sempre */ }
+  if (seen) return;
+  openModal(`
+    <div style="font-size:40px; text-align:center; margin-bottom:4px;">🧃</div>
+    <h3 class="modal-title" style="text-align:center;">Como jogar CapMart</h3>
+    <p class="card-sub" style="text-align:center;">Organize o mercadinho da capivara!</p>
+    <ul class="install-steps">
+      <li>Toque em dois produtos pra trocar eles de lugar.</li>
+      <li>Junte 3 produtos iguais numa prateleira pra organizá-la.</li>
+      <li>Várias prateleiras têm estoque escondido atrás — ele aparece sozinho assim que a da frente esvazia.</li>
+      <li>Algumas fases pedem mais que esvaziar tudo: separar uma quantidade de um produto, ou bater uma pontuação.</li>
+      <li>O tempo é só uma meta — terminar rápido dá bônus, passar do tempo não faz perder. Já os movimentos, quando a fase limita, contam de verdade.</li>
+      <li>Travou? Desfazer, dica, +30s e embaralhar ajudam, mas custam moeda.</li>
+    </ul>
+    <button class="btn btn-primary btn-block" style="margin-top:12px;" id="btn-capmart-tutorial-ok">Entendi, bora jogar! 🎮</button>
+  `, () => { try { localStorage.setItem(CAPMART_TUTORIAL_SEEN_KEY, "1"); } catch (e) { /* ok, só mostra de novo */ } closeModal(); });
+  $("#btn-capmart-tutorial-ok").addEventListener("click", () => {
+    try { localStorage.setItem(CAPMART_TUTORIAL_SEEN_KEY, "1"); } catch (e) { /* ok, só mostra de novo */ }
+    closeModal();
+  });
+}
+
 async function renderCapMartGame(scope) {
+  maybeShowCapMartTutorial();
   const isAmigos = scope === "amigos";
   const container = isAmigos ? $("#friends-view") : view;
   const theme = {
