@@ -7669,6 +7669,8 @@ function renderCapMartPlay(scope, isAmigos, container, theme, onBack, level, unl
   let selected = null;
   let timerHandle = null;
   let busy = false;
+  let lastComboShown = null; // sincronizado toda vez que o placar inteiro é redesenhado (renderHud) —
+  // é o que o relógio de 500ms compara pra saber se precisa mexer no selo de combo ou não
 
   function clearTimer() { if (timerHandle) { clearInterval(timerHandle); timerHandle = null; } }
 
@@ -7705,15 +7707,18 @@ function renderCapMartPlay(scope, isAmigos, container, theme, onBack, level, unl
     `).join("");
   }
 
+  // o selo de combo fica sempre no DOM (só escondido via visibility quando não há combo ativo)
+  // pra reservar a altura dele sempre — senão, toda vez que ele aparece/some o placar muda de
+  // tamanho e empurra o tabuleiro (bug reportado: "a tela fica mudando de tamanho")
   function hudHTML() {
     const objective = g.level.objective;
     return `
       <div class="row" style="gap:8px; text-align:center;">
         <div style="flex:1; background:var(--surface-alt); border-radius:9px; padding:6px;"><div class="hint-text" style="margin:0;">PONTOS</div><strong>${g.score}</strong></div>
-        <div style="flex:1; background:var(--surface-alt); border-radius:9px; padding:6px;"><div class="hint-text" style="margin:0;">META DE TEMPO</div><strong style="color:${g.remaining < 0 ? "var(--danger, #e05252)" : "inherit"};">${capMartFormatTime(g.remaining)}</strong></div>
+        <div style="flex:1; background:var(--surface-alt); border-radius:9px; padding:6px;"><div class="hint-text" style="margin:0;">META DE TEMPO</div><strong id="cm-hud-time" style="color:${g.remaining < 0 ? "var(--danger, #e05252)" : "inherit"};">${capMartFormatTime(g.remaining)}</strong></div>
         <div style="flex:1; background:var(--surface-alt); border-radius:9px; padding:6px;"><div class="hint-text" style="margin:0;">${g.level.moves ? "MOVIMENTOS" : "TROCAS"}</div><strong>${g.level.moves ? Math.max(0, g.level.moves - g.movesUsed) : g.movesUsed}</strong></div>
       </div>
-      ${g.combo > 1 ? `<div class="cm-combo-badge" style="text-align:center; margin-top:6px; font-weight:800; color:${theme.accentStrong};">✦ Combo ×${g.combo}!</div>` : ""}
+      <div class="cm-combo-badge" id="cm-hud-combo" style="display:block; text-align:center; margin-top:6px; font-weight:800; min-height:20px; color:${theme.accentStrong}; visibility:${g.combo > 1 ? "visible" : "hidden"};">✦ Combo ×${g.combo > 1 ? g.combo : 2}!</div>
       ${objective.kind === "order" ? `<div class="hint-text" style="text-align:center; margin-top:6px;">Pedido: ${g.collected[objective.product] || 0} / ${objective.count} ${capMart.PRODUCTS[objective.product].icon}</div>` : ""}
     `;
   }
@@ -7739,6 +7744,7 @@ function renderCapMartPlay(scope, isAmigos, container, theme, onBack, level, unl
       <p class="hint-text" id="cm-status" style="text-align:center; margin-top:8px;"></p>
     `;
     $("#cm-play-back").addEventListener("click", () => { clearTimer(); onBack(); });
+    lastComboShown = g.combo;
     wireBoard();
     wireHelp();
   }
@@ -7751,9 +7757,17 @@ function renderCapMartPlay(scope, isAmigos, container, theme, onBack, level, unl
     return true;
   }
 
+  // única porta de saída pra redesenhar o placar inteiro (fora do tick de 500ms, que só toca
+  // tempo/combo direto no DOM) — sempre ressincroniza lastComboShown, senão o próximo tick acha
+  // que o combo "mudou" (porque o nó #cm-hud-combo foi recriado do zero aqui) e mexe de novo à toa
+  function renderHud() {
+    $("#cm-hud").innerHTML = hudHTML();
+    lastComboShown = g.combo;
+  }
+
   function refreshBoardAndHud() {
     $("#cm-board").innerHTML = boardHTML();
-    $("#cm-hud").innerHTML = hudHTML();
+    renderHud();
     container.querySelectorAll("[data-help]").forEach((btn) => { btn.disabled = !capMartHelpAvailable(btn.dataset.help); });
     wireBoard();
   }
@@ -7777,7 +7791,7 @@ function renderCapMartPlay(scope, isAmigos, container, theme, onBack, level, unl
             $("#cm-status").textContent = "";
             busy = true;
             $("#cm-board").innerHTML = boardHTML(cleared);
-            $("#cm-hud").innerHTML = hudHTML();
+            renderHud();
             setTimeout(() => {
               busy = false;
               refreshBoardAndHud();
@@ -7860,12 +7874,27 @@ function renderCapMartPlay(scope, isAmigos, container, theme, onBack, level, unl
 
   render();
   let previous = performance.now();
+  // atualiza só o que o tempo passando realmente muda (o relógio, e o combo quando ele expira
+  // sozinho) direto no DOM — nunca recria o placar inteiro aqui. Score/movimentos só mudam por
+  // uma jogada de verdade, que já passa por renderHud() nos outros pontos acima.
   timerHandle = setInterval(() => {
     const now = performance.now(), delta = (now - previous) / 1000;
     previous = now;
     if (g.status !== "playing") return;
     g = capMart.tick(g, delta);
-    $("#cm-hud").innerHTML = hudHTML();
+    const timeEl = $("#cm-hud-time");
+    if (timeEl) {
+      timeEl.textContent = capMartFormatTime(g.remaining);
+      timeEl.style.color = g.remaining < 0 ? "var(--danger, #e05252)" : "";
+    }
+    if (g.combo !== lastComboShown) {
+      lastComboShown = g.combo;
+      const comboEl = $("#cm-hud-combo");
+      if (comboEl) {
+        if (g.combo > 1) comboEl.textContent = `✦ Combo ×${g.combo}!`;
+        comboEl.style.visibility = g.combo > 1 ? "visible" : "hidden";
+      }
+    }
     if (g.status !== "playing") onGameEnd();
   }, 500);
 }

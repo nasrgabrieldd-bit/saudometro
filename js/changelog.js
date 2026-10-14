@@ -348,6 +348,13 @@ export const CHANGELOG = [
     title: "O app muda de roupa no dia do aniversário",
     text: "No dia marcado como aniversário (mesma data do Recadinho de Aniversário), a cor de destaque do app vira uma paleta de festa e um confete sutil cai no fundo da tela — assim que a pessoa abre o app, antes mesmo de ler qualquer recadinho.",
   },
+  {
+    id: "capmart-hud-bug-2026-10",
+    tag: "geral",
+    emoji: "🛠️",
+    title: "Corrigido: placar do CapMart ficava tremendo",
+    text: "O selo de combo reiniciava a animação sozinho a cada meio segundo e, ao aparecer/sumir, empurrava o tabuleiro e mudava o tamanho da tela. Agora o relógio só atualiza o tempo e o combo quando eles realmente mudam — vale pro casal e pra turma.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
