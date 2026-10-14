@@ -341,6 +341,13 @@ export const CHANGELOG = [
     title: "Tutorial do CapMart",
     text: "Quem entrar no CapMart agora vê um tutorial rápido explicando como jogar (trocar produtos, juntar trios, estoque escondido, metas de tempo e movimentos) antes da primeira partida.",
   },
+  {
+    id: "modo-festa-aniversario-2026-10",
+    tag: "casal",
+    emoji: "🎉",
+    title: "O app muda de roupa no dia do aniversário",
+    text: "No dia marcado como aniversário (mesma data do Recadinho de Aniversário), a cor de destaque do app vira uma paleta de festa e um confete sutil cai no fundo da tela — assim que a pessoa abre o app, antes mesmo de ler qualquer recadinho.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
