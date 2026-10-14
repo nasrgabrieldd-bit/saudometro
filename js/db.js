@@ -802,6 +802,33 @@ export async function listTimeCapsules(coupleId) {
   return data || [];
 }
 
+// ---------- recadinhos de aniversário ----------
+
+export async function createBirthdayNote(coupleId, fromRole, toRole, title, message, deliverOnISO) {
+  const { data, error } = await supabase
+    .from("birthday_notes")
+    .insert({ couple_id: coupleId, from_role: fromRole, to_role: toRole, title, message, deliver_on: deliverOnISO })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function listBirthdayNotes(coupleId) {
+  const { data, error } = await supabase
+    .from("birthday_notes")
+    .select("*")
+    .eq("couple_id", coupleId)
+    .order("deliver_on", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function deleteBirthdayNote(id) {
+  const { error } = await supabase.from("birthday_notes").delete().eq("id", id);
+  if (error) throw error;
+}
+
 // ---------- desafio do dia ----------
 
 export async function upsertChallengeAnswer(coupleId, dayISO, role, answer) {
@@ -983,6 +1010,7 @@ export function subscribeCoupleChanges(coupleId, onChange, onSettings) {
     .on("postgres_changes", { event: "*", schema: "public", table: "reactions", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "memory_photos", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "time_capsules", filter: `couple_id=eq.${coupleId}` }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "birthday_notes", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "daily_challenge_answers", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "secret_wishes", filter: `couple_id=eq.${coupleId}` }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "wish_redemptions", filter: `couple_id=eq.${coupleId}` }, onChange)

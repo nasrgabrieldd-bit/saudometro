@@ -1,13 +1,14 @@
-// uma pergunta por semana — a lista roda em ciclo depois de acabar
+// uma pergunta por semana — a lista roda em ciclo depois de acabar.
+// Diferente do desafio do dia (challenges.js): aqui o par é "pergunta de fundo", pensada pra
+// uma conversa mais longa, não pra responder na hora — por isso evitamos temas que já aparecem
+// lá (cheiro/música/lembrança de rir juntos) e focamos em passado, medos, sonhos e futuro a dois.
 export const QUESTIONS = [
   "Qual foi o momento em que você sentiu mais orgulho de mim?",
-  "Qual é uma coisa pequena que eu faço que te faz sorrir sem eu perceber?",
   "Se pudesse reviver um dia nosso, qual seria e por quê?",
   "Qual é o seu jeito favorito de receber carinho: palavras, toque, tempo junto, presentes ou atos de serviço?",
   "O que você mudaria em mim se pudesse, e o que nunca mudaria?",
   "Qual memória de infância te define até hoje?",
   "O que te dá mais medo em relação ao nosso futuro?",
-  "Qual foi a vez que você mais riu comigo?",
   "O que você sente que eu não sei sobre você ainda?",
   "Qual é um sonho que você nunca me contou?",
   "Como você prefere ser consolada(o) quando está triste?",
@@ -20,10 +21,12 @@ export const QUESTIONS = [
   "O que te deixa com mais saudade quando estamos longe?",
   "Qual é uma coisa que você queria ter coragem de me pedir?",
   "Como você imagina a gente daqui a 10 anos?",
-  "Qual cheiro, música ou lugar te lembra de mim?",
+  "Qual foi a decisão mais difícil que você já tomou por nós dois?",
   "O que você aprendeu sobre amor com seus pais?",
   "Qual foi a primeira vez que você pensou 'eu quero ficar com essa pessoa'?",
   "O que te faz sentir segura(o) numa relação?",
+  "Se pudesse mudar uma coisa na forma como a gente resolve brigas, o que seria?",
+  "Qual é um objetivo de vida seu que eu poderia te ajudar mais a alcançar?",
 ];
 
 // mesmo ajuste do desafio do dia (ver challenges.js): conta semanas de calendário a partir

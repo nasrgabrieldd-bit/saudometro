@@ -306,6 +306,41 @@ export const CHANGELOG = [
     title: "Ideia de 'fazer juntos' agora pode virar encontro",
     text: "Em Recadinhos → Fazer juntos, cada ideia ganhou um botão 📅 que já abre o encontro combinado com o título preenchido — não precisa digitar tudo de novo.",
   },
+  {
+    id: "pergunta-semana-reformulada-2026-10",
+    tag: "casal",
+    emoji: "💭",
+    title: "Pergunta da semana ficou mais profunda",
+    text: "Trocamos algumas perguntas que repetiam tema com o desafio do dia (cheiro, música, lembrança de rir juntos) por perguntas sobre passado, medos e futuro a dois. As duas telas agora deixam claro pra que servem: desafio do dia é rápido, pergunta da semana é pra pensar com calma.",
+  },
+  {
+    id: "jogos-destaque-home-2026-10",
+    tag: "casal",
+    emoji: "🎮",
+    title: "Jogos ganharam espaço na tela inicial",
+    text: "Antes só o Capibatman aparecia na Home — Capiverso (cartas), Capistop e CapMart só apareciam 2 toques depois, dentro de Lojinha. Agora os 4 jogos têm atalho direto logo na Home.",
+  },
+  {
+    id: "lojinha-promocoes-2026-10",
+    tag: "casal",
+    emoji: "🔥",
+    title: "Promoções com prazo na Lojinha",
+    text: "Agora dá pra criar uma promoção temporária em qualquer item da Lojinha (oficial ou criado por vocês): escolhe o desconto e até quando vale, pelo botão ✏️ Valor (ou ✏️ Editar, nos itens criados por vocês). O item com promoção ativa ganha um selo 🔥 e mostra o preço riscado.",
+  },
+  {
+    id: "recadinho-aniversario-2026-10",
+    tag: "casal",
+    emoji: "🎂",
+    title: "Recadinho de Aniversário",
+    text: "Em Recados → Recadinho de Aniversário, dá pra escrever bilhetes com antecedência, cada um programado pra chegar num dia específico — quem recebe só enxerga o conteúdo quando o dia chega, e ganha uma notificação na hora. No dia marcado como aniversário, uma celebração aparece sozinha assim que o app abre.",
+  },
+  {
+    id: "capmart-tutorial-2026-10",
+    tag: "geral",
+    emoji: "🧃",
+    title: "Tutorial do CapMart",
+    text: "Quem entrar no CapMart agora vê um tutorial rápido explicando como jogar (trocar produtos, juntar trios, estoque escondido, metas de tempo e movimentos) antes da primeira partida.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";

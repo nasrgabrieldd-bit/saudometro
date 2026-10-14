@@ -4514,6 +4514,7 @@ ${(() => {
   }
 
   if (feat("kiss")) maybeShowKissMilestone(daysSinceKiss, stats?.last_kiss_at);
+  maybeShowBirthdayCelebration();
 }
 
 // mostra uma animação de susto fofo quando o contador de beijo bate um múltiplo de 15 dias
@@ -5397,6 +5398,7 @@ async function renderMood() {
 ${feat("weekly") ? `    <div class="card-tab-wrap">
       <span class="card-tab">💭 Pergunta da semana</span>
     <div class="card">
+      <p class="hint-text" style="margin:-2px 0 10px;">Diferente do desafio do dia: essa é pra ir mais fundo, sem pressa pra responder.</p>
       <div class="card-sub" style="font-size:15px; color:var(--text); font-weight:700;">${question}</div>
       <textarea id="weekly-answer" rows="3" style="margin-top:10px;" placeholder="escreve sua resposta...">${escapeHTML(myAnswer?.answer || "")}</textarea>
       <button class="btn btn-primary btn-block" style="margin-top:12px;" id="save-weekly">${myAnswer ? "Atualizar resposta" : `Responder${earnTag("weekly")}`}</button>
@@ -5825,7 +5827,7 @@ async function renderNotes() {
     hub: renderNotesHub, history: renderNotesHistory,
     challenge: renderChallengeView, capsule: renderCapsuleView,
     wishes: renderWishesView, invites: renderInvites, memories: renderMemoriesView,
-    "together-ideas": renderTogetherIdeasView,
+    "together-ideas": renderTogetherIdeasView, birthday: renderBirthdayNotesView,
   };
   (map[State.notesView] || renderNotesHub)();
 }
@@ -5834,7 +5836,7 @@ async function renderNotesHub() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const todayStr = todayISO();
 
-  const [notes, noteReactions, todayAnswers, capsules, redemptions, invites, memories, memoryReactions, dateIdeas, dateIdeaRatings] = await Promise.all([
+  const [notes, noteReactions, todayAnswers, capsules, redemptions, invites, memories, memoryReactions, dateIdeas, dateIdeaRatings, birthdayNotes] = await Promise.all([
     db.listRecentSweetNotes(State.coupleId, 5),
     db.listReactions(State.coupleId, "note").catch(() => null), // null = recurso ainda não ativado no banco
     db.getChallengeAnswersForDay(State.coupleId, todayStr),
@@ -5845,9 +5847,17 @@ async function renderNotesHub() {
     db.listReactions(State.coupleId, "memory").catch(() => null),
     db.listDateIdeas(State.coupleId).catch(() => []),
     db.listDateIdeaRatings(State.coupleId).catch(() => []),
+    db.listBirthdayNotes(State.coupleId).catch(() => []), // [] = recurso ainda não ativado no banco
   ]);
   const memoriesPending = memories ? memories.filter((m) => m.role !== State.role && m.reply_role !== State.role && !(memoryReactions || []).some((r) => r.target_id === m.id && r.role === State.role)).length : 0;
   const dateIdeasPending = dateIdeas.filter((idea) => !dateIdeaRatings.some((r) => r.idea_id === idea.id && r.role === State.role)).length;
+  const myBirthdayNotes = birthdayNotes.filter((n) => n.from_role === State.role);
+  const visibleBirthdayNotes = birthdayNotes.filter((n) => n.to_role === State.role && n.deliver_on <= todayStr);
+  const pendingBirthdayNotes = birthdayNotes.filter((n) => n.to_role === State.role && n.deliver_on > todayStr);
+  const birthdaySub = myBirthdayNotes.length ? `${myBirthdayNotes.length} escrito${myBirthdayNotes.length === 1 ? "" : "s"}`
+    : visibleBirthdayNotes.length ? `${visibleBirthdayNotes.length} esperando você`
+    : pendingBirthdayNotes.length ? "chegando em breve..."
+    : "Criar um novo";
 
   const myLastNote = notes.find((n) => n.role === State.role);
   const iSentToday = notes.some((n) => n.role === State.role && n.created_at.slice(0, 10) === todayStr);
@@ -5870,6 +5880,7 @@ async function renderNotesHub() {
 
     <div class="section-title">Atalhos</div>
     <div class="settings-list">
+${settingsRowHTML({ emoji: "🎂", title: "Recadinho de Aniversário", sub: birthdaySub, dataView: "birthday", dot: visibleBirthdayNotes.some((n) => n.deliver_on === todayStr) })}
 ${feat("daily") ? settingsRowHTML({ iconName: "target", title: "Desafio do dia", sub: myAnswerToday ? "Respondido ✓" : "Responder agora", dataView: "challenge" }) : ""}
 ${feat("capsule") ? settingsRowHTML({ iconName: "clock", title: "Cápsula do tempo", sub: capsules.length ? `${capsules.length} guardada${capsules.length === 1 ? "" : "s"}` : "Nenhuma ainda", dataView: "capsule" }) : ""}
 ${feat("wishes") ? settingsRowHTML({ iconName: "gift", title: "Desejos secretos", sub: readyRedemptions.length ? "Tem resgate revelado!" : "Ver desejos", dataView: "wishes", dot: !!readyRedemptions.length }) : ""}
@@ -5938,6 +5949,7 @@ async function renderChallengeView() {
   view.innerHTML = `
     ${subViewHeader("🎯 Desafio do dia")}
     <div class="card" style="background:var(--warm-soft);">
+      <p class="hint-text" style="margin:0 0 10px;">Rapidinho, sem pensar muito — a pergunta mais profunda da semana fica na aba Humor.</p>
       <div class="card-title" style="font-size:15.5px; font-family:'Baloo 2', sans-serif;">"${todayChallenge}"</div>
       ${myAnswerToday ? `
         <div class="entry-meta" style="margin-top:8px; color:var(--text);">Você: "${escapeHTML(myAnswerToday.answer)}"</div>
@@ -6018,6 +6030,139 @@ async function renderCapsuleView() {
       alert("Não deu: " + (e.message || e));
       setBusy("#btn-seal-capsule", false);
     }
+  });
+}
+
+// ---------------- Recadinho de Aniversário ----------------
+// Bilhetes escritos com antecedência (um por dia, por exemplo), cada um só visível pra quem
+// recebe a partir do dia marcado pra "chegar" (deliver_on) — mesma lógica de visibilidade já
+// usada na Cápsula do Tempo (quem escreveu sempre pode reler o que escreveu). A notificação
+// de cada um é disparada pelo job diário (scripts/deliver-birthday-notes.mjs), não na hora em
+// que o bilhete é escrito, porque não tem nada rodando em segundo plano aqui pra acertar a
+// hora exata do agendamento.
+
+function birthdayNoteItemHTML(n) {
+  const mine = n.from_role === State.role;
+  const arrived = n.deliver_on <= todayISO();
+  const canRead = mine || arrived;
+  const timing = arrived ? `Entregue em ${humanDateShort(parseISODate(n.deliver_on))}` : `Chega ${daysUntilLabel(parseISODate(n.deliver_on))}`;
+  return `
+    <div class="entry-item">
+      <div class="entry-icon">${canRead ? "🎂" : "🔒"}</div>
+      <div class="entry-body">
+        <div class="entry-title">${escapeHTML(n.title || "Recadinho de Aniversário")}</div>
+        <div class="entry-meta">${timing}</div>
+        ${canRead
+          ? `<div class="entry-meta" style="margin-top:6px; color:var(--text);">"${escapeHTML(n.message)}"</div>`
+          : `<div class="entry-meta" style="margin-top:6px; filter:blur(4px); user-select:none;">${"• ".repeat(18)}</div>`}
+        ${mine && !arrived ? `<div class="entry-actions"><button class="btn btn-ghost btn-sm" data-act="delete-birthday-note" data-id="${n.id}">🗑️ Cancelar</button></div>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+async function renderBirthdayNotesView() {
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const notes = await db.listBirthdayNotes(State.coupleId).catch(() => []);
+  const todayStr = todayISO();
+  const birthdays = State.settings?.features?.birthdays || {};
+  const targetDate = birthdays[otherRole()];
+
+  view.innerHTML = `
+    ${subViewHeader("🎂 Recadinho de Aniversário")}
+    <div class="card" style="text-align:center; background:var(--warm-soft);">
+      ${targetDate
+        ? `<div class="card-title" style="font-size:15px;">Aniversário de ${ROLE_LABEL[otherRole()]}: ${humanDateLong(parseISODate(targetDate))}</div><div class="card-sub" style="margin-bottom:0;">${daysUntilLabel(parseISODate(targetDate))}</div>`
+        : `<div class="card-sub">Ainda sem data marcada pra ${ROLE_LABEL[otherRole()]}.</div>`}
+      <div class="row" style="margin-top:10px; gap:8px; justify-content:center; align-items:center;">
+        <input type="date" id="birthday-target-date" value="${targetDate || ""}" style="flex:1; max-width:180px;" />
+        <button class="btn btn-secondary btn-sm" style="flex:none;" id="btn-save-birthday-target">Salvar data</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="font-size:15px;">Escrever um recadinho</div>
+      <label class="field-label">Título (opcional)</label>
+      <input type="text" id="birthday-note-title" maxlength="60" placeholder="Recadinho de Aniversário" />
+      <label class="field-label">Mensagem</label>
+      <textarea id="birthday-note-text" rows="3" placeholder="escreve o bilhete aqui..."></textarea>
+      <label class="field-label">Entregar em</label>
+      <input type="date" id="birthday-note-date" min="${todayStr}" value="${targetDate && targetDate >= todayStr ? targetDate : todayStr}" />
+      <button class="btn btn-primary btn-block" style="margin-top:12px;" id="btn-save-birthday-note">Programar recadinho 🎂</button>
+    </div>
+
+    <div class="card">
+      ${notes.length ? `<div class="stack">${notes.map(birthdayNoteItemHTML).join("")}</div>` : `<div class="empty-state"><span class="emoji">🎂</span>Nenhum recadinho ainda.</div>`}
+    </div>
+  `;
+
+  wireNotesBack();
+
+  $("#btn-save-birthday-target")?.addEventListener("click", async () => {
+    const date = $("#birthday-target-date").value;
+    if (!date) { alert("Escolhe uma data :)"); return; }
+    setBusy("#btn-save-birthday-target", true);
+    try {
+      State.settings = await db.updateCoupleFeatures(State.coupleId, (f) => ({ ...f, birthdays: { ...(f.birthdays || {}), [otherRole()]: date } }));
+      setPeopleSettings(State.settings);
+      await renderBirthdayNotesView();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#btn-save-birthday-target", false);
+    }
+  });
+
+  $("#btn-save-birthday-note")?.addEventListener("click", async () => {
+    const title = $("#birthday-note-title").value.trim() || "Recadinho de Aniversário";
+    const message = $("#birthday-note-text").value.trim();
+    const deliverOn = $("#birthday-note-date").value;
+    if (!message) { alert("Escreve o recadinho primeiro :)"); return; }
+    if (!deliverOn) { alert("Escolhe quando ele deve chegar :)"); return; }
+    setBusy("#btn-save-birthday-note", true);
+    try {
+      await db.createBirthdayNote(State.coupleId, State.role, otherRole(), title, message, deliverOn);
+      await renderBirthdayNotesView();
+    } catch (e) {
+      alert("Não deu: " + (e.message || e));
+      setBusy("#btn-save-birthday-note", false);
+    }
+  });
+
+  view.querySelectorAll("[data-act='delete-birthday-note']").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Cancelar esse recadinho programado?")) return;
+      try {
+        await db.deleteBirthdayNote(btn.dataset.id);
+        await renderBirthdayNotesView();
+      } catch (e) {
+        alert("Não deu: " + (e.message || e));
+      }
+    });
+  });
+}
+
+// celebração automática no dia: dispara uma vez (por casal+pessoa+data, guardado no aparelho)
+// quando a Home é renderizada e a data guardada em features.birthdays[State.role] é hoje
+function maybeShowBirthdayCelebration() {
+  const bday = State.settings?.features?.birthdays?.[State.role];
+  if (!bday || bday !== todayISO()) return;
+  const key = `birthdayCelebrationShown:${State.coupleId}:${State.role}:${bday}`;
+  try {
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(key, "1");
+  } catch (e) { /* sem storage: pode repetir, sem problema */ }
+
+  openModal(`
+    <div class="milestone-icon">🎂</div>
+    <h3 class="modal-title" style="text-align:center;">Feliz Aniversário!!! 🎉</h3>
+    <p class="card-sub" style="text-align:center;">Hoje é o seu dia! Separaram recadinhos especiais só pra você essa semana 💗</p>
+    <button class="btn btn-primary btn-block" style="margin-top:16px;" id="btn-birthday-ok">Ver recadinhos 🎁</button>
+  `);
+  $("#btn-birthday-ok")?.addEventListener("click", () => {
+    closeModal();
+    setActiveTab("notes");
+    State.notesView = "birthday";
+    renderNotes();
   });
 }
 
@@ -7325,6 +7470,15 @@ async function renderStarBattleGame(scope) {
 
 // card da Home mostrando em que fase o casal está no jogo e quanto já ganhou jogando —
 // carrega depois do resto da Home (não trava o resto da tela esperando essa consulta a mais)
+// antes só o Capibatman aparecia na Home (os outros 3 jogos só apareciam 2 toques depois,
+// dentro de Lojinha > Atalhos > Jogos) — item #11, dar mais destaque aos jogos, sem mexer na
+// navegação principal (que já tem os 6 slots ocupados).
+function goToGame(renderFn, ...args) {
+  State.activeTab = "shop";
+  document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === "shop"));
+  renderFn(...args);
+}
+
 async function renderHomeGameCard() {
   const el = $("#home-game-card");
   if (!el) return;
@@ -7334,27 +7488,37 @@ async function renderHomeGameCard() {
       db.getGameCoinsEarnedByRole(State.coupleId, "Capibatman"),
     ]);
     el.innerHTML = `
-      <div class="card" id="home-game-card-inner" style="cursor:pointer;">
-        <div class="row" style="align-items:center; gap:10px;">
-          <img src="icons/capivarinhas.jpg" alt="" style="width:40px; height:40px; border-radius:10px; object-fit:cover; flex:none;" />
-          <div class="card-title" style="font-size:14px; margin-bottom:0;">Capibatman</div>
-        </div>
-        <div class="row" style="gap:8px; margin-top:10px;">
-          <div style="flex:1; text-align:center; background:var(--accent-soft); border-radius:10px; padding:8px;">
-            <div style="font-weight:800; font-size:13px; color:var(--accent-strong);">${ROLE_LABEL.gabriel}</div>
-            <div class="hint-text" style="margin:0;">Fase ${levels.gabriel} · 💰${coins.gabriel || 0}</div>
-          </div>
-          <div style="flex:1; text-align:center; background:var(--accent-soft); border-radius:10px; padding:8px;">
-            <div style="font-weight:800; font-size:13px; color:var(--accent-strong);">${ROLE_LABEL.tata}</div>
-            <div class="hint-text" style="margin:0;">Fase ${levels.tata} · 💰${coins.tata || 0}</div>
-          </div>
-        </div>
+      <div class="section-title" style="margin-top:0;">🎮 Jogos</div>
+      <div class="shortcut-grid" id="home-games-grid">
+        <button class="shortcut-card" data-game="capibatman">
+          <img src="icons/capivarinhas.jpg" alt="" style="width:44px; height:44px; border-radius:50%; object-fit:cover;" />
+          <span class="shortcut-title">Capibatman</span>
+          <span class="shortcut-sub">${ROLE_LABEL.gabriel} f.${levels.gabriel} · ${ROLE_LABEL.tata} f.${levels.tata}</span>
+        </button>
+        <button class="shortcut-card" data-game="cartas">
+          <img src="icons/capiverso.png" alt="" style="width:44px; height:44px; border-radius:50%; object-fit:cover;" />
+          <span class="shortcut-title">${GAME_LABEL.cartas}</span>
+          <span class="shortcut-sub">fique sem cartas antes</span>
+        </button>
+        <button class="shortcut-card" data-game="stop">
+          <img src="icons/capistop.png" alt="" style="width:44px; height:44px; border-radius:50%; object-fit:cover;" />
+          <span class="shortcut-title">${GAME_LABEL.stop}</span>
+          <span class="shortcut-sub">uma letra, pouco tempo</span>
+        </button>
+        <button class="shortcut-card" data-game="capmart">
+          <img src="icons/capmart-capivara.jpg" alt="" style="width:44px; height:44px; border-radius:50%; object-fit:contain;" />
+          <span class="shortcut-title">CapMart</span>
+          <span class="shortcut-sub">110 fases de trios</span>
+        </button>
       </div>
     `;
-    $("#home-game-card-inner").addEventListener("click", () => {
-      State.activeTab = "shop";
-      document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === "shop"));
-      renderStarBattleGame("casal");
+    $("#home-games-grid").querySelectorAll("[data-game]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const game = btn.dataset.game;
+        if (game === "capibatman") goToGame(renderStarBattleGame, "casal");
+        else if (game === "capmart") goToGame(renderCapMartGame, "casal");
+        else goToGame(renderGameHub, "casal", game);
+      });
     });
   } catch (e) { /* jogo ainda não tem progresso ou deu erro de rede: só não mostra o card */ }
 }
@@ -7383,7 +7547,36 @@ function capMartFormatTime(seconds) {
   return `${sign}${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
+const CAPMART_TUTORIAL_SEEN_KEY = "capmartTutorialSeenV1";
+
+// tutorial simples, uma vez só por aparelho (ninguém tem essa chave ainda, então aparece pra
+// todo mundo que já usa o app na primeira vez que entrar no CapMart depois deste deploy)
+function maybeShowCapMartTutorial() {
+  let seen = false;
+  try { seen = localStorage.getItem(CAPMART_TUTORIAL_SEEN_KEY) === "1"; } catch (e) { /* sem storage: mostra sempre */ }
+  if (seen) return;
+  openModal(`
+    <div style="font-size:40px; text-align:center; margin-bottom:4px;">🧃</div>
+    <h3 class="modal-title" style="text-align:center;">Como jogar CapMart</h3>
+    <p class="card-sub" style="text-align:center;">Organize o mercadinho da capivara!</p>
+    <ul class="install-steps">
+      <li>Toque em dois produtos pra trocar eles de lugar.</li>
+      <li>Junte 3 produtos iguais numa prateleira pra organizá-la.</li>
+      <li>Várias prateleiras têm estoque escondido atrás — ele aparece sozinho assim que a da frente esvazia.</li>
+      <li>Algumas fases pedem mais que esvaziar tudo: separar uma quantidade de um produto, ou bater uma pontuação.</li>
+      <li>O tempo é só uma meta — terminar rápido dá bônus, passar do tempo não faz perder. Já os movimentos, quando a fase limita, contam de verdade.</li>
+      <li>Travou? Desfazer, dica, +30s e embaralhar ajudam, mas custam moeda.</li>
+    </ul>
+    <button class="btn btn-primary btn-block" style="margin-top:12px;" id="btn-capmart-tutorial-ok">Entendi, bora jogar! 🎮</button>
+  `, () => { try { localStorage.setItem(CAPMART_TUTORIAL_SEEN_KEY, "1"); } catch (e) { /* ok, só mostra de novo */ } closeModal(); });
+  $("#btn-capmart-tutorial-ok").addEventListener("click", () => {
+    try { localStorage.setItem(CAPMART_TUTORIAL_SEEN_KEY, "1"); } catch (e) { /* ok, só mostra de novo */ }
+    closeModal();
+  });
+}
+
 async function renderCapMartGame(scope) {
+  maybeShowCapMartTutorial();
   const isAmigos = scope === "amigos";
   const container = isAmigos ? $("#friends-view") : view;
   const theme = {
@@ -7663,15 +7856,28 @@ async function loadShopData() {
     const ov = perkCosts[id];
     if (Number.isInteger(ov) && ov >= 1 && ov <= 200) perkById[id] = { ...PERK_BY_ID[id], cost: ov, fulfillReward: suggestedReward(ov) };
   }
+  // promoção temporária (desconto com prazo) — vale pra item oficial ou criado por vocês;
+  // aplica em cima do custo já ajustado acima, e vence sozinha (sem precisar limpar nada,
+  // só para de contar quando "until" passa, igual outras datas do app)
+  const today = todayISO();
+  const promos = State.settings?.features?.perk_promos || {};
+  for (const [id, promo] of Object.entries(promos)) {
+    if (!perkById[id] || promo.until < today) continue;
+    const original = perkById[id].cost;
+    const discounted = Math.max(1, Math.round(original * (1 - promo.pct / 100)));
+    perkById[id] = { ...perkById[id], cost: discounted, originalCost: original, fulfillReward: suggestedReward(discounted), promoPct: promo.pct, promoUntil: promo.until };
+  }
   // item apagado depois de resgatado: usa a recompensa sugerida pelo custo que ficou registrado
   const rewardFor = (r) => perkById[r.perk_id]?.fulfillReward ?? suggestedReward(r.cost);
   return { coins, redemptions, customRows, customPerks, perkById, myCoins, pending, fulfilled, rewardFor };
 }
 
 function shopPerkCardHTML(p, myCoins) {
+  const onPromo = !!p.promoUntil;
   return `
-    <div class="card">
-      <div class="row" style="align-items:flex-start;">
+    <div class="card" style="${onPromo ? "position:relative; overflow:visible;" : ""}">
+      ${onPromo ? `<span style="position:absolute; top:-14px; left:16px; background:var(--warm); color:#4a2c07; font-size:11.5px; font-weight:800; padding:6px 12px; border-radius:999px; box-shadow:var(--shadow-tap);">🔥 -${p.promoPct}% até ${humanDateShort(parseISODate(p.promoUntil))}</span>` : ""}
+      <div class="row" style="align-items:flex-start; ${onPromo ? "margin-top:6px;" : ""}">
         <div style="flex:0 0 auto; font-size:30px;">${escapeHTML(p.emoji)}</div>
         <div style="flex:1; min-width:0;">
           <div class="card-title" style="font-size:15px;">${escapeHTML(gen(p.title, genderOf(State.role)))}</div>
@@ -7681,7 +7887,7 @@ function shopPerkCardHTML(p, myCoins) {
           ? `<button class="btn btn-ghost btn-sm" style="flex:none;" data-act="edit-perk" data-id="${p.rowId}">✏️ Editar</button>`
           : `<button class="btn btn-ghost btn-sm" style="flex:none;" data-act="edit-cost" data-id="${p.id}">✏️ Valor</button>`}
       </div>
-      <button class="btn ${myCoins >= p.cost ? "btn-warm" : "btn-secondary"} btn-block" data-act="redeem" data-perk="${p.id}" ${myCoins < p.cost ? "disabled" : ""}>Resgatar (💰 ${p.cost})</button>
+      <button class="btn ${myCoins >= p.cost ? "btn-warm" : "btn-secondary"} btn-block" data-act="redeem" data-perk="${p.id}" ${myCoins < p.cost ? "disabled" : ""}>Resgatar (${onPromo ? `<s>💰 ${p.originalCost}</s> ` : ""}💰 ${p.cost})</button>
     </div>
   `;
 }
@@ -7926,8 +8132,42 @@ async function renderShopHistory() {
   wireShopActions(redemptions, rewardFor, customRows, perkById);
 }
 
+// promoção temporária de um item da lojinha (item #5): desconto por % com prazo, guardado em
+// couple_settings.features.perk_promos (mesmo padrão do perk_costs), vale pra item oficial ou
+// criado pelo casal. Os dois campos em branco = sem promoção (ou remove a que já existe).
+function perkPromoFieldsHTML(promo) {
+  return `
+    <label class="field-label" style="margin-top:14px;">🔥 Promoção temporária (opcional)</label>
+    <div class="row" style="gap:10px;">
+      <input type="number" id="perk-promo-pct" min="1" max="90" placeholder="% de desconto" value="${promo?.pct ?? ""}" style="flex:1;" />
+      <input type="date" id="perk-promo-until" min="${todayISO()}" value="${promo?.until ?? ""}" style="flex:1;" />
+    </div>
+    <p class="hint-text" style="margin-top:4px;">Deixa os dois em branco pra não ter promoção (ou tirar uma que já existe).</p>
+  `;
+}
+
+// lê os campos acima e devolve: "remove" (os dois em branco), "invalid" (preenchimento
+// incompleto ou fora da faixa) ou { pct, until } prontos pra salvar
+function readPerkPromoPatch() {
+  const pctStr = $("#perk-promo-pct")?.value.trim();
+  const until = $("#perk-promo-until")?.value;
+  if (!pctStr && !until) return "remove";
+  const pct = parseInt(pctStr, 10);
+  if (!pct || pct < 1 || pct > 90 || !until || until < todayISO()) return "invalid";
+  return { pct, until };
+}
+
+function applyPerkPromoPatch(features, promoId, patch) {
+  const perk_promos = { ...(features.perk_promos || {}) };
+  if (patch === "remove") delete perk_promos[promoId];
+  else perk_promos[promoId] = patch;
+  return { ...features, perk_promos };
+}
+
 function openPerkModal(existing) {
   const cost0 = existing?.cost ?? 10;
+  const promoId = existing ? `custom:${existing.id}` : null;
+  const promo = promoId ? State.settings?.features?.perk_promos?.[promoId] : null;
   openModal(`
     <h3 class="modal-title">${existing ? "✏️ Editar item" : "💡 Novo item da lojinha"}</h3>
     <div class="row" style="gap:10px;">
@@ -7945,6 +8185,7 @@ function openPerkModal(existing) {
     <label class="field-label">Custo em moedas</label>
     <input type="number" id="perk-cost" min="1" max="200" value="${cost0}" />
     <p class="hint-text" id="perk-reward-hint" style="margin-top:6px;"></p>
+    ${existing ? perkPromoFieldsHTML(promo) : ""}
     <button class="btn btn-primary btn-block" style="margin-top:16px;" id="save-perk">Salvar</button>
     ${existing ? `<button class="btn btn-danger btn-block" style="margin-top:8px;" id="delete-perk">🗑️ Apagar item</button>` : ""}
   `);
@@ -7958,6 +8199,8 @@ function openPerkModal(existing) {
     const cost = parseInt($("#perk-cost").value, 10);
     if (!title) { alert("Dá um nome pro item :)"); return; }
     if (!cost || cost < 1 || cost > 200) { alert("O custo tem que ser entre 1 e 200 moedas."); return; }
+    const promoPatch = existing ? readPerkPromoPatch() : null;
+    if (promoPatch === "invalid") { alert("Preenche o desconto (1 a 90%) e uma data válida, ou deixa os dois em branco."); return; }
     setBusy("#save-perk", true);
     try {
       await db.saveCustomPerk({
@@ -7965,6 +8208,10 @@ function openPerkModal(existing) {
         emoji: $("#perk-emoji").value.trim() || "🎁", title,
         description: $("#perk-desc").value.trim(), cost, fulfillReward: suggestedReward(cost),
       });
+      if (promoPatch) {
+        State.settings = await db.updateCoupleFeatures(State.coupleId, (f) => applyPerkPromoPatch(f, promoId, promoPatch));
+        setPeopleSettings(State.settings);
+      }
       closeModal();
       await renderShop();
     } catch (e) {
@@ -7988,22 +8235,27 @@ function openPerkModal(existing) {
 // pra itens criados por vocês, a edição completa já é pelo botão "✏️ Editar" (openPerkModal).
 function openPerkCostModal(perk) {
   const base = PERK_BY_ID[perk.id];
-  const isCustomValue = perk.cost !== base.cost;
+  const currentCost = perk.originalCost ?? perk.cost; // sem o desconto de uma promoção ativa, se houver
+  const isCustomValue = currentCost !== base.cost;
+  const promo = State.settings?.features?.perk_promos?.[perk.id];
   openModal(`
     <h3 class="modal-title">✏️ Valor deste item</h3>
     <p class="card-sub">${perk.emoji} ${escapeHTML(gen(perk.title, genderOf(State.role)))}</p>
     <p class="hint-text">Isso só muda pro seu casal, outros casais continuam vendo o valor padrão (${base.cost}).</p>
     <label class="field-label">Custo em moedas</label>
-    <input type="number" id="perk-cost-value" min="1" max="200" value="${perk.cost}" />
-    <button class="btn btn-primary btn-block" style="margin-top:16px;" id="save-perk-cost">Salvar</button>
+    <input type="number" id="perk-cost-value" min="1" max="200" value="${currentCost}" />
     ${isCustomValue ? `<button class="btn btn-ghost btn-block" style="margin-top:8px;" id="reset-perk-cost">Voltar ao valor padrão (${base.cost})</button>` : ""}
+    ${perkPromoFieldsHTML(promo)}
+    <button class="btn btn-primary btn-block" style="margin-top:16px;" id="save-perk-cost">Salvar</button>
   `);
   $("#save-perk-cost").addEventListener("click", async () => {
     const cost = parseInt($("#perk-cost-value").value, 10);
     if (!cost || cost < 1 || cost > 200) { alert("O custo tem que ser entre 1 e 200 moedas."); return; }
+    const promoPatch = readPerkPromoPatch();
+    if (promoPatch === "invalid") { alert("Preenche o desconto (1 a 90%) e uma data válida, ou deixa os dois em branco."); return; }
     setBusy("#save-perk-cost", true);
     try {
-      State.settings = await db.updateCoupleFeatures(State.coupleId, (f) => ({ ...f, perk_costs: { ...(f.perk_costs || {}), [perk.id]: cost } }));
+      State.settings = await db.updateCoupleFeatures(State.coupleId, (f) => applyPerkPromoPatch({ ...f, perk_costs: { ...(f.perk_costs || {}), [perk.id]: cost } }, perk.id, promoPatch));
       setPeopleSettings(State.settings);
       closeModal();
       await renderShop();
