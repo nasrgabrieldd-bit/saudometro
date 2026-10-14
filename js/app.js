@@ -6155,7 +6155,7 @@ function maybeShowBirthdayCelebration() {
   } catch (e) { /* sem storage: pode repetir, sem problema */ }
 
   openModal(`
-    <div class="milestone-icon">🎂</div>
+    <img src="icons/aniversario-capivara.png" alt="" class="milestone-icon" style="width:84px; height:84px; display:block; margin:0 auto 6px; object-fit:contain;" />
     <h3 class="modal-title" style="text-align:center;">Feliz Aniversário!!! 🎉</h3>
     <p class="card-sub" style="text-align:center;">Hoje é o seu dia! Separaram recadinhos especiais só pra você essa semana 💗</p>
     <button class="btn btn-primary btn-block" style="margin-top:16px;" id="btn-birthday-ok">Ver recadinhos 🎁</button>
