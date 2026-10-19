@@ -163,12 +163,21 @@ export async function setMyMood(friendGroupId, dayISO, userId, mood, { wantsToTa
   if (error) throw error;
 }
 
-// ---------- prêmios (cofre de moedas do grupo) ----------
+// ---------- prêmios (carteira de moedas, uma por pessoa — igual ao casal) ----------
 
-export async function getGroupCoinBalance(friendGroupId) {
-  const { data, error } = await supabase.from("friend_coin_balances").select("balance").eq("friend_group_id", friendGroupId).maybeSingle();
+export async function getGroupCoinBalance(friendGroupId, userId) {
+  const { data, error } = await supabase.from("friend_coin_balances").select("balance").eq("friend_group_id", friendGroupId).eq("user_id", userId).maybeSingle();
   if (error) throw error;
   return data?.balance || 0;
+}
+
+// saldo de todo mundo da turma de uma vez (pra mostrar a carteira de cada um lado a lado)
+export async function getGroupMemberBalances(friendGroupId) {
+  const { data, error } = await supabase.from("friend_coin_balances").select("user_id, balance").eq("friend_group_id", friendGroupId);
+  if (error) throw error;
+  const map = {};
+  for (const row of data || []) map[row.user_id] = row.balance;
+  return map;
 }
 
 export async function listCoinHistory(friendGroupId, limit = 30) {
@@ -185,16 +194,6 @@ export async function listCoinHistory(friendGroupId, limit = 30) {
 export async function addCoinBonus(friendGroupId, userId, delta, reason) {
   const { error } = await supabase.from("friend_coin_ledger").insert({ friend_group_id: friendGroupId, user_id: userId, delta, reason });
   if (error) throw error;
-}
-
-// quanto cada integrante já ganhou pro cofre da turma, no total (só o que entrou, não o que foi
-// gasto) — pra mostrar quem tá contribuindo mais, já que o saldo em si é só um, compartilhado.
-export async function getCoinsEarnedByMember(friendGroupId) {
-  const { data, error } = await supabase.from("friend_coin_ledger").select("user_id, delta").eq("friend_group_id", friendGroupId).gt("delta", 0);
-  if (error) throw error;
-  const map = {};
-  for (const row of data || []) map[row.user_id] = (map[row.user_id] || 0) + row.delta;
-  return map;
 }
 
 // ---------- progresso em jogos (Capibatman etc.) ----------

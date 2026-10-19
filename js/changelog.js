@@ -376,6 +376,13 @@ export const CHANGELOG = [
     title: "Stop: mais variação de letra entre partidas",
     text: "Jogando várias partidas seguidas na mesma sala, agora o sorteio evita repetir uma letra já usada em partidas anteriores daquela sala — só reaproveita quando o alfabeto inteiro já saiu.",
   },
+  {
+    id: "turma-carteiras-individuais-2026-10",
+    tag: "amigos",
+    emoji: "👛",
+    title: "Turma: moedas separadas por pessoa",
+    text: "Acabou o cofre comum — agora cada integrante tem sua própria carteira, igual já funciona no casal. Cada um só gasta o que ganhou (Lojinha, ajudas do CapMart, Capisurpresa). O saldo que já estava acumulado foi dividido em partes iguais entre os membros atuais de cada turma.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
