@@ -1561,7 +1561,7 @@ async function renderFriendsHome() {
     friends.listGroupMembers(State.friendGroup.id),
     friends.getMoodsForDay(State.friendGroup.id, today).catch(() => []),
     friends.getMoodHistory(State.friendGroup.id, toISODate(addDays(new Date(), -6))).catch(() => []),
-    friends.getGroupCoinBalance(State.friendGroup.id).catch(() => 0),
+    friends.getGroupCoinBalance(State.friendGroup.id, State.userId).catch(() => 0),
     friends.listUpcomingEvents(State.friendGroup.id, today, 1).catch(() => []),
     friends.ensureMonthPlan(State.friendGroup.id, mk, 2).catch(() => ({ target: 2 })),
     friends.listEventsForMonth(State.friendGroup.id, monthStart, monthEnd).catch(() => []),
@@ -1638,7 +1638,7 @@ async function renderFriendsHome() {
     <div class="row" style="gap:12px; margin-top:14px;">
       <div class="card" style="flex:1; text-align:center; padding:16px 10px;">
         <div style="font-family:'Baloo 2'; font-weight:800; font-size:22px; color:var(--friends-accent-strong);">${balance}</div>
-        <div class="hint-text" style="margin:0;">moedas da turma</div>
+        <div class="hint-text" style="margin:0;">suas moedas</div>
       </div>
       <div class="card" style="flex:1; text-align:center; padding:16px 10px;">
         <div style="font-family:'Baloo 2'; font-weight:800; font-size:22px; color:var(--friends-accent-strong);">${members.length}</div>
@@ -2653,7 +2653,8 @@ function openNewEventModal(dateISO, byId) {
   });
 }
 
-function perkCardHTML(p) {
+function perkCardHTML(p, myCoins) {
+  const canAfford = myCoins >= p.cost;
   return `
     <div class="card" style="margin-bottom:12px;">
       <div class="row" style="align-items:flex-start; gap:10px;">
@@ -2664,7 +2665,7 @@ function perkCardHTML(p) {
         </div>
         ${p.created_by === State.userId ? `<button class="btn btn-ghost btn-sm" style="padding:4px 8px;" data-delete-perk="${p.id}">Apagar</button>` : ""}
       </div>
-      <button class="btn btn-block" style="margin-top:10px; background:var(--friends-accent-soft); color:var(--friends-accent-strong);" data-redeem="${p.id}">Resgatar (💰 ${p.cost})</button>
+      <button class="btn btn-block" style="margin-top:10px; background:var(--friends-accent-soft); color:var(--friends-accent-strong);" data-redeem="${p.id}" ${canAfford ? "" : "disabled"}>Resgatar (💰 ${p.cost})</button>
     </div>`;
 }
 
@@ -2672,7 +2673,7 @@ async function renderFriendsShop() {
   const view = $("#friends-view");
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const [balance, redemptions, customPerks] = await Promise.all([
-    friends.getGroupCoinBalance(State.friendGroup.id).catch(() => 0),
+    friends.getGroupCoinBalance(State.friendGroup.id, State.userId).catch(() => 0),
     friends.listGroupRedemptions(State.friendGroup.id).catch(() => []),
     friends.listCustomPerks(State.friendGroup.id).catch(() => []),
   ]);
@@ -2684,7 +2685,7 @@ async function renderFriendsShop() {
       <span class="icon-badge" style="background:var(--friends-accent-soft); color:var(--friends-accent-strong);">💰</span>
       <div>
         <div style="font-family:'Baloo 2'; font-weight:800; font-size:18px; color:var(--friends-accent-strong);">${balance} moedas</div>
-        <div class="hint-text" style="margin:0;">no cofre da turma</div>
+        <div class="hint-text" style="margin:0;">sua carteira</div>
       </div>
     </div>
 
@@ -2694,7 +2695,7 @@ async function renderFriendsShop() {
         <img src="icons/capivarinhas.jpg" alt="Capibatman" style="width:48px; height:48px; border-radius:12px; object-fit:cover; flex:none;" />
         <div style="flex:1;">
           <div class="card-title" style="font-size:15px; margin-bottom:0;">Capibatman</div>
-          <div class="hint-text" style="margin:0;">Quebra-cabeça de lógica · ganha moeda pra turma a cada fase</div>
+          <div class="hint-text" style="margin:0;">Quebra-cabeça de lógica · ganha moeda pra você a cada fase</div>
         </div>
       </div>
     </div>
@@ -2712,11 +2713,11 @@ async function renderFriendsShop() {
 
     ${Object.entries(FRIEND_PERK_CATEGORIES).map(([catId, cat]) => `
       <div class="section-title">${cat.emoji} ${cat.label}</div>
-      ${FRIEND_PERKS.filter((p) => p.category === catId).map(perkCardHTML).join("")}
+      ${FRIEND_PERKS.filter((p) => p.category === catId).map((p) => perkCardHTML(p, balance)).join("")}
     `).join("")}
 
     <div class="section-title">🙋 Criados pela turma</div>
-    ${customPerks.map(perkCardHTML).join("")}
+    ${customPerks.map((p) => perkCardHTML(p, balance)).join("")}
     <button class="btn btn-block" style="margin-bottom:12px; background:var(--friends-accent); color:var(--on-friends-accent);" id="friends-new-perk-btn">+ Criar prêmio pra turma</button>
 
     ${pending.length ? `
@@ -2745,7 +2746,7 @@ async function renderFriendsShop() {
   view.querySelectorAll("[data-redeem]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const perk = allPerks[btn.dataset.redeem];
-      if (!confirm(`Resgatar "${perk.title}" por ${perk.cost} moedas do cofre da turma?`)) return;
+      if (!confirm(`Resgatar "${perk.title}" por ${perk.cost} moedas suas?`)) return;
       btn.disabled = true;
       try {
         await friends.redeemGroupPerk(State.friendGroup.id, State.userId, perk);
@@ -3929,7 +3930,7 @@ async function renderFriendsGroup() {
       <p class="field-label">Zona de risco</p>
       <p class="hint-text">Sair da turma tira só você. Os dados dela continuam existindo pros outros.</p>
       <button class="btn btn-ghost btn-block" id="friends-leave-group-btn">Sair da turma</button>
-      <p class="hint-text" style="margin-top:12px;">Excluir a turma apaga tudo (rolês, humor, achados, prêmios e o cofre) pra sempre, pra todo mundo.</p>
+      <p class="hint-text" style="margin-top:12px;">Excluir a turma apaga tudo (rolês, humor, achados, prêmios e as moedas de todo mundo) pra sempre, pra todo mundo.</p>
       <button class="btn btn-ghost btn-block" style="color:var(--danger-text);" id="friends-delete-group-btn">Excluir turma</button>
     </div>
   `;
@@ -4056,31 +4057,31 @@ async function renderFriendsPrivacy() {
 async function renderFriendsWallet() {
   const view = $("#friends-view");
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
-  const [members, balance, history, earnedByMember] = await Promise.all([
+  const [members, balance, history, balanceByMember] = await Promise.all([
     friends.listGroupMembers(State.friendGroup.id).catch(() => []),
-    friends.getGroupCoinBalance(State.friendGroup.id).catch(() => 0),
+    friends.getGroupCoinBalance(State.friendGroup.id, State.userId).catch(() => 0),
     friends.listCoinHistory(State.friendGroup.id, 30).catch(() => []),
-    friends.getCoinsEarnedByMember(State.friendGroup.id).catch(() => ({})),
+    friends.getGroupMemberBalances(State.friendGroup.id).catch(() => ({})),
   ]);
   const byId = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
-  const ranking = members.map((m) => ({ ...m, earned: earnedByMember[m.user_id] || 0 })).sort((a, b) => b.earned - a.earned);
+  const ranking = members.map((m) => ({ ...m, balance: balanceByMember[m.user_id] || 0 })).sort((a, b) => b.balance - a.balance);
   view.innerHTML = `
     ${friendsSettingsHeader("💰 Moedas")}
     <div class="card">
-      <div class="row"><span class="pill" style="background:var(--friends-accent-soft); color:var(--friends-accent-strong);">💰 cofre da turma: ${balance}</span></div>
+      <div class="row"><span class="pill" style="background:var(--friends-accent-soft); color:var(--friends-accent-strong);">💰 sua carteira: ${balance}</span></div>
     </div>
-    <div class="section-title">Quem já contribuiu</div>
+    <div class="section-title">Carteira de cada um</div>
     <div class="card">
       <div class="stack">
         ${ranking.map((m) => `
           <div class="entry-item">
             ${avatarHTML(m.display_name, m.avatar_url, "width:32px; height:32px; font-size:13px; background:var(--friends-accent-soft); color:var(--friends-accent-strong);")}
             <div class="entry-body"><div class="entry-title">${m.user_id === State.userId ? "Você" : escapeHTML(m.display_name)}</div></div>
-            <span class="pill pill-muted">💰 ${m.earned}</span>
+            <span class="pill pill-muted">💰 ${m.balance}</span>
           </div>
         `).join("") || '<p class="hint-text">Só você, por enquanto.</p>'}
       </div>
-      <p class="hint-text" style="margin-top:10px; margin-bottom:0;">Total já ganho por cada um, pro cofre — o saldo em si é compartilhado por toda a turma.</p>
+      <p class="hint-text" style="margin-top:10px; margin-bottom:0;">Cada um só gasta o que ganhou — sem cofre compartilhado.</p>
     </div>
     <div class="section-title">Histórico</div>
     <div class="card">
@@ -6903,7 +6904,7 @@ async function capiPreviewControlsHTML() {
   } else {
     const [members, bal] = await Promise.all([
       friends.listGroupMembers(State.friendGroup.id),
-      friends.getGroupCoinBalance(State.friendGroup.id).catch(() => 0),
+      friends.getGroupCoinBalance(State.friendGroup.id, State.userId).catch(() => 0),
     ]);
     balance = bal;
     const others = members.filter((m) => m.user_id !== State.userId);
@@ -7875,7 +7876,7 @@ function renderCapMartPlay(scope, isAmigos, container, theme, onBack, level, unl
         if (!capMartHelpAvailable(help) || busy) return;
         const cost = capMart.RULES.costs[help];
         if (coinsOn()) {
-          const balance = isAmigos ? await friends.getGroupCoinBalance(State.friendGroup.id).catch(() => 0) : (await db.getCoinBalances(State.coupleId))[State.role] || 0;
+          const balance = isAmigos ? await friends.getGroupCoinBalance(State.friendGroup.id, State.userId).catch(() => 0) : (await db.getCoinBalances(State.coupleId))[State.role] || 0;
           if (balance < cost) { $("#cm-status").textContent = "Moedas insuficientes pra essa ajuda."; return; }
           if (!confirm(`Usar ${CAPMART_HELP_NAMES[help]} por ${cost} moedas?`)) return;
           busy = true;
