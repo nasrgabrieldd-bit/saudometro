@@ -230,6 +230,23 @@ export async function listStopAnswers(matchId, roundNumber = null) {
   return data;
 }
 
+// todas as partidas já jogadas numa sala (inclusive revanches) — usado pro placar acumulado
+// da sala, que soma os pontos de todas elas, não só da partida atual
+export async function listStopMatchesForRoom(roomId) {
+  const { data, error } = await supabase.from("stop_matches").select("*").eq("room_id", roomId).order("created_at");
+  if (error) throw error;
+  return data;
+}
+
+// respostas de várias partidas de uma vez (pro placar acumulado da sala) — uma query só,
+// em vez de uma por partida
+export async function listStopAnswersForMatches(matchIds) {
+  if (!matchIds.length) return [];
+  const { data, error } = await supabase.from("stop_answers").select("*").in("match_id", matchIds);
+  if (error) throw error;
+  return data;
+}
+
 export function subscribeStopMatch(matchId, onChange) {
   const channel = supabase
     .channel(`stop-match-${matchId}`)
