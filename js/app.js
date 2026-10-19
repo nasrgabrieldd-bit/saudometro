@@ -3649,7 +3649,15 @@ async function renderStopResults(matchId, match) {
   $("#btn-stop-next-round")?.addEventListener("click", async (e) => {
     setBusy("#btn-stop-next-round", true);
     try { await gameRooms.advanceStopRound(matchId); await renderStopMatchScreen(matchId); }
-    catch (err) { alert("Não deu: " + (err.message || err)); setBusy("#btn-stop-next-round", false); }
+    catch (err) {
+      // a partida já pode ter avançado por outro caminho bem na hora do clique (ex: o tempo da
+      // rodada esgotou sozinho) — nesse caso o servidor recusa porque o estado já mudou debaixo
+      // do pé, mas o jogo já avançou de verdade, só não foi por esse clique. Em vez de assustar
+      // com um alerta, só re-sincroniza a tela com o que o servidor tem agora.
+      if (String(err.message || err).includes("ainda não terminou essa rodada")) { await renderStopMatchScreen(matchId); return; }
+      alert("Não deu: " + (err.message || err));
+      setBusy("#btn-stop-next-round", false);
+    }
   });
 }
 
