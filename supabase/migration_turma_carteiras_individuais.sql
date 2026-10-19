@@ -7,7 +7,11 @@
 -- É seguro rodar mais de uma vez (a divisão do saldo acumulado só acontece uma vez por turma).
 
 -- 1) friend_coin_balances passa a ser por pessoa, não só por turma
-create or replace view friend_coin_balances as
+-- (precisa dropar e recriar porque a coluna 2 muda de "balance" pra "user_id" —
+-- o Postgres não deixa um create or replace view renomear coluna existente.
+-- cascade também derruba capmart_balance, que é recriada no passo 4 aqui embaixo.)
+drop view if exists friend_coin_balances cascade;
+create view friend_coin_balances as
   select friend_group_id, user_id, sum(delta)::int as balance
   from friend_coin_ledger
   group by friend_group_id, user_id;

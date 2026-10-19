@@ -2307,7 +2307,8 @@ grant execute on function advance_stop_round(uuid) to authenticated;
 -- ------------------------------------------------------------
 -- MIGRACAO (Turma: carteiras individuais de moedas) - igual a migration_turma_carteiras_individuais.sql
 -- ------------------------------------------------------------
-create or replace view friend_coin_balances as
+drop view if exists friend_coin_balances cascade;
+create view friend_coin_balances as
   select friend_group_id, user_id, sum(delta)::int as balance
   from friend_coin_ledger
   group by friend_group_id, user_id;
