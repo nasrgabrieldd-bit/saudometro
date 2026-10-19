@@ -355,6 +355,13 @@ export const CHANGELOG = [
     title: "Corrigido: placar do CapMart ficava tremendo",
     text: "O selo de combo reiniciava a animação sozinho a cada meio segundo e, ao aparecer/sumir, empurrava o tabuleiro e mudava o tamanho da tela. Agora o relógio só atualiza o tempo e o combo quando eles realmente mudam — vale pro casal e pra turma.",
   },
+  {
+    id: "stop-ultima-rodada-bug-2026-10",
+    tag: "geral",
+    emoji: "🛠️",
+    title: "Corrigido: Stop travava na última rodada",
+    text: "Quando a partida já tinha sido encerrada por outro caminho (ex: o tempo esgotando sozinho) bem na hora de avançar a última rodada, aparecia um erro que repetia pra sempre. Agora a tela se ajusta sozinha e mostra o resultado final de verdade.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
