@@ -362,6 +362,13 @@ export const CHANGELOG = [
     title: "Corrigido: Stop travava na última rodada",
     text: "Quando a partida já tinha sido encerrada por outro caminho (ex: o tempo esgotando sozinho) bem na hora de avançar a última rodada, aparecia um erro que repetia pra sempre. Agora a tela se ajusta sozinha e mostra o resultado final de verdade.",
   },
+  {
+    id: "stop-placar-sala-2026-10",
+    tag: "geral",
+    emoji: "🏆",
+    title: "Stop: placar acumulado da sala",
+    text: "Jogando várias partidas seguidas na mesma sala (revanches), os pontos agora somam. Ao tocar em \"Sair da sala\", se mais de uma partida foi jogada ali, aparece o campeão da sala com o placar acumulado antes de sair de verdade.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";

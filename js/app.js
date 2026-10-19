@@ -3559,6 +3559,61 @@ function computeStopStandings(answers, members, match) {
   return members.map((m) => ({ ...m, points: total.get(m.user_id) || 0 })).sort((a, b) => b.points - a.points);
 }
 
+// placar acumulado de TODAS as partidas já jogadas numa sala (inclusive revanches) — usado
+// pra anunciar o campeão da sala ao sair, não só o vencedor da última partida
+async function computeStopRoomStandings(roomId, members) {
+  const matches = await gameRooms.listStopMatchesForRoom(roomId).catch(() => []);
+  if (matches.length < 2) return { matches, standings: [] }; // só uma partida: o placar dela já foi mostrado, nada novo a anunciar
+  const allAnswers = await gameRooms.listStopAnswersForMatches(matches.map((m) => m.id)).catch(() => []);
+  const total = new Map();
+  for (const m of matches) {
+    const matchAnswers = allAnswers.filter((a) => a.match_id === m.id);
+    for (const r of computeStopStandings(matchAnswers, members, m)) total.set(r.user_id, (total.get(r.user_id) || 0) + r.points);
+  }
+  const standings = members.map((m) => ({ ...m, points: total.get(m.user_id) || 0 })).sort((a, b) => b.points - a.points);
+  return { matches, standings };
+}
+
+// mostra o campeão acumulado da sala (se tiver mais de uma partida jogada) antes de sair de
+// verdade — se só rolou uma partida, sai direto, sem repetir o mesmo resultado que já apareceu
+async function leaveStopRoomWithChampion(roomId) {
+  let matches = [], standings = [];
+  try {
+    const members = await roomMembers();
+    ({ matches, standings } = await computeStopRoomStandings(roomId, members));
+  } catch (e) { /* sem rede ou sem acesso: sai direto, sem anúncio */ }
+
+  const doLeave = async () => {
+    try { await gameRooms.leaveRoom(roomId); } catch (e) { /* já pode ter saído */ }
+    closeRoomChannels();
+    renderGameHub();
+  };
+
+  if (matches.length < 2 || standings.length < 2) { await doLeave(); return; }
+
+  const champion = standings[0];
+  openModal(`
+    <div style="text-align:center;">
+      <div style="font-size:40px;">🏆</div>
+      <div class="card-title" style="margin-top:10px;">${champion.user_id === State.userId ? "Você é o campeão da sala!" : `${escapeHTML(champion.display_name || "alguém")} é o campeão da sala!`}</div>
+      <p class="hint-text" style="margin-top:2px;">Somando as ${matches.length} partidas jogadas aqui</p>
+      <div class="stack" style="margin-top:14px; text-align:left;">
+        ${standings.map((r, i) => `
+          <div class="entry-item">
+            <div class="entry-icon">${i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "🎮"}</div>
+            <div class="entry-body">
+              <div class="entry-title">${r.user_id === State.userId ? "Você" : escapeHTML(r.display_name || "alguém")}</div>
+              <div class="entry-meta">${r.points} pontos no total</div>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+      <button class="btn btn-block" style="margin-top:16px; ${roomBtnStyle()}" id="btn-stop-champion-ok">Sair da sala</button>
+    </div>
+  `, doLeave);
+  $("#btn-stop-champion-ok").addEventListener("click", async () => { closeModal(); await doLeave(); });
+}
+
 function stopStandingsHTML(standings, title) {
   if (standings.length < 2) return "";
   return `
@@ -3725,9 +3780,8 @@ async function renderStopFinished(matchId, match) {
     } catch (e) { alert("Não deu: " + (e.message || e)); }
   });
   $("#btn-stopmatch-leave").addEventListener("click", async () => {
-    try { await gameRooms.leaveRoom(match.room_id); } catch (e) { /* já pode ter saído */ }
-    closeRoomChannels();
-    renderGameHub();
+    setBusy("#btn-stopmatch-leave", true);
+    await leaveStopRoomWithChampion(match.room_id);
   });
 }
 
