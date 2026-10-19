@@ -369,6 +369,13 @@ export const CHANGELOG = [
     title: "Stop: placar acumulado da sala",
     text: "Jogando várias partidas seguidas na mesma sala (revanches), os pontos agora somam. Ao tocar em \"Sair da sala\", se mais de uma partida foi jogada ali, aparece o campeão da sala com o placar acumulado antes de sair de verdade.",
   },
+  {
+    id: "stop-mais-variacao-letras-2026-10",
+    tag: "geral",
+    emoji: "🔤",
+    title: "Stop: mais variação de letra entre partidas",
+    text: "Jogando várias partidas seguidas na mesma sala, agora o sorteio evita repetir uma letra já usada em partidas anteriores daquela sala — só reaproveita quando o alfabeto inteiro já saiu.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
