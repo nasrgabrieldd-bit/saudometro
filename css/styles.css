@@ -936,6 +936,29 @@ html.party-mode[data-theme="dark"] {
   .party-confetti span { animation: none; opacity: .35; top: 40%; }
 }
 
+/* confete do popup de "Feliz Aniversário" — cai por cima de tudo (modal incluso),
+   enquanto o popup está aberto; some junto quando ele fecha */
+.birthday-confetti-burst {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 60;
+}
+.birthday-confetti-burst span {
+  position: absolute;
+  top: -24px;
+  width: 9px;
+  height: 16px;
+  opacity: .9;
+  animation: party-confetti-fall linear infinite;
+}
+.birthday-confetti-burst span:nth-child(3n) { border-radius: 50%; }
+.birthday-confetti-burst span:nth-child(5n) { width: 7px; height: 7px; }
+@media (prefers-reduced-motion: reduce) {
+  .birthday-confetti-burst span { animation: none; opacity: .35; top: 40%; }
+}
+
 .modal-close {
   position: absolute;
   top: 16px;
