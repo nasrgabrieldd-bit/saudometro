@@ -6206,6 +6206,27 @@ async function renderBirthdayNotesView() {
   });
 }
 
+// confete caindo por cima de tudo (até por cima do modal), só enquanto o popup de
+// aniversário está aberto na tela — some junto quando a pessoa fecha o popup
+function spawnBirthdayConfettiBurst() {
+  removeBirthdayConfettiBurst();
+  const layer = document.createElement("div");
+  layer.className = "birthday-confetti-burst";
+  layer.id = "birthday-confetti-burst";
+  for (let i = 0; i < 40; i++) {
+    const piece = document.createElement("span");
+    piece.style.left = `${Math.round(Math.random() * 100)}%`;
+    piece.style.background = PARTY_CONFETTI_COLORS[i % PARTY_CONFETTI_COLORS.length];
+    piece.style.animationDelay = `${(Math.random() * 3).toFixed(2)}s`;
+    piece.style.animationDuration = `${(3.5 + Math.random() * 3).toFixed(2)}s`;
+    layer.appendChild(piece);
+  }
+  document.body.appendChild(layer);
+}
+function removeBirthdayConfettiBurst() {
+  $("#birthday-confetti-burst")?.remove();
+}
+
 // celebração automática no dia: dispara uma vez (por casal+pessoa+data, guardado no aparelho)
 // quando a Home é renderizada e a data guardada em features.birthdays[State.role] é hoje
 function maybeShowBirthdayCelebration() {
@@ -6217,13 +6238,18 @@ function maybeShowBirthdayCelebration() {
     localStorage.setItem(key, "1");
   } catch (e) { /* sem storage: pode repetir, sem problema */ }
 
+  spawnBirthdayConfettiBurst();
   openModal(`
     <img src="icons/aniversario-capivara.png" alt="" class="milestone-icon" style="width:84px; height:84px; display:block; margin:0 auto 6px; object-fit:contain;" />
     <h3 class="modal-title" style="text-align:center;">Feliz Aniversário!!! 🎉</h3>
-    <p class="card-sub" style="text-align:center;">Hoje é o seu dia! Separaram recadinhos especiais só pra você essa semana 💗</p>
+    <p class="card-sub" style="text-align:center;">Hoje é o seu dia, e eu quero que você saiba o quanto você é especial pra mim. Você ilumina tudo ao seu redor com seu jeitinho único, seu carinho e esse sorriso que muda meu dia inteiro. Que esse novo ano venha cheio de motivos pra sorrir — e separaram recadinhos especiais só pra você essa semana 💗</p>
     <button class="btn btn-primary btn-block" style="margin-top:16px;" id="btn-birthday-ok">Ver recadinhos 🎁</button>
-  `);
+  `, () => {
+    removeBirthdayConfettiBurst();
+    closeModal();
+  });
   $("#btn-birthday-ok")?.addEventListener("click", () => {
+    removeBirthdayConfettiBurst();
     closeModal();
     setActiveTab("notes");
     State.notesView = "birthday";

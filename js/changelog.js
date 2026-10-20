@@ -383,6 +383,13 @@ export const CHANGELOG = [
     title: "Turma: moedas separadas por pessoa",
     text: "Acabou o cofre comum — agora cada integrante tem sua própria carteira, igual já funciona no casal. Cada um só gasta o que ganhou (Lojinha, ajudas do CapMart, Capisurpresa). O saldo que já estava acumulado foi dividido em partes iguais entre os membros atuais de cada turma.",
   },
+  {
+    id: "aniversario-confete-popup-2026-10",
+    tag: "casal",
+    emoji: "🎊",
+    title: "Popup de aniversário com confete",
+    text: "O popup que aparece automaticamente no dia do seu aniversário ganhou confete caindo na tela e um recadinho mais carinhoso, além de levar direto pros recadinhos programados pra você.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
