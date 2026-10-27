@@ -24,14 +24,16 @@ type Msg = { title: string; body: string; path: string; excludeUserId?: string |
 
 // lembrete das 20h (scripts/lembrete-humor.mjs): estilo "coruja do Duolingo", frase ao acaso
 const MOOD_REMINDERS: Array<[string, string]> = [
-  ["Psiu! 🦫", "A capivara ficou o dia todo esperando seu humor. Leva só 10 segundinhos!"],
-  ["O Saudômetro tá com saudade de você 🥺", "Seu humor de hoje ainda não chegou. Como foi o seu dia?"],
-  ["Já são mais de 20h... ⏰", "Seu humor de hoje ainda tá em branco. Bora fechar o dia?"],
-  ["Esses lembretes não vão parar 😈", "Registra o humor de hoje e a capivara te deixa em paz. Talvez."],
-  ["Seu humor tá chorando num canto 😢", "Ninguém registrou ele hoje. Vem dar um abraço nele!"],
-  ["A sequência tá em perigo! 🔥", "Falta só registrar o humor de hoje pra não perder o embalo."],
-  ["Tá tudo bem por aí? 💗", "Conta pra turma como foi seu dia: o humor de hoje ainda tá esperando."],
-  ["A capivara não vai dormir sem saber 🌙", "Registra o humor de hoje rapidinho e descansa tranquilo(a)."],
+  ["Psiu 🦫", "Como foi seu dia?"],
+  ["Saudade de você 🥺", "Seu humor de hoje tá te esperando."],
+  ["Boa noite 🌙", "Conta pra gente como você tá?"],
+  ["Tá tudo bem? 💗", "Registra o humor de hoje rapidinho."],
+  ["A capivara tá curiosa 🦫", "Como você tá se sentindo hoje?"],
+  ["Antes de dormir 🌷", "Deixa seu humor de hoje aqui, tá?"],
+  ["Esses lembretes não vão parar 😈", "Registra o humor e a capivara te deixa em paz."],
+  ["Seu humor tá chorando num canto 😢", "Vem dar um abraço nele!"],
+  ["A sequência tá em perigo! 🔥", "Falta só o humor de hoje."],
+  ["Já são mais de 20h ⏰", "Seu humor ainda tá em branco."],
 ];
 
 function messageFor(table: string, type: string, record: any): Msg {
