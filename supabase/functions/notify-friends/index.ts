@@ -22,7 +22,23 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 // só pra esse usuário.
 type Msg = { title: string; body: string; path: string; excludeUserId?: string | null; targetUserId?: string | null } | null;
 
+// lembrete das 20h (scripts/lembrete-humor.mjs): estilo "coruja do Duolingo", frase ao acaso
+const MOOD_REMINDERS: Array<[string, string]> = [
+  ["Psiu! 🦫", "A capivara ficou o dia todo esperando seu humor. Leva só 10 segundinhos!"],
+  ["O Saudômetro tá com saudade de você 🥺", "Seu humor de hoje ainda não chegou. Como foi o seu dia?"],
+  ["Já são mais de 20h... ⏰", "Seu humor de hoje ainda tá em branco. Bora fechar o dia?"],
+  ["Esses lembretes não vão parar 😈", "Registra o humor de hoje e a capivara te deixa em paz. Talvez."],
+  ["Seu humor tá chorando num canto 😢", "Ninguém registrou ele hoje. Vem dar um abraço nele!"],
+  ["A sequência tá em perigo! 🔥", "Falta só registrar o humor de hoje pra não perder o embalo."],
+  ["Tá tudo bem por aí? 💗", "Conta pra turma como foi seu dia: o humor de hoje ainda tá esperando."],
+  ["A capivara não vai dormir sem saber 🌙", "Registra o humor de hoje rapidinho e descansa tranquilo(a)."],
+];
+
 function messageFor(table: string, type: string, record: any): Msg {
+  if (table === "mood_reminder" && type === "INSERT") {
+    const [title, body] = MOOD_REMINDERS[Math.floor(Math.random() * MOOD_REMINDERS.length)];
+    return { title, body, path: "?tab=mood", targetUserId: record.user_id };
+  }
   if (table === "friend_events" && type === "INSERT") {
     return {
       title: "Novo rolê marcado 📅",
