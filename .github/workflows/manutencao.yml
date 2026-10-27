@@ -4,18 +4,20 @@ name: Manutenção do banco
 # de "Lembrei de você" que passaram de 30 dias, apaga os posts temporários do feed de amigos
 # que já venceram (arquivo incluído, não só o registro, nos dois casos), e entrega (com
 # notificação push) os recadinhos de aniversário cujo dia chegou.
+# Todo dia às 20h de Brasília (23h UTC): lembra por push quem ainda não registrou o humor de hoje.
 # Todo domingo: guarda uma cópia criptografada de todos os dados (fica 90 dias na aba Actions).
 # Também dá pra rodar na mão: Actions > Manutenção do banco > Run workflow.
 on:
   schedule:
     - cron: "17 9 * * *"
     - cron: "43 9 * * 0"
+    - cron: "0 23 * * *"
   workflow_dispatch:
     inputs:
       tarefa:
         description: "O que rodar"
         type: choice
-        options: [tudo, acordar, limpar-lembrancas, limpar-feed, entregar-aniversario, backup]
+        options: [tudo, acordar, limpar-lembrancas, limpar-feed, entregar-aniversario, lembrar-humor, backup]
         default: tudo
 
 permissions:
@@ -75,6 +77,19 @@ jobs:
         env:
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: node scripts/deliver-birthday-notes.mjs
+
+  lembrar-humor:
+    if: github.event.schedule == '0 23 * * *' || github.event_name == 'workflow_dispatch' && inputs.tarefa == 'lembrar-humor'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Lembrar quem ainda não registrou o humor de hoje
+        env:
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: node scripts/lembrete-humor.mjs
 
   backup:
     if: github.event.schedule == '43 9 * * 0' || github.event_name == 'workflow_dispatch' && (inputs.tarefa == 'tudo' || inputs.tarefa == 'backup')

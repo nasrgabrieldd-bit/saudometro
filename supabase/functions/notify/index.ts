@@ -20,7 +20,29 @@ const otherRole = (role: string) => (role === "gabriel" ? "tata" : "gabriel");
 
 type Msg = { targetRole: string; title: string; body: string; path: string } | null;
 
+// lembrete das 20h (scripts/lembrete-humor.mjs): estilo "coruja do Duolingo", escolhe uma
+// frase ao acaso. {nome} vira o nome de quem vai receber.
+const MOOD_REMINDERS: Array<[string, string]> = [
+  ["Psiu, {nome}! 🦫", "A capivara ficou o dia todo esperando seu humor. Leva só 10 segundinhos!"],
+  ["O Saudômetro tá com saudade de você 🥺", "Seu humor de hoje ainda não chegou. Como foi o seu dia?"],
+  ["Já são mais de 20h... ⏰", "{nome}, seu humor de hoje ainda tá em branco. Bora fechar o dia?"],
+  ["Esses lembretes não vão parar 😈", "Registra o humor de hoje e a capivara te deixa em paz. Talvez."],
+  ["Seu humor tá chorando num canto 😢", "Ninguém registrou ele hoje. Vem dar um abraço nele!"],
+  ["{nome}, a sequência tá em perigo! 🔥", "Falta só registrar o humor de hoje pra não perder o embalo."],
+  ["Tá tudo bem por aí? 💗", "Conta pra gente como foi seu dia: o humor de hoje ainda tá esperando."],
+  ["A capivara não vai dormir sem saber 🌙", "Registra o humor de hoje rapidinho e descansa tranquilo(a)."],
+];
+const pickReminder = (nome: string): [string, string] => {
+  const [t, b] = MOOD_REMINDERS[Math.floor(Math.random() * MOOD_REMINDERS.length)];
+  return [t.replaceAll("{nome}", nome), b.replaceAll("{nome}", nome)];
+};
+
 function messageFor(table: string, type: string, record: any, oldRecord: any): Msg {
+  if (table === "mood_reminder" && type === "INSERT") {
+    const [title, body] = pickReminder(ROLE_LABEL[record.role] || "amor");
+    return { targetRole: record.role, title, body, path: "?tab=mood" };
+  }
+
   if (table === "moods" && type === "INSERT") {
     return {
       targetRole: otherRole(record.role),

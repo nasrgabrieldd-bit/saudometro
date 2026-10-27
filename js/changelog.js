@@ -390,6 +390,13 @@ export const CHANGELOG = [
     title: "Popup de aniversário com confete",
     text: "O popup que aparece automaticamente no dia do seu aniversário ganhou confete caindo na tela e um recadinho mais carinhoso, além de levar direto pros recadinhos programados pra você.",
   },
+  {
+    id: "lembrete-humor-20h-2026-10",
+    tag: "geral",
+    emoji: "🦫",
+    title: "Lembrete do humor às 20h",
+    text: "Se às 20h você ainda não registrou o humor do dia, o app manda uma notificação fofa (estilo Duolingo) te chamando pra atualizar. Precisa estar com as notificações ligadas no aparelho, em Perfil.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
