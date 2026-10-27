@@ -19,6 +19,11 @@ on:
         type: choice
         options: [tudo, acordar, limpar-lembrancas, limpar-feed, entregar-aniversario, lembrar-humor, backup]
         default: tudo
+      alvo_role:
+        description: "Só pra lembrar-humor: manda na hora pra uma pessoa do casal (gabriel ou tata), ignorando horário e se já registrou"
+        type: choice
+        options: ["", gabriel, tata]
+        default: ""
 
 permissions:
   contents: read
@@ -89,6 +94,7 @@ jobs:
       - name: Lembrar quem ainda não registrou o humor de hoje
         env:
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          ALVO_ROLE: ${{ inputs.alvo_role }}
         run: node scripts/lembrete-humor.mjs
 
   backup:

@@ -4,6 +4,8 @@
 // direto, com um payload sintético, igual o script de aniversário.
 // Roda todo dia 23h UTC (= 20h de Brasília) pelo GitHub Actions (manutencao.yml).
 // Variáveis: SUPABASE_URL e SUPABASE_SECRET_KEY. FORCAR=1 ignora a trava de horário (testes).
+// ALVO_ROLE=tata (ou gabriel): disparo manual só pra essa pessoa no casal, ignorando horário,
+// se já registrou o humor e se já foi lembrada hoje.
 const URL_BASE = process.env.SUPABASE_URL?.replace(/\/$/, "");
 const KEY = process.env.SUPABASE_SECRET_KEY;
 if (!URL_BASE || !KEY) {
@@ -19,7 +21,8 @@ const partes = Object.fromEntries(
   }).formatToParts(new Date()).map((p) => [p.type, p.value])
 );
 const today = `${partes.year}-${partes.month}-${partes.day}`;
-if (Number(partes.hour) < 20 && process.env.FORCAR !== "1") {
+const alvoRole = ["gabriel", "tata"].includes(process.env.ALVO_ROLE) ? process.env.ALVO_ROLE : null;
+if (Number(partes.hour) < 20 && process.env.FORCAR !== "1" && !alvoRole) {
   console.log(`Ainda são ${partes.hour}h em Brasília — o lembrete só sai depois das 20h.`);
   process.exit(0);
 }
@@ -52,6 +55,21 @@ async function chamar(fn, table, record) {
 
 let enviados = 0;
 let falhou = false;
+
+if (alvoRole) {
+  try {
+    const subs = await rest(`push_subscriptions?select=couple_id&role=eq.${alvoRole}`);
+    for (const couple_id of new Set(subs.map((x) => x.couple_id))) {
+      await chamar("notify", "mood_reminder", { couple_id, role: alvoRole });
+      enviados++;
+    }
+  } catch (e) {
+    console.error("Disparo manual falhou:", e.message || e);
+    process.exit(1);
+  }
+  console.log(`${enviados} lembrete(s) manual(is) enviado(s) pra ${alvoRole}.`);
+  process.exit(0);
+}
 
 try {
   // ---- casal: cada (couple_id, role) com aparelho cadastrado e sem humor hoje ----
