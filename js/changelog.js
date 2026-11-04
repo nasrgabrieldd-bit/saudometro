@@ -397,6 +397,13 @@ export const CHANGELOG = [
     title: "Lembrete do humor às 20h",
     text: "Se às 20h você ainda não registrou o humor do dia, o app manda uma notificação fofa (estilo Duolingo) te chamando pra atualizar. Precisa estar com as notificações ligadas no aparelho, em Perfil.",
   },
+  {
+    id: "humor-cheirinho-2026-11",
+    tag: "casal",
+    emoji: "🧴",
+    title: "Novo humor: Quero cheirinho",
+    text: "Chegou mais um jeito de falar sem palavras: \"Quero cheirinho\" 🧴. Aparece no humor do dia e também em como você está com seu par.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";

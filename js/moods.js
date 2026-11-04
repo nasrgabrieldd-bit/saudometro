@@ -41,6 +41,7 @@ export const MOODS = [
   { id: "sortuda", emoji: "🍀", label: "Com sorte hoje" },
   { id: "dramatica", emoji: "🎭", label: "Dramática(o) hoje" },
   { id: "modo_cientista", emoji: "🧪", label: "No modo cientista maluco" },
+  { id: "cheirinho", emoji: "🧴", label: "Quero cheirinho" },
 ];
 
 export const MOOD_BY_ID = Object.fromEntries(MOODS.map((m) => [m.id, m]));

@@ -1506,7 +1506,7 @@ function renderFriendsPlaceholder(icon, title, text) {
 }
 
 // moods do casal que não fazem sentido pra uma turma de amigos (tom romântico) ficam de fora aqui
-const FRIENDS_MOODS = MOODS.filter((m) => !["apaixonada", "safadinha", "carinhosa"].includes(m.id));
+const FRIENDS_MOODS = MOODS.filter((m) => !["apaixonada", "safadinha", "carinhosa", "cheirinho"].includes(m.id));
 
 function daysUntil(dateISO) {
   return Math.round((parseISODate(dateISO) - startOfDay(new Date())) / 86400000);
