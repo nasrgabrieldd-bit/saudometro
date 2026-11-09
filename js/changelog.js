@@ -404,6 +404,13 @@ export const CHANGELOG = [
     title: "Novo humor: Quero cheirinho",
     text: "Chegou mais um jeito de falar sem palavras: \"Quero cheirinho\" 🧴. Aparece no humor do dia e também em como você está com seu par.",
   },
+  {
+    id: "estante-livros-2026-11",
+    tag: "casal",
+    emoji: "📚",
+    title: "Nova aba: Estante",
+    text: "Um contador de livros lidos que conta tudo — Kindle, físico, PDF, Wattpad. Digite o nome e a capa aparece sozinha; acompanhe a % de leitura, dê nota, escolha como o livro te deixou e crie palavras-chave. No fim tem a retrospectiva do ano e do mês em cartões prontos pro Instagram. O menu também ficou mais limpo: só a aba aberta mostra o nome.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";

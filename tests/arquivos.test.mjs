@@ -81,7 +81,7 @@ test("service worker: lista de arquivos guardados está completa e sem arquivo f
 test("app não depende de CDN nem de fontes de terceiros (só Supabase e o CAPTCHA)", () => {
   const arquivos = [...jsDoApp().filter((f) => !f.includes("vendor")), "index.html", "css/styles.css", "css/fonts.css", "privacidade.html", "sw.js"];
   for (const f of arquivos) {
-    const src = ler(f);
+    const src = ler(f).replaceAll("www.googleapis.com/books/", ""); // catálogo de livros da Estante (dados, não fonte/biblioteca)
     assert.ok(!/googleapis|gstatic|jsdelivr|unpkg|cdnjs|esm\.sh/.test(src), `${f} usa serviço externo de fontes/bibliotecas`);
   }
 });
