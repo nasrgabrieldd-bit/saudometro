@@ -23,6 +23,8 @@ import * as capiEngine from "./games/capisurpresa.js";
 import * as capMart from "./games/capmart.js";
 import { cycleInfo, cycleRingSVG, cycleLegendHTML, cycleTilesHTML, cycleHelpHTML, cyclePhaseName, cycleTip, cyclePhaseOnDate, averageCycleLength, CYCLE_COLORS, CYCLE_DISCLAIMER } from "./cycle.js";
 import { pickSaudadeNudge } from "./nudges.js";
+import { periodStats, monthsStreak, parseTitleList, cleanTag, searchBooks, lookupBook, STATUS, SOURCES, BOOK_MOODS, BOOK_MOOD_BY_ID, MONTHS_PT } from "./books.js";
+import { buildCards, canvasToBlob, shareOrDownload } from "./bookCards.js";
 import { nameOf, genderOf, emojiOf, gen, genMixed, cleanName, setPeopleSettings, defaultEmojis, legacyPeople, feat, goalTarget, HOME_WIDGETS, homeOrder, homeWidgetOn, togetherSince, coinRule, luckyOn, perkHidden, COIN_DEFAULTS } from "./people.js";
 import {
   toISODate, monthKey, parseISODate, addDays, addMonths, startOfMonth,
@@ -572,6 +574,7 @@ function setActiveTab(tab) {
   if (tab === "notes") State.notesView = "hub";
   if (tab === "profile") State.profileView = "hub";
   if (tab === "shop") State.shopView = "hub";
+  if (tab === "shelf") { estante.readonly = false; estante.role = State.role; }
   if (tab === "home") State.homeMonth = startOfMonth(new Date());
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   renderActiveTab();
@@ -603,7 +606,7 @@ function renderActiveTab() {
   if (!State.coupleId) return;
   clearKissTimer();
   clearRechargeTimer();
-  const map = { home: renderHome, calendar: renderCalendar, mood: renderMood, notes: renderNotes, shop: renderShop, profile: renderProfile };
+  const map = { home: renderHome, calendar: renderCalendar, mood: renderMood, notes: renderNotes, shelf: renderEstante, shop: renderShop, profile: renderProfile };
   Promise.resolve((map[State.activeTab] || renderHome)()).catch(handleRenderError);
 }
 
@@ -5791,6 +5794,414 @@ function shopSubHeader(title) {
 }
 function wireShopBack() {
   $("#btn-shop-back")?.addEventListener("click", () => { State.shopView = "hub"; renderShop(); });
+}
+
+// ================= ESTANTE (livros lidos) =================
+
+const estante = { role: null, books: [], settings: null, filter: "todos", year: new Date().getFullYear(), readonly: false };
+
+function coverHTML(b, cls = "bk-cover") {
+  if (b.cover_url) return `<img class="${cls}" src="${escapeHTML(b.cover_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'${cls} bk-cover-fb',textContent:this.dataset.t}))" data-t="${escapeHTML((b.title || "").slice(0, 40))}">`;
+  return `<div class="${cls} bk-cover-fb">${escapeHTML((b.title || "").slice(0, 40))}</div>`;
+}
+
+async function renderEstante() {
+  const mine = !estante.readonly || !estante.role;
+  if (!estante.role) estante.role = State.role;
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  try {
+    const [books, settings] = await Promise.all([
+      db.listBooks(State.coupleId, estante.role),
+      db.getBookSettings(State.coupleId, estante.role),
+    ]);
+    estante.books = books;
+    estante.settings = settings;
+  } catch (e) {
+    view.innerHTML = `<div class="card"><div class="card-title">Estante</div><div class="card-sub">Não consegui carregar a estante. Se acabou de atualizar o app, falta rodar o SQL da Estante no Supabase.</div><button class="btn btn-secondary btn-sm" id="bk-retry">Tentar de novo</button></div>`;
+    $("#bk-retry").onclick = renderEstante;
+    return;
+  }
+  drawEstante();
+}
+
+function drawEstante() {
+  const ro = estante.readonly;
+  const nowY = new Date().getFullYear(), nowM = new Date().getMonth() + 1;
+  const y = estante.year;
+  const st = periodStats(estante.books, y);
+  const goal = estante.settings?.goal_year === y ? estante.settings.year_goal : null;
+  const reading = estante.books.filter((b) => b.status === "lendo");
+  const f = estante.filter;
+  const shown = f === "todos" ? estante.books : estante.books.filter((b) => b.status === f);
+  const streak = monthsStreak(estante.books, nowY, nowM);
+  const years = [...new Set([nowY, ...estante.books.filter((b) => b.finished_at).map((b) => Number(b.finished_at.slice(0, 4)))])].sort((a, b) => b - a);
+  const who = ro ? partnerDisplayName() : "";
+
+  view.innerHTML = `
+    <div class="bk-head">
+      <div>
+        <h2 class="bk-title">${ro ? `Estante de ${escapeHTML(who)}` : "Minha Estante"} 📚</h2>
+        <select id="bk-year" class="bk-year" aria-label="Ano">${years.map((yy) => `<option value="${yy}" ${yy === y ? "selected" : ""}>${yy}</option>`).join("")}</select>
+      </div>
+      ${ro ? `<button class="btn btn-ghost btn-sm" id="bk-back">← Minha</button>` : `<div class="bk-actions">
+        <button class="bk-round" id="bk-share" aria-label="Compartilhar retrospectiva">${icon("share", { size: 20 })}</button>
+        <button class="bk-round bk-round-pri" id="bk-add" aria-label="Adicionar livro">${icon("plus", { size: 22 })}</button>
+      </div>`}
+    </div>
+
+    <div class="bk-kpis">
+      <div class="bk-kpi bk-y"><div class="bk-n">${st.count}</div><div class="bk-l">livros em ${y}</div></div>
+      <div class="bk-kpi bk-p"><div class="bk-n">${st.pages.toLocaleString("pt-BR")}</div><div class="bk-l">páginas</div></div>
+      <div class="bk-kpi bk-g"><div class="bk-n">${streak}</div><div class="bk-l">${streak === 1 ? "mês seguido" : "meses seguidos"}</div></div>
+    </div>
+    ${st.outsideKindle ? `<div class="bk-note">📖 ${st.outsideKindle} ${st.outsideKindle === 1 ? "desses não é" : "desses não são"} do Kindle — aqui conta tudo que você leu!</div>` : ""}
+
+    <div class="card bk-goal">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <div class="card-title" style="margin:0;">Meta de ${y}</div>
+        ${ro ? "" : `<button class="btn btn-ghost btn-sm" id="bk-goal-edit">${goal ? "✏️" : "Definir meta"}</button>`}
+      </div>
+      ${goal ? `<div class="progress-track" style="margin:10px 0 6px;"><div class="progress-fill" style="width:${Math.min(100, Math.round(st.count / goal * 100))}%"></div></div>
+      <div class="card-sub" style="margin:0;">${st.count} de ${goal} livros${st.count >= goal ? " — meta batida! 🎉" : ""}</div>` : `<div class="card-sub" style="margin:6px 0 0;">Quantos livros você quer ler em ${y}?</div>`}
+    </div>
+
+    ${reading.length ? `<div class="bk-sec">Lendo agora</div>
+    <div class="bk-reading">${reading.map((b) => `
+      <button class="bk-rd" data-book="${b.id}">
+        ${coverHTML(b)}
+        <div class="bk-rd-t">${escapeHTML(b.title)}</div>
+        <div class="progress-track" style="height:6px;"><div class="progress-fill" style="width:${b.progress}%"></div></div>
+        <div class="bk-rd-p">${b.progress}%</div>
+      </button>`).join("")}</div>` : ""}
+
+    <div class="bk-tabs" role="tablist">
+      ${[["todos", "Todos"], ["quero", "Quero ler"], ["lendo", "Lendo"], ["li", "Li"], ["larguei", "Larguei"]].map(([id, lb]) => `<button class="bk-tab ${f === id ? "on" : ""}" data-f="${id}">${lb}</button>`).join("")}
+    </div>
+    ${shown.length ? `<div class="bk-grid">${shown.map((b) => `
+      <button class="bk-item" data-book="${b.id}">
+        ${coverHTML(b)}
+        ${b.status === "li" ? `<span class="bk-badge">✓</span>` : ""}
+        ${b.status === "li" && b.rating ? `<span class="bk-stars">${"★".repeat(b.rating)}</span>` : ""}
+      </button>`).join("")}</div>`
+      : `<div class="center-note">${ro ? "Nada por aqui ainda." : "Nenhum livro aqui ainda. Toque no <b>+</b> pra adicionar o primeiro 💕"}</div>`}
+
+    ${ro || estante.settings === undefined ? "" : `<div class="bk-foot">
+      <label class="bk-toggle"><input type="checkbox" id="bk-sharetoggle" ${estante.settings?.share_with_partner ? "checked" : ""}> Deixar ${escapeHTML(partnerDisplayName())} ver minha estante</label>
+      ${estante.settings?.share_with_partner ? "" : `<div class="card-sub" style="margin:4px 0 0;">Por padrão, só você vê.</div>`}
+      <button class="btn btn-ghost btn-sm" id="bk-view-partner" style="margin-top:8px;">👀 Ver a estante de ${escapeHTML(partnerDisplayName())}</button>
+    </div>`}
+  `;
+
+  $("#bk-year").onchange = (e) => { estante.year = Number(e.target.value); drawEstante(); };
+  document.querySelectorAll(".bk-tab").forEach((t) => (t.onclick = () => { estante.filter = t.dataset.f; drawEstante(); }));
+  document.querySelectorAll("[data-book]").forEach((el) => (el.onclick = () => openBookModal(el.dataset.book)));
+  if (ro) { $("#bk-back").onclick = () => { estante.readonly = false; estante.role = State.role; renderEstante(); }; return; }
+  $("#bk-add").onclick = openAddBookModal;
+  $("#bk-share").onclick = openBookShareModal;
+  $("#bk-goal-edit").onclick = openGoalModal;
+  $("#bk-sharetoggle").onchange = async (e) => {
+    try { estante.settings = await db.saveBookSettings(State.coupleId, State.role, { share_with_partner: e.target.checked }); }
+    catch (err) { alert("Não deu: " + (err.message || err)); e.target.checked = !e.target.checked; return; }
+    drawEstante();
+  };
+  $("#bk-view-partner").onclick = () => { estante.readonly = true; estante.role = otherRole(); renderEstante(); };
+}
+
+function openGoalModal() {
+  const y = estante.year;
+  const cur = estante.settings?.goal_year === y ? estante.settings.year_goal : "";
+  openModal(`
+    <h3 class="modal-title">Meta de ${y} 🎯</h3>
+    <label class="field-label">Quantos livros?</label>
+    <input type="number" id="bk-goal-in" min="1" max="999" inputmode="numeric" value="${cur}" placeholder="ex: 30">
+    <button class="btn btn-primary btn-block" id="bk-goal-save" style="margin-top:14px;">Salvar</button>
+  `);
+  $("#bk-goal-save").onclick = async () => {
+    const n = parseInt($("#bk-goal-in").value, 10);
+    if (!(n >= 1 && n <= 999)) return alert("Coloque um número entre 1 e 999.");
+    try { estante.settings = await db.saveBookSettings(State.coupleId, State.role, { year_goal: n, goal_year: y }); }
+    catch (e) { return alert("Não deu: " + (e.message || e)); }
+    closeModal(); drawEstante();
+  };
+}
+
+// ---------- adicionar ----------
+
+function openAddBookModal() {
+  openModal(`
+    <h3 class="modal-title">Adicionar livro 📚</h3>
+    <input type="search" id="bk-q" placeholder="Nome do livro ou autor" autocomplete="off" enterkeyhint="search">
+    <div id="bk-results" class="bk-results"></div>
+    <div class="bk-add-links">
+      <button class="btn btn-ghost btn-sm" id="bk-manual">✍️ Não achei, digitar</button>
+      <button class="btn btn-ghost btn-sm" id="bk-paste">📋 Colar lista de títulos</button>
+    </div>
+  `);
+  const input = $("#bk-q"), box = $("#bk-results");
+  let timer = null, seq = 0;
+  input.focus();
+  const run = async () => {
+    const my = ++seq;
+    box.innerHTML = `<div class="bk-hint">Procurando...</div>`;
+    const { results, failed } = await searchBooks(input.value);
+    if (my !== seq) return;
+    if (!results.length) { box.innerHTML = `<div class="bk-hint">${failed ? "Sem conexão com o catálogo agora — dá pra digitar o título manualmente." : "Nada encontrado. Tente só o título, ou digite manualmente."}</div>`; return; }
+    box.innerHTML = results.map((r, i) => `
+      <div class="bk-res">
+        ${coverHTML(r, "bk-res-cover")}
+        <div class="bk-res-info"><div class="bk-res-t">${escapeHTML(r.title)}</div><div class="bk-res-a">${escapeHTML(r.author || "autor desconhecido")}${r.pages ? ` · ${r.pages} págs` : ""}</div></div>
+        <div class="bk-res-btns"><button class="btn btn-primary btn-sm" data-i="${i}" data-st="lendo">Lendo</button><button class="btn btn-secondary btn-sm" data-i="${i}" data-st="quero">Quero ler</button></div>
+      </div>`).join("");
+    box.querySelectorAll("button[data-i]").forEach((btn) => (btn.onclick = async () => {
+      const r = results[Number(btn.dataset.i)];
+      btn.disabled = true;
+      await saveNewBook({ title: r.title, author: r.author, cover_url: r.cover_url, pages: r.pages }, btn.dataset.st);
+    }));
+  };
+  input.oninput = () => { clearTimeout(timer); if (input.value.trim().length < 2) { box.innerHTML = ""; return; } timer = setTimeout(run, 450); };
+  input.onkeydown = (e) => { if (e.key === "Enter") { clearTimeout(timer); run(); } };
+  $("#bk-manual").onclick = () => openManualBookModal(input.value.trim());
+  $("#bk-paste").onclick = openPasteBooksModal;
+}
+
+async function saveNewBook(info, status, extra = {}) {
+  const row = {
+    title: info.title.slice(0, 200), author: info.author?.slice(0, 150) || null, cover_url: info.cover_url || null,
+    pages: info.pages || null, status, source: extra.source || "kindle",
+    started_at: status === "lendo" ? todayISO() : null, ...extra,
+  };
+  try { await db.addBook(State.coupleId, State.role, row); }
+  catch (e) { alert("Não deu pra salvar: " + (e.message || e)); return; }
+  closeModal(); estante.filter = status === "li" ? "li" : "todos"; renderEstante();
+}
+
+function openManualBookModal(prefill = "") {
+  openModal(`
+    <h3 class="modal-title">Adicionar à mão ✍️</h3>
+    <label class="field-label">Título</label><input id="bk-m-t" maxlength="200" value="${escapeHTML(prefill)}">
+    <label class="field-label">Autor(a) (opcional)</label><input id="bk-m-a" maxlength="150">
+    <label class="field-label">Páginas (opcional)</label><input id="bk-m-p" type="number" min="1" max="20000" inputmode="numeric">
+    <label class="field-label">Como você tá lendo?</label>${sourceSelectHTML("bk-m-s", "kindle")}
+    <div class="row" style="margin-top:14px;">
+      <button class="btn btn-primary" id="bk-m-lendo" style="flex:1">Lendo</button>
+      <button class="btn btn-secondary" id="bk-m-quero" style="flex:1">Quero ler</button>
+      <button class="btn btn-secondary" id="bk-m-li" style="flex:1">Já li</button>
+    </div>
+  `);
+  const go = (status) => {
+    const title = $("#bk-m-t").value.trim();
+    if (!title) return alert("Coloque o título.");
+    const info = { title, author: $("#bk-m-a").value.trim() || null, pages: parseInt($("#bk-m-p").value, 10) || null };
+    const source = $("#bk-m-s").value;
+    if (status === "li") return openFinishModal(null, { info, source });
+    saveNewBook(info, status, { source });
+  };
+  $("#bk-m-lendo").onclick = () => go("lendo");
+  $("#bk-m-quero").onclick = () => go("quero");
+  $("#bk-m-li").onclick = () => go("li");
+}
+
+function sourceSelectHTML(id, cur) {
+  return `<select id="${id}">${Object.entries(SOURCES).map(([k, v]) => `<option value="${k}" ${k === cur ? "selected" : ""}>${v}</option>`).join("")}</select>`;
+}
+
+function openPasteBooksModal() {
+  const nowM = todayISO().slice(0, 7);
+  openModal(`
+    <h3 class="modal-title">Colar lista 📋</h3>
+    <div class="card-sub">Um livro por linha. Se quiser, <b>Título - Autor</b>. Eu procuro as capas sozinho.</div>
+    <textarea id="bk-p-t" rows="7" placeholder="A Culpa é das Estrelas - John Green&#10;Torto Arado&#10;..."></textarea>
+    <label class="field-label">Esses livros eu…</label>
+    <select id="bk-p-s"><option value="li">já li</option><option value="quero">quero ler</option></select>
+    <div id="bk-p-mwrap"><label class="field-label">Li em (mês)</label><input type="month" id="bk-p-m" value="${nowM}" max="${nowM}"></div>
+    <button class="btn btn-primary btn-block" id="bk-p-go" style="margin-top:14px;">Adicionar</button>
+    <div id="bk-p-prog" class="bk-hint"></div>
+  `);
+  $("#bk-p-s").onchange = () => { $("#bk-p-mwrap").style.display = $("#bk-p-s").value === "li" ? "" : "none"; };
+  $("#bk-p-go").onclick = async () => {
+    const list = parseTitleList($("#bk-p-t").value);
+    if (!list.length) return alert("Cole pelo menos um título.");
+    const status = $("#bk-p-s").value;
+    const month = $("#bk-p-m").value || nowM;
+    const finished = status === "li" ? (month === nowM ? todayISO() : month + "-15") : null;
+    $("#bk-p-go").disabled = true;
+    const rows = [];
+    for (let i = 0; i < list.length; i++) {
+      $("#bk-p-prog").textContent = `Procurando capas... ${i + 1}/${list.length}`;
+      const hit = await lookupBook(list[i].title, list[i].author);
+      rows.push({
+        title: (hit?.title && hit.title.toLowerCase().includes(list[i].title.toLowerCase().slice(0, 6)) ? hit.title : list[i].title).slice(0, 200),
+        author: list[i].author || hit?.author || null, cover_url: hit?.cover_url || null, pages: hit?.pages || null,
+        status, source: "kindle", finished_at: finished, started_at: null,
+      });
+    }
+    try { await db.addBooksBulk(State.coupleId, State.role, rows); }
+    catch (e) { $("#bk-p-go").disabled = false; return alert("Não deu: " + (e.message || e)); }
+    closeModal(); estante.filter = "todos"; renderEstante();
+  };
+}
+
+// ---------- detalhe do livro ----------
+
+function ringSVG(p) {
+  const r = 60, c = 2 * Math.PI * r;
+  return `<svg viewBox="0 0 150 150" class="bk-ring"><circle cx="75" cy="75" r="${r}" fill="none" stroke="var(--surface-sunk)" stroke-width="14"/><circle id="bk-ring-c" cx="75" cy="75" r="${r}" fill="none" stroke="#c9305a" stroke-width="14" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - p / 100)}" transform="rotate(-90 75 75)"/><text id="bk-ring-t" x="75" y="86" text-anchor="middle" font-size="34" font-weight="800" fill="currentColor" font-family="Baloo 2, sans-serif">${p}%</text></svg>`;
+}
+
+function openBookModal(id) {
+  const b = estante.books.find((x) => x.id === id);
+  if (!b) return;
+  if (estante.readonly) {
+    openModal(`<div class="bk-detail-head">${coverHTML(b, "bk-dcover")}<div><h3 class="modal-title" style="margin:0">${escapeHTML(b.title)}</h3><div class="card-sub">${escapeHTML(b.author || "")}</div>
+      <div class="pill pill-muted">${STATUS[b.status].emoji} ${STATUS[b.status].label}</div>${b.rating ? `<div class="bk-stars-lg">${"★".repeat(b.rating)}</div>` : ""}</div></div>
+      ${b.tags?.length ? `<div class="bk-tagrow">${b.tags.map((t) => `<span class="bk-tag">#${escapeHTML(t)}</span>`).join("")}</div>` : ""}`);
+    return;
+  }
+  const pg = b.pages ? Math.round(b.pages * b.progress / 100) : null;
+  openModal(`
+    <div class="bk-detail-head">${coverHTML(b, "bk-dcover")}
+      <div><h3 class="modal-title" style="margin:0">${escapeHTML(b.title)}</h3><div class="card-sub" style="margin:2px 0 6px;">${escapeHTML(b.author || "autor desconhecido")}${b.pages ? ` · ${b.pages} págs` : ""}</div>
+      <div class="bk-statusrow">${Object.entries(STATUS).map(([k, v]) => `<button class="bk-st ${b.status === k ? "on" : ""}" data-st="${k}">${v.emoji} ${v.label}</button>`).join("")}</div></div>
+    </div>
+    ${b.status === "lendo" ? `
+      <div class="bk-progress">
+        ${ringSVG(b.progress)}
+        <div class="bk-pcol">
+          <input type="range" id="bk-range" min="0" max="100" value="${b.progress}" aria-label="Porcentagem do Kindle">
+          <div class="bk-chips"><button data-d="-1">−1%</button><button data-d="1">+1%</button><button data-d="10">+10%</button></div>
+          <div class="card-sub" id="bk-pgs" style="margin:6px 0 0;">${pg != null ? `≈ ${pg} de ${b.pages} páginas` : "Copie a % que aparece no seu Kindle"}</div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px;"><button class="btn btn-primary" id="bk-done" style="flex:2">Terminei 🎉</button><button class="btn btn-secondary" id="bk-drop" style="flex:1">Larguei</button></div>` : ""}
+    ${b.status === "li" ? `
+      <div class="bk-meta">${b.rating ? `<span class="bk-stars-lg">${"★".repeat(b.rating)}</span>` : ""}${b.mood && BOOK_MOOD_BY_ID[b.mood] ? `<span class="pill pill-muted">${BOOK_MOOD_BY_ID[b.mood].emoji} ${BOOK_MOOD_BY_ID[b.mood].label}</span>` : ""}${b.finished_at ? `<span class="card-sub" style="margin:0">terminado em ${b.finished_at.split("-").reverse().join("/")}</span>` : ""}</div>
+      ${b.tags?.length ? `<div class="bk-tagrow">${b.tags.map((t) => `<span class="bk-tag">#${escapeHTML(t)}</span>`).join("")}</div>` : ""}
+      <button class="btn btn-secondary btn-block" id="bk-edit-fin" style="margin-top:10px;">✏️ Editar nota, humor e palavras-chave</button>` : ""}
+    <label class="field-label">Onde você lê</label>${sourceSelectHTML("bk-src", b.source)}
+    ${b.pages ? "" : `<label class="field-label">Páginas</label><input id="bk-pgin" type="number" min="1" max="20000" inputmode="numeric" placeholder="opcional">`}
+    <button class="btn btn-ghost btn-sm" id="bk-del" style="margin-top:14px; color:var(--danger, #b3261e);">🗑️ Remover da estante</button>
+  `);
+  const patch = async (fields, rerender = true) => {
+    try { Object.assign(b, await db.updateBook(b.id, fields)); }
+    catch (e) { alert("Não deu: " + (e.message || e)); return false; }
+    if (rerender) { closeModal(); drawEstante(); }
+    return true;
+  };
+  document.querySelectorAll(".bk-st").forEach((el) => (el.onclick = () => {
+    const st = el.dataset.st;
+    if (st === b.status) return;
+    if (st === "li") return openFinishModal(b);
+    patch({ status: st, started_at: st === "lendo" && !b.started_at ? todayISO() : b.started_at, finished_at: null });
+  }));
+  $("#bk-src").onchange = (e) => patch({ source: e.target.value }, false);
+  $("#bk-pgin")?.addEventListener("change", (e) => { const n = parseInt(e.target.value, 10); if (n >= 1) patch({ pages: n }, false); });
+  $("#bk-del").onclick = async () => {
+    if (!confirm("Remover este livro da estante?")) return;
+    try { await db.deleteBook(b.id); } catch (e) { return alert("Não deu: " + (e.message || e)); }
+    closeModal(); renderEstante();
+  };
+  $("#bk-edit-fin")?.addEventListener("click", () => openFinishModal(b));
+  if (b.status === "lendo") {
+    const range = $("#bk-range");
+    let t = null;
+    const paint = (v) => {
+      const c = 2 * Math.PI * 60;
+      $("#bk-ring-c").setAttribute("stroke-dashoffset", c * (1 - v / 100));
+      $("#bk-ring-t").textContent = v + "%";
+      if (b.pages) $("#bk-pgs").textContent = `≈ ${Math.round(b.pages * v / 100)} de ${b.pages} páginas`;
+    };
+    const commit = (v) => { b.progress = v; clearTimeout(t); t = setTimeout(() => patch({ progress: v }, false), 500); };
+    range.oninput = () => { const v = Number(range.value); paint(v); commit(v); };
+    document.querySelectorAll(".bk-chips button").forEach((c) => (c.onclick = () => {
+      const v = Math.max(0, Math.min(100, Number(range.value) + Number(c.dataset.d)));
+      range.value = v; paint(v); commit(v);
+    }));
+    $("#bk-done").onclick = () => { clearTimeout(t); openFinishModal({ ...b, progress: 100 }, null, b); };
+    $("#bk-drop").onclick = () => { clearTimeout(t); patch({ status: "larguei" }); };
+  }
+}
+
+// terminar (ou editar um já terminado): nota, humor, palavras-chave e data
+function openFinishModal(book, fresh = null, original = null) {
+  const info = fresh?.info || book;
+  const tags = [...(book?.tags || [])];
+  let rating = book?.rating || 0, mood = book?.mood || null;
+  openModal(`
+    <h3 class="modal-title">${book?.status === "li" && !original ? "Editar" : "Terminou! 🎉"}</h3>
+    <div class="card-sub">${escapeHTML(info.title)}</div>
+    <label class="field-label">Sua nota</label>
+    <div class="bk-rate">${[1, 2, 3, 4, 5].map((n) => `<button data-r="${n}" aria-label="${n} estrelas">★</button>`).join("")}</div>
+    <label class="field-label">Como esse livro te deixou?</label>
+    <div class="bk-moods">${BOOK_MOODS.map((m) => `<button data-m="${m.id}">${m.emoji} ${m.label}</button>`).join("")}</div>
+    <label class="field-label">Palavras-chave</label>
+    <div class="bk-tagrow" id="bk-tags"></div>
+    <input id="bk-tag-in" maxlength="24" placeholder="ex: romance, plot twist (Enter pra adicionar)" enterkeyhint="done">
+    <label class="field-label">Terminei em</label>
+    <input type="date" id="bk-fin-date" value="${book?.finished_at || todayISO()}" max="${todayISO()}">
+    <button class="btn btn-primary btn-block" id="bk-fin-save" style="margin-top:14px;">Salvar na estante</button>
+  `);
+  const paintRate = () => document.querySelectorAll(".bk-rate button").forEach((el) => el.classList.toggle("on", Number(el.dataset.r) <= rating));
+  const paintMood = () => document.querySelectorAll(".bk-moods button").forEach((el) => el.classList.toggle("on", el.dataset.m === mood));
+  const paintTags = () => {
+    $("#bk-tags").innerHTML = tags.map((t, i) => `<button class="bk-tag" data-i="${i}">#${escapeHTML(t)} ✕</button>`).join("");
+    $("#bk-tags").querySelectorAll("button").forEach((el) => (el.onclick = () => { tags.splice(Number(el.dataset.i), 1); paintTags(); }));
+  };
+  const addTags = () => {
+    for (const raw of $("#bk-tag-in").value.split(",")) { const t = cleanTag(raw); if (t && !tags.includes(t) && tags.length < 12) tags.push(t); }
+    $("#bk-tag-in").value = ""; paintTags();
+  };
+  document.querySelectorAll(".bk-rate button").forEach((el) => (el.onclick = () => { rating = rating === Number(el.dataset.r) ? 0 : Number(el.dataset.r); paintRate(); }));
+  document.querySelectorAll(".bk-moods button").forEach((el) => (el.onclick = () => { mood = mood === el.dataset.m ? null : el.dataset.m; paintMood(); }));
+  $("#bk-tag-in").onkeydown = (e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addTags(); } };
+  paintRate(); paintMood(); paintTags();
+  $("#bk-fin-save").onclick = async () => {
+    addTags();
+    const fields = { status: "li", progress: 100, rating: rating || null, mood, tags, finished_at: $("#bk-fin-date").value || todayISO() };
+    try {
+      if (fresh) await db.addBook(State.coupleId, State.role, { title: fresh.info.title.slice(0, 200), author: fresh.info.author, pages: fresh.info.pages, cover_url: null, source: fresh.source, ...fields });
+      else await db.updateBook(book.id, fields);
+    } catch (e) { return alert("Não deu: " + (e.message || e)); }
+    closeModal(); estante.filter = "li"; renderEstante();
+  };
+}
+
+// ---------- retrospectiva compartilhável ----------
+
+function openBookShareModal() {
+  const nowM = new Date().getMonth() + 1, y = estante.year;
+  openModal(`
+    <h3 class="modal-title">Sua retrospectiva ✨</h3>
+    <div class="card-sub">Cartões prontos pro Instagram (stories).</div>
+    <div class="bk-statusrow" style="margin:10px 0;">
+      <button class="bk-st on" data-per="year">📅 Ano de ${y}</button>
+      <button class="bk-st" data-per="month">🗓️ ${MONTHS_PT[nowM - 1]}</button>
+    </div>
+    <button class="btn btn-primary btn-block" id="bk-gen">Gerar cartões</button>
+    <div id="bk-cards" class="bk-cards"></div>
+  `);
+  let per = "year";
+  document.querySelectorAll("[data-per]").forEach((el) => (el.onclick = () => {
+    per = el.dataset.per;
+    document.querySelectorAll("[data-per]").forEach((x) => x.classList.toggle("on", x === el));
+  }));
+  $("#bk-gen").onclick = async () => {
+    const btn = $("#bk-gen");
+    btn.disabled = true; btn.textContent = "Desenhando...";
+    try {
+      const cvs = await buildCards({ books: estante.books, year: y, month: per === "month" ? nowM : null, name: myDisplayName() });
+      const blobs = await Promise.all(cvs.map(canvasToBlob));
+      $("#bk-cards").innerHTML = cvs.map((_, i) => `<img src="${URL.createObjectURL(blobs[i])}" alt="Cartão ${i + 1}">`).join("") +
+        `<button class="btn btn-primary btn-block" id="bk-send" style="grid-column:1/-1;">Compartilhar / salvar</button>`;
+      $("#bk-send").onclick = async () => {
+        const r = await shareOrDownload(blobs, `estante-${per === "month" ? nowM + "-" : ""}${y}`);
+        if (r === "downloaded") alert("Imagens salvas! Agora é só postar nos stories 💕");
+      };
+      btn.style.display = "none";
+    } catch (e) {
+      btn.disabled = false; btn.textContent = "Gerar cartões";
+      alert("Não consegui gerar os cartões: " + (e.message || e));
+    }
+  };
 }
 
 // ================= CONVITES =================

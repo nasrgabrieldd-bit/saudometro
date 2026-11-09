@@ -1120,3 +1120,56 @@ export async function listSpecialDates(coupleId) {
   if (error) throw error;
   return data || [];
 }
+
+// ---------- Estante (livros lidos) ----------
+
+export async function listBooks(coupleId, role) {
+  const { data, error } = await supabase
+    .from("books").select("*").eq("couple_id", coupleId).eq("role", role)
+    .order("updated_at", { ascending: false }).limit(1000);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function addBook(coupleId, role, fields) {
+  const { data, error } = await supabase
+    .from("books").insert({ couple_id: coupleId, role, ...fields }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function addBooksBulk(coupleId, role, rows) {
+  if (!rows.length) return [];
+  const { data, error } = await supabase
+    .from("books").insert(rows.map((r) => ({ couple_id: coupleId, role, ...r }))).select();
+  if (error) throw error;
+  return data || [];
+}
+
+export async function updateBook(id, fields) {
+  const { data, error } = await supabase
+    .from("books").update({ ...fields, updated_at: new Date().toISOString() }).eq("id", id).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteBook(id) {
+  const { error } = await supabase.from("books").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function getBookSettings(coupleId, role) {
+  const { data, error } = await supabase
+    .from("book_settings").select("*").eq("couple_id", coupleId).eq("role", role).maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+export async function saveBookSettings(coupleId, role, fields) {
+  const { data, error } = await supabase
+    .from("book_settings")
+    .upsert({ couple_id: coupleId, role, ...fields, updated_at: new Date().toISOString() }, { onConflict: "couple_id,role" })
+    .select().single();
+  if (error) throw error;
+  return data;
+}
