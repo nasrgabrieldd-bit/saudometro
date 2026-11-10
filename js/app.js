@@ -574,7 +574,7 @@ function setActiveTab(tab) {
   if (tab === "notes") State.notesView = "hub";
   if (tab === "profile") State.profileView = "hub";
   if (tab === "shop") State.shopView = "hub";
-  if (tab === "shelf") { estante.readonly = false; estante.role = State.role; }
+  if (tab === "shelf") { estante.mode = "couple"; estante.readonly = false; estante.role = State.role; }
   if (tab === "home") State.homeMonth = startOfMonth(new Date());
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   renderActiveTab();
@@ -625,7 +625,7 @@ function renderOfflineFallback(container, scope) {
   $("#offline-fallback-play", container)?.addEventListener("click", () => {
     if (isAmigos) {
       State.friendsTab = "shop";
-      document.querySelectorAll("[data-friends-tab]").forEach((b) => { b.style.color = b.dataset.friendsTab === "shop" ? "var(--friends-accent-strong)" : ""; });
+      markFriendsTab("shop");
     } else {
       State.activeTab = "shop";
       document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === "shop"));
@@ -1274,6 +1274,7 @@ const FRIENDS_TABS = [
   { tab: "roles", icon: "calendar", label: "Rolês" },
   { tab: "mood", icon: "heart", label: "Humor" },
   { tab: "notes", icon: "mail", label: "Experiências" },
+  { tab: "shelf", icon: "book", label: "Estante" },
   { tab: "shop", icon: "shopping-bag", label: "Prêmios" },
   { tab: "group", icon: "settings", label: "Turma" },
 ];
@@ -1331,10 +1332,12 @@ async function enterFriendsMode(group) {
 function setFriendsTab(tab) {
   closeRoomChannels();
   State.friendsTab = tab;
-  document.querySelectorAll("[data-friends-tab]").forEach((b) => {
-    b.style.color = b.dataset.friendsTab === tab ? "var(--friends-accent-strong)" : "";
-  });
+  markFriendsTab(tab);
   renderFriendsActiveTab();
+}
+// só a aba aberta mostra o nome (pílula na cor da turma)
+function markFriendsTab(tab) {
+  document.querySelectorAll("[data-friends-tab]").forEach((b) => b.classList.toggle("active", b.dataset.friendsTab === tab));
 }
 
 // sequência de dias em que a turma teve atividade — conta com "congelador" grátis: até 1 dia
@@ -1397,6 +1400,7 @@ function renderFriendsActiveTab() {
     roles: renderFriendsRoles,
     mood: renderFriendsMood,
     notes: renderFriendsExperiencias,
+    shelf: renderFriendsShelf,
     shop: renderFriendsShop,
     group: renderFriendsGroup,
     "together-ideas": renderFriendsTogetherIdeas,
@@ -1692,7 +1696,7 @@ async function renderFriendsHomeGameCard(members, byId) {
     `;
     $("#home-game-card-friends-inner").addEventListener("click", () => {
       State.friendsTab = "shop";
-      document.querySelectorAll("[data-friends-tab]").forEach((b) => { b.style.color = b.dataset.friendsTab === "shop" ? "var(--friends-accent-strong)" : ""; });
+      markFriendsTab("shop");
       renderStarBattleGame("amigos");
     });
   } catch (e) { /* jogo ainda não tem progresso ou deu erro de rede: só não mostra o card */ }
@@ -1890,10 +1894,13 @@ async function renderFriendsMood() {
   const view = $("#friends-view");
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const today = todayISO();
-  const [members, todaysMoods] = await Promise.all([
+  const [members, todaysMoods, allMoodReactions] = await Promise.all([
     friends.listGroupMembers(State.friendGroup.id),
     friends.getMoodsForDay(State.friendGroup.id, today).catch(() => []),
+    friends.listMoodReactions(State.friendGroup.id).catch(() => []), // sem a tabela nova ainda: só não mostra reações
   ]);
+  const nameById = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
+  const moodReactions = allMoodReactions.filter((r) => todaysMoods.some((m) => m.id === r.mood_id));
   const moodEntryByUser = Object.fromEntries(todaysMoods.map((m) => [m.user_id, m]));
   const myEntry = moodEntryByUser[State.userId];
 
@@ -1914,6 +1921,8 @@ async function renderFriendsMood() {
                 <div class="entry-meta">${info ? escapeHTML(gen(info.label, "homem")) : "ainda não registrou"}</div>
                 ${talk && talk.id !== "talvez" ? `<div class="entry-meta">${talk.emoji} ${talk.label}</div>` : ""}
                 ${entry?.note ? `<div class="entry-meta" style="margin-top:2px; color:var(--text);">"${escapeHTML(entry.note)}"</div>` : ""}
+              ${entry && m.user_id !== State.userId ? `<div class="react-bar" data-fmood="${entry.id}">${REACTION_EMOJIS.map((e) => { const on = moodReactions.some((r) => r.mood_id === entry.id && r.user_id === State.userId && r.emoji === e); return `<button type="button" class="react-btn ${on ? "selected" : ""}" data-emoji="${e}" aria-pressed="${on}" aria-label="Reagir com ${e}">${e}</button>`; }).join("")}</div>` : ""}
+              ${entry && m.user_id === State.userId && moodReactions.some((r) => r.mood_id === entry.id) ? `<div class="react-got">${moodReactions.filter((r) => r.mood_id === entry.id).map((r) => `<span class="react-got-emoji">${r.emoji}</span> ${escapeHTML(nameById[r.user_id] || "alguém")}`).join(" · ")} reagiu</div>` : ""}
               </div>
               ${needsCare ? `<button class="btn btn-ghost btn-sm" data-nudge="${m.user_id}" data-nudge-name="${escapeHTML(m.display_name)}">👋 Mandar um alô</button>` : ""}
             </div>`;
@@ -1923,6 +1932,19 @@ async function renderFriendsMood() {
     <button class="btn btn-block" style="margin-top:14px; background:var(--friends-accent); color:var(--on-friends-accent);" id="friends-set-mood-btn">${myEntry ? "Mudar meu humor de hoje" : "Contar como você tá hoje"}</button>
   `;
   $("#friends-set-mood-btn").addEventListener("click", () => openFriendsMoodPicker(myEntry));
+  view.querySelectorAll(".react-bar[data-fmood]").forEach((bar) => {
+    bar.addEventListener("click", async (ev) => {
+      const btn = ev.target.closest(".react-btn");
+      if (!btn) return;
+      const wasOn = btn.classList.contains("selected");
+      bar.querySelectorAll(".react-btn").forEach((b) => { b.classList.remove("selected"); b.setAttribute("aria-pressed", "false"); });
+      if (!wasOn) { btn.classList.add("selected"); btn.setAttribute("aria-pressed", "true"); }
+      try {
+        if (wasOn) await friends.removeMoodReaction(bar.dataset.fmood, State.userId);
+        else await friends.setMoodReaction(State.friendGroup.id, bar.dataset.fmood, State.userId, btn.dataset.emoji);
+      } catch (e) { alert("Não deu pra enviar agora. Tenta de novo."); renderFriendsMood(); }
+    });
+  });
   view.querySelectorAll("[data-nudge]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       btn.disabled = true;
@@ -5798,7 +5820,25 @@ function wireShopBack() {
 
 // ================= ESTANTE (livros lidos) =================
 
-const estante = { role: null, books: [], settings: null, filter: "todos", year: new Date().getFullYear(), readonly: false };
+const estante = { mode: "couple", ownerName: "", members: [], role: null, books: [], settings: null, filter: "todos", year: new Date().getFullYear(), readonly: false };
+
+// a Estante serve o casal (dono = papel) e a turma (dono = id do usuário); só muda de onde lê/grava
+const shelfFriends = () => estante.mode === "friends";
+const shelfHost = () => (shelfFriends() ? $("#friends-view") : view);
+const shelfMe = () => (shelfFriends() ? State.userId : State.role);
+const shelfApi = {
+  list: (o) => (shelfFriends() ? friends.listBooks(State.friendGroup.id, o) : db.listBooks(State.coupleId, o)),
+  settings: (o) => (shelfFriends() ? friends.getBookSettings(State.friendGroup.id, o) : db.getBookSettings(State.coupleId, o)),
+  saveSettings: (f) => (shelfFriends() ? friends.saveBookSettings(State.friendGroup.id, State.userId, f) : shelfApi.saveSettings(f)),
+  add: (f) => (shelfFriends() ? friends.addBook(State.friendGroup.id, State.userId, f) : shelfApi.add(f)),
+  addBulk: (rows) => (shelfFriends() ? friends.addBooksBulk(State.friendGroup.id, State.userId, rows) : shelfApi.addBulk(rows)),
+  update: (id, f) => (shelfFriends() ? friends.updateBook(id, f) : shelfApi.update(id, f)),
+  remove: (id) => (shelfFriends() ? friends.deleteBook(id) : shelfApi.remove(id)),
+};
+function renderFriendsShelf() {
+  estante.mode = "friends"; estante.readonly = false; estante.role = State.userId;
+  return renderEstante();
+}
 
 function coverHTML(b, cls = "bk-cover") {
   if (b.cover_url) return `<img class="${cls}" src="${escapeHTML(b.cover_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'${cls} bk-cover-fb',textContent:this.dataset.t}))" data-t="${escapeHTML((b.title || "").slice(0, 40))}">`;
@@ -5807,17 +5847,21 @@ function coverHTML(b, cls = "bk-cover") {
 
 async function renderEstante() {
   const mine = !estante.readonly || !estante.role;
-  if (!estante.role) estante.role = State.role;
-  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  if (!estante.role) estante.role = shelfMe();
+  shelfHost().innerHTML = `<div class="center-note">Carregando...</div>`;
   try {
     const [books, settings] = await Promise.all([
-      db.listBooks(State.coupleId, estante.role),
-      db.getBookSettings(State.coupleId, estante.role),
+      shelfApi.list(estante.role),
+      shelfApi.settings(estante.role),
     ]);
     estante.books = books;
     estante.settings = settings;
+    if (shelfFriends() && !estante.readonly) {
+      const [mem, sharing] = await Promise.all([friends.listGroupMembers(State.friendGroup.id), friends.listSharingMembers(State.friendGroup.id).catch(() => [])]);
+      estante.members = mem.filter((m) => m.user_id !== State.userId && sharing.includes(m.user_id));
+    }
   } catch (e) {
-    view.innerHTML = `<div class="card"><div class="card-title">Estante</div><div class="card-sub">Não consegui carregar a estante. Se acabou de atualizar o app, falta rodar o SQL da Estante no Supabase.</div><button class="btn btn-secondary btn-sm" id="bk-retry">Tentar de novo</button></div>`;
+    shelfHost().innerHTML = `<div class="card"><div class="card-title">Estante</div><div class="card-sub">Não consegui carregar a estante. Se acabou de atualizar o app, falta rodar o SQL da Estante no Supabase.</div><button class="btn btn-secondary btn-sm" id="bk-retry">Tentar de novo</button></div>`;
     $("#bk-retry").onclick = renderEstante;
     return;
   }
@@ -5835,9 +5879,9 @@ function drawEstante() {
   const shown = f === "todos" ? estante.books : estante.books.filter((b) => b.status === f);
   const streak = monthsStreak(estante.books, nowY, nowM);
   const years = [...new Set([nowY, ...estante.books.filter((b) => b.finished_at).map((b) => Number(b.finished_at.slice(0, 4)))])].sort((a, b) => b - a);
-  const who = ro ? partnerDisplayName() : "";
+  const who = ro ? (shelfFriends() ? estante.ownerName : partnerDisplayName()) : "";
 
-  view.innerHTML = `
+  shelfHost().innerHTML = `
     <div class="bk-head">
       <div>
         <h2 class="bk-title">${ro ? `Estante de ${escapeHTML(who)}` : "Minha Estante"} 📚</h2>
@@ -5885,26 +5929,31 @@ function drawEstante() {
       </button>`).join("")}</div>`
       : `<div class="center-note">${ro ? "Nada por aqui ainda." : "Nenhum livro aqui ainda. Toque no <b>+</b> pra adicionar o primeiro 💕"}</div>`}
 
-    ${ro || estante.settings === undefined ? "" : `<div class="bk-foot">
-      <label class="bk-toggle"><input type="checkbox" id="bk-sharetoggle" ${estante.settings?.share_with_partner ? "checked" : ""}> Deixar ${escapeHTML(partnerDisplayName())} ver minha estante</label>
+    ${ro ? "" : `<div class="bk-foot">
+      <label class="bk-toggle"><input type="checkbox" id="bk-sharetoggle" ${estante.settings?.share_with_partner ? "checked" : ""}> Deixar ${shelfFriends() ? "a turma" : escapeHTML(partnerDisplayName())} ver minha estante</label>
       ${estante.settings?.share_with_partner ? "" : `<div class="card-sub" style="margin:4px 0 0;">Por padrão, só você vê.</div>`}
-      <button class="btn btn-ghost btn-sm" id="bk-view-partner" style="margin-top:8px;">👀 Ver a estante de ${escapeHTML(partnerDisplayName())}</button>
+      ${shelfFriends()
+        ? (estante.members.length ? `<div class="bk-sec" style="margin-top:14px;">Estantes da turma</div><div class="bk-tagrow">${estante.members.map((m) => `<button class="bk-tag" data-shelf-user="${m.user_id}" data-shelf-name="${escapeHTML(m.display_name)}">📚 ${escapeHTML(m.display_name)}</button>`).join("")}</div>` : `<div class="card-sub" style="margin:10px 0 0;">Quando alguém da turma compartilhar a estante, aparece aqui.</div>`)
+        : `<button class="btn btn-ghost btn-sm" id="bk-view-partner" style="margin-top:8px;">👀 Ver a estante de ${escapeHTML(partnerDisplayName())}</button>`}
     </div>`}
   `;
 
   $("#bk-year").onchange = (e) => { estante.year = Number(e.target.value); drawEstante(); };
   document.querySelectorAll(".bk-tab").forEach((t) => (t.onclick = () => { estante.filter = t.dataset.f; drawEstante(); }));
   document.querySelectorAll("[data-book]").forEach((el) => (el.onclick = () => openBookModal(el.dataset.book)));
-  if (ro) { $("#bk-back").onclick = () => { estante.readonly = false; estante.role = State.role; renderEstante(); }; return; }
+  if (ro) { $("#bk-back").onclick = () => { estante.readonly = false; estante.role = shelfMe(); renderEstante(); }; return; }
   $("#bk-add").onclick = openAddBookModal;
   $("#bk-share").onclick = openBookShareModal;
   $("#bk-goal-edit").onclick = openGoalModal;
   $("#bk-sharetoggle").onchange = async (e) => {
-    try { estante.settings = await db.saveBookSettings(State.coupleId, State.role, { share_with_partner: e.target.checked }); }
+    try { estante.settings = await shelfApi.saveSettings({ share_with_partner: e.target.checked }); }
     catch (err) { alert("Não deu: " + (err.message || err)); e.target.checked = !e.target.checked; return; }
     drawEstante();
   };
-  $("#bk-view-partner").onclick = () => { estante.readonly = true; estante.role = otherRole(); renderEstante(); };
+  $("#bk-view-partner")?.addEventListener("click", () => { estante.readonly = true; estante.role = otherRole(); renderEstante(); });
+  document.querySelectorAll("[data-shelf-user]").forEach((el) => (el.onclick = () => {
+    estante.readonly = true; estante.role = el.dataset.shelfUser; estante.ownerName = el.dataset.shelfName; renderEstante();
+  }));
 }
 
 function openGoalModal() {
@@ -5919,7 +5968,7 @@ function openGoalModal() {
   $("#bk-goal-save").onclick = async () => {
     const n = parseInt($("#bk-goal-in").value, 10);
     if (!(n >= 1 && n <= 999)) return alert("Coloque um número entre 1 e 999.");
-    try { estante.settings = await db.saveBookSettings(State.coupleId, State.role, { year_goal: n, goal_year: y }); }
+    try { estante.settings = await shelfApi.saveSettings({ year_goal: n, goal_year: y }); }
     catch (e) { return alert("Não deu: " + (e.message || e)); }
     closeModal(); drawEstante();
   };
@@ -5970,7 +6019,7 @@ async function saveNewBook(info, status, extra = {}) {
     pages: info.pages || null, status, source: extra.source || "kindle",
     started_at: status === "lendo" ? todayISO() : null, ...extra,
   };
-  try { await db.addBook(State.coupleId, State.role, row); }
+  try { await shelfApi.add(row); }
   catch (e) { alert("Não deu pra salvar: " + (e.message || e)); return; }
   closeModal(); estante.filter = status === "li" ? "li" : "todos"; renderEstante();
 }
@@ -6035,7 +6084,7 @@ function openPasteBooksModal() {
         status, source: "kindle", finished_at: finished, started_at: null,
       });
     }
-    try { await db.addBooksBulk(State.coupleId, State.role, rows); }
+    try { await shelfApi.addBulk(rows); }
     catch (e) { $("#bk-p-go").disabled = false; return alert("Não deu: " + (e.message || e)); }
     closeModal(); estante.filter = "todos"; renderEstante();
   };
@@ -6082,7 +6131,7 @@ function openBookModal(id) {
     <button class="btn btn-ghost btn-sm" id="bk-del" style="margin-top:14px; color:var(--danger, #b3261e);">🗑️ Remover da estante</button>
   `);
   const patch = async (fields, rerender = true) => {
-    try { Object.assign(b, await db.updateBook(b.id, fields)); }
+    try { Object.assign(b, await shelfApi.update(b.id, fields)); }
     catch (e) { alert("Não deu: " + (e.message || e)); return false; }
     if (rerender) { closeModal(); drawEstante(); }
     return true;
@@ -6097,7 +6146,7 @@ function openBookModal(id) {
   $("#bk-pgin")?.addEventListener("change", (e) => { const n = parseInt(e.target.value, 10); if (n >= 1) patch({ pages: n }, false); });
   $("#bk-del").onclick = async () => {
     if (!confirm("Remover este livro da estante?")) return;
-    try { await db.deleteBook(b.id); } catch (e) { return alert("Não deu: " + (e.message || e)); }
+    try { await shelfApi.remove(b.id); } catch (e) { return alert("Não deu: " + (e.message || e)); }
     closeModal(); renderEstante();
   };
   $("#bk-edit-fin")?.addEventListener("click", () => openFinishModal(b));
@@ -6158,8 +6207,8 @@ function openFinishModal(book, fresh = null, original = null) {
     addTags();
     const fields = { status: "li", progress: 100, rating: rating || null, mood, tags, finished_at: $("#bk-fin-date").value || todayISO() };
     try {
-      if (fresh) await db.addBook(State.coupleId, State.role, { title: fresh.info.title.slice(0, 200), author: fresh.info.author, pages: fresh.info.pages, cover_url: null, source: fresh.source, ...fields });
-      else await db.updateBook(book.id, fields);
+      if (fresh) await shelfApi.add({ title: fresh.info.title.slice(0, 200), author: fresh.info.author, pages: fresh.info.pages, cover_url: null, source: fresh.source, ...fields });
+      else await shelfApi.update(book.id, fields);
     } catch (e) { return alert("Não deu: " + (e.message || e)); }
     closeModal(); estante.filter = "li"; renderEstante();
   };
@@ -6188,7 +6237,7 @@ function openBookShareModal() {
     const btn = $("#bk-gen");
     btn.disabled = true; btn.textContent = "Desenhando...";
     try {
-      const cvs = await buildCards({ books: estante.books, year: y, month: per === "month" ? nowM : null, name: myDisplayName() });
+      const cvs = await buildCards({ books: estante.books, year: y, month: per === "month" ? nowM : null, name: shelfFriends() ? (State.friendGroup?.myDisplayName || "") : myDisplayName() });
       const blobs = await Promise.all(cvs.map(canvasToBlob));
       $("#bk-cards").innerHTML = cvs.map((_, i) => `<img src="${URL.createObjectURL(blobs[i])}" alt="Cartão ${i + 1}">`).join("") +
         `<button class="btn btn-primary btn-block" id="bk-send" style="grid-column:1/-1;">Compartilhar / salvar</button>`;

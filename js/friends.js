@@ -593,3 +593,67 @@ export async function addFeedComment(postId, userId, text) {
   if (error) throw error;
   return data;
 }
+
+// ---------- Estante da turma (livros lidos de cada pessoa; turma só vê o que a pessoa compartilha) ----------
+
+export async function listBooks(groupId, userId) {
+  const { data, error } = await supabase.from("friend_books").select("*").eq("friend_group_id", groupId).eq("user_id", userId)
+    .order("updated_at", { ascending: false }).limit(1000);
+  if (error) throw error;
+  return data || [];
+}
+export async function addBook(groupId, userId, fields) {
+  const { data, error } = await supabase.from("friend_books").insert({ friend_group_id: groupId, user_id: userId, ...fields }).select().single();
+  if (error) throw error;
+  return data;
+}
+export async function addBooksBulk(groupId, userId, rows) {
+  if (!rows.length) return [];
+  const { data, error } = await supabase.from("friend_books").insert(rows.map((r) => ({ friend_group_id: groupId, user_id: userId, ...r }))).select();
+  if (error) throw error;
+  return data || [];
+}
+export async function updateBook(id, fields) {
+  const { data, error } = await supabase.from("friend_books").update({ ...fields, updated_at: new Date().toISOString() }).eq("id", id).select().single();
+  if (error) throw error;
+  return data;
+}
+export async function deleteBook(id) {
+  const { error } = await supabase.from("friend_books").delete().eq("id", id);
+  if (error) throw error;
+}
+export async function getBookSettings(groupId, userId) {
+  const { data, error } = await supabase.from("friend_book_settings").select("*").eq("friend_group_id", groupId).eq("user_id", userId).maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+export async function saveBookSettings(groupId, userId, fields) {
+  const { data, error } = await supabase.from("friend_book_settings")
+    .upsert({ friend_group_id: groupId, user_id: userId, ...fields, updated_at: new Date().toISOString() }, { onConflict: "friend_group_id,user_id" })
+    .select().single();
+  if (error) throw error;
+  return data;
+}
+export async function listSharingMembers(groupId) {
+  const { data, error } = await supabase.from("friend_book_settings").select("user_id").eq("friend_group_id", groupId).eq("share_with_partner", true);
+  if (error) throw error;
+  return (data || []).map((r) => r.user_id);
+}
+
+// ---------- reações no humor dos amigos ----------
+
+export async function listMoodReactions(groupId) {
+  const { data, error } = await supabase.from("friend_mood_reactions").select("mood_id, user_id, emoji").eq("friend_group_id", groupId)
+    .order("created_at", { ascending: false }).limit(2000);
+  if (error) throw error;
+  return data || [];
+}
+export async function setMoodReaction(groupId, moodId, userId, emoji) {
+  const { error } = await supabase.from("friend_mood_reactions")
+    .upsert({ friend_group_id: groupId, mood_id: moodId, user_id: userId, emoji, created_at: new Date().toISOString() }, { onConflict: "mood_id,user_id" });
+  if (error) throw error;
+}
+export async function removeMoodReaction(moodId, userId) {
+  const { error } = await supabase.from("friend_mood_reactions").delete().eq("mood_id", moodId).eq("user_id", userId);
+  if (error) throw error;
+}
