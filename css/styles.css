@@ -747,6 +747,7 @@ label.field-label:first-child { margin-top: 0; }
 .nav-btn .nav-label { display: none; font-size: 12.5px; font-weight: 800; white-space: nowrap; }
 .nav-btn.active { flex: 0 0 auto; padding: 0 14px; background: var(--accent-btn); color: var(--on-accent-btn); }
 .nav-btn.active .nav-label { display: inline; }
+#screen-friends .nav-btn.active { background: var(--friends-accent); color: var(--on-friends-accent); }
 .dot-badge {
   width: 8px;
   height: 8px;

@@ -411,6 +411,13 @@ export const CHANGELOG = [
     title: "Nova aba: Estante",
     text: "Um contador de livros lidos que conta tudo — Kindle, físico, PDF, Wattpad. Digite o nome e a capa aparece sozinha; acompanhe a % de leitura, dê nota, escolha como o livro te deixou e crie palavras-chave. No fim tem a retrospectiva do ano e do mês em cartões prontos pro Instagram. O menu também ficou mais limpo: só a aba aberta mostra o nome.",
   },
+  {
+    id: "estante-amigos-2026-11",
+    tag: "amigos",
+    emoji: "📚",
+    title: "Estante e reações na turma",
+    text: "A aba Estante chegou ao Modo Amigos: conte os livros que você leu (Kindle ou não), acompanhe a % de leitura, dê nota e gere a retrospectiva pro Instagram. Só você vê a sua estante — se quiser, libere pra turma e veja a dos amigos. Agora também dá pra reagir ao humor de cada amigo com um toque (❤️ 🤗 😂 …), e o menu ficou mais limpo: só a aba aberta mostra o nome.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
