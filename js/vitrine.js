@@ -1,43 +1,43 @@
 // Vitrine: carrossel de mimos no topo do Hoje (casal e turma), com as capivaras da Capi.
 // Mostra o que dá pra trocar por moedas, com preço e quanto falta pro saldo. Tocar leva pra Lojinha/Prêmios.
 // Cada mimo tem uma capivara e uma cor (pastel no claro, versão profunda no escuro); mimo sem arte própria
-// (por exemplo os criados pelo casal) usa a capivara de cobertor.
-export const CAPI = ["cobertor", "peso", "brava", "confusa", "gamer", "leitura", "batata", "hamburguer", "taco"];
+// (por exemplo os criados pelo casal) usa a Capi apaixonada.
+export const CAPI = ["thug", "brava", "confusa", "apaixonada", "dormindo", "gamer", "laptop", "leitura", "pipoca", "fitness", "mochila", "cafe", "festa", "oi", "envergonhada"];
 const ART = {
-  boa_noite_fofo: { img: "cobertor", bg: "lilac" },
-  cafe_na_cama: { img: "cobertor", bg: "rose" },
-  tarefa_livre: { img: "peso", bg: "mint", short: "Livre de uma tarefa chata" },
-  surpresa: { img: "confusa", bg: "butter" },
+  boa_noite_fofo: { img: "dormindo", bg: "lilac" },
+  cafe_na_cama: { img: "cafe", bg: "rose" },
+  tarefa_livre: { img: "mochila", bg: "mint", short: "Livre de uma tarefa chata" },
+  surpresa: { img: "festa", bg: "butter" },
   fala_sincera: { img: "brava", bg: "rose" },
-  passeio_surpresa: { img: "gamer", bg: "peach", short: "Passeio surpresa" },
-  sem_recusa: { img: "brava", bg: "peach" },
-  nao_dormir_brigados: { img: "cobertor", bg: "blue" },
-  tempo_de_respiro: { img: "cobertor", bg: "mint" },
-  chocolate: { img: "confusa", bg: "peach", tag: "Mais resgatado" },
-  cinema: { img: "cobertor", bg: "blue", tag: "Oferta do dia" },
-  maratona: { img: "cobertor", bg: "lilac" },
-  curinga: { img: "confusa", bg: "butter", tag: "Novo" },
-  batata: { img: "batata", bg: "peach", tag: "Novo", short: "Batata frita" },
+  passeio_surpresa: { img: "mochila", bg: "peach", short: "Passeio surpresa" },
+  sem_recusa: { img: "apaixonada", bg: "peach" },
+  nao_dormir_brigados: { img: "dormindo", bg: "blue" },
+  tempo_de_respiro: { img: "cafe", bg: "mint" },
+  chocolate: { img: "envergonhada", bg: "peach", tag: "Mais resgatado" },
+  cinema: { img: "pipoca", bg: "blue", tag: "Oferta do dia" },
+  maratona: { img: "laptop", bg: "lilac" },
+  curinga: { img: "thug", bg: "butter", tag: "Novo" },
+  batata: { img: "pipoca", bg: "peach", tag: "Novo", short: "Batata frita" },
   leitura: { img: "leitura", bg: "blue", tag: "Novo" },
-  academia: { img: "peso", bg: "mint", tag: "Novo" },
-  taco: { img: "taco", bg: "mint", tag: "Novo" },
+  academia: { img: "fitness", bg: "mint", tag: "Novo" },
+  taco: { img: "festa", bg: "mint", tag: "Novo" },
   briga: { img: "brava", bg: "rose", tag: "Divertido" },
-  pizza: { img: "confusa", bg: "peach", tag: "Oferta do dia" },
+  pizza: { img: "pipoca", bg: "peach", tag: "Oferta do dia" },
   games: { img: "gamer", bg: "butter", tag: "Divertido" },
-  rap10: { img: "hamburguer", bg: "butter", tag: "Novo" },
-  rap10t: { img: "hamburguer", bg: "butter", tag: "Novo" },
+  rap10: { img: "thug", bg: "butter", tag: "Novo" },
+  rap10t: { img: "thug", bg: "butter", tag: "Novo" },
   escolhe_jogo: { img: "gamer", bg: "butter" },
-  escolhe_filme: { img: "gamer", bg: "blue" },
-  escolhe_local: { img: "confusa", bg: "mint", short: "Escolhe o rolê" },
-  imunidade_zoeira: { img: "peso", bg: "peach", short: "Imunidade de zoeira" },
+  escolhe_filme: { img: "pipoca", bg: "blue" },
+  escolhe_local: { img: "mochila", bg: "mint", short: "Escolhe o rolê" },
+  imunidade_zoeira: { img: "thug", bg: "peach", short: "Imunidade de zoeira" },
   veta_zoeira: { img: "brava", bg: "rose" },
-  coroa_resenha: { img: "peso", bg: "butter", short: "Rei da resenha" },
-  vale_carona: { img: "cobertor", bg: "lilac" },
-  paga_rodada: { img: "confusa", bg: "butter" },
-  chega_atrasado: { img: "cobertor", bg: "mint", short: "Atraso sem climinha" },
+  coroa_resenha: { img: "festa", bg: "butter", short: "Rei da resenha" },
+  vale_carona: { img: "mochila", bg: "lilac" },
+  paga_rodada: { img: "cafe", bg: "butter" },
+  chega_atrasado: { img: "dormindo", bg: "mint", short: "Atraso sem climinha" },
   playlist: { img: "gamer", bg: "butter", tag: "Novo" },
 };
-const DEFAULT_ART = { img: "cobertor", bg: "lilac", tag: "Criado por vocês" };
+const DEFAULT_ART = { img: "apaixonada", bg: "lilac", tag: "Criado por vocês" };
 export const artOf = (perk) => ART[perk.id] || DEFAULT_ART;
 
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));

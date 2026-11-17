@@ -8198,13 +8198,13 @@ const friendPerksPromoted = () => withAutoPromos(FRIEND_PERKS, "turma");
 
 // banner da campanha (Black Friday, Natal, Ano Novo...) com a capivara na fantasia da data
 const CAMP_ART = {
-  black: { img: "gamer", hat: "tag", deco: "BLACK" },
-  natal: { img: "confusa", hat: "santa", deco: "snow" },
-  anonovo: { img: "peso", hat: "party", deco: "spark" },
+  black: { img: "thug", hat: "tag", deco: "BLACK" },
+  natal: { img: "mochila", hat: "santa", deco: "snow" },
+  anonovo: { img: "oi", hat: "party", deco: "spark" },
   halloween: { img: "brava", hat: "witch", deco: "spark" },
-  namorados: { img: "cobertor", hat: null, deco: "hearts" },
-  carnaval: { img: "gamer", hat: "party", deco: "spark" },
-  pascoa: { img: "batata", hat: null, deco: "spark" },
+  namorados: { img: "apaixonada", hat: null, deco: "hearts" },
+  carnaval: { img: "laptop", hat: "party", deco: "spark" },
+  pascoa: { img: "oi", hat: null, deco: "spark" },
   amigo: { img: "gamer", hat: null, deco: "spark" },
 };
 const HAT_SVG = {
