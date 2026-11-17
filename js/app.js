@@ -4438,8 +4438,8 @@ function checklistCardHTML(done) {
 }
 
 
-// Visual novo: ligado por padrão (classe v2 no <html>); Perfil permite voltar ao visual antigo.
-const isV2 = () => document.documentElement.classList.contains("v2");
+// Visual novo: sempre ligado (classe v2 no <html>, direto no index.html).
+const isV2 = () => true;
 
 // Humor em destaque no topo do Hoje: o humor geral de cada um, o humor "com o par" e a saudade do dia
 function humorHeroHTML(recentMoods, todayStr, saude) {
@@ -9090,11 +9090,6 @@ async function renderProfileHub() {
       </div>
     </div>
 
-    <label class="card" style="display:flex; gap:12px; align-items:center; cursor:pointer;">
-      <input type="checkbox" id="toggle-visual-novo" ${isV2() ? "checked" : ""} style="width:22px; height:22px; flex:none;">
-      <span><strong>Visual novo</strong><span class="card-sub" style="display:block; margin:2px 0 0;">Fontes, cores e cartões do novo design. Desmarque para voltar ao visual antigo.</span></span>
-    </label>
-
 ${googleLinked && myFriendGroups.length ? `    <button class="btn btn-block" id="btn-quick-friends" style="background:var(--friends-accent); color:var(--on-friends-accent);">
       👥 ${myFriendGroups.length === 1 ? `Ir pra turma "${escapeHTML(myFriendGroups[0].name)}"` : "Ir pro Modo Amigos"}
     </button>` : ""}
@@ -9135,11 +9130,6 @@ ${settingsRowHTML({ iconName: "lightbulb", title: "Rever as boas-vindas", sub: "
   });
 
   $("#btn-edit-names")?.addEventListener("click", openNamesEditor);
-  $("#toggle-visual-novo")?.addEventListener("change", (e) => {
-    document.documentElement.classList.toggle("v2", e.target.checked);
-    try { localStorage.setItem("saudometro-visual", e.target.checked ? "1" : "0"); } catch (err) { /* sem storage: vale só até fechar */ }
-    renderActiveTab();
-  });
   $("#btn-personalize")?.addEventListener("click", openPersonalizeModal);
   $("#btn-replay-tour")?.addEventListener("click", replayFeatureTour);
   $("#btn-quick-friends")?.addEventListener("click", async () => {

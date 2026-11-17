@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="v2">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
@@ -9,10 +9,6 @@
   <link rel="icon" href="icons/icon.png" />
   <link rel="apple-touch-icon" href="icons/icon.png" />
   <link rel="manifest" href="manifest.json" />
-  <script>
-    /* Visual novo: ligado por padrão; "0" guardado no aparelho volta ao visual antigo (Perfil). Roda antes de pintar pra não piscar. */
-    try { if (localStorage.getItem("saudometro-visual") !== "0") document.documentElement.classList.add("v2"); } catch (e) { document.documentElement.classList.add("v2"); }
-  </script>
   <link rel="stylesheet" href="css/fonts.css" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
