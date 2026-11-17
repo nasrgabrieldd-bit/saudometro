@@ -439,6 +439,13 @@ export const CHANGELOG = [
     title: "Visual novo e a turma de capivaras",
     text: "O app ganhou um visual novo: fontes e cores mais limpas, o humor de vocês em destaque na tela Hoje e uma vitrine de mimos com as capivaras. Chegaram mimos novos, como o Faz um Rap10 pra mim, a briga leve e as 2 horas de leitura em paz. Em “Quer conversar?” agora são Modo Manaus, Pouquinho e Falante. Se preferir o visual antigo, desmarque “Visual novo” em Perfil.",
   },
+  {
+    id: "lojinha-nova-2026-11",
+    tag: "geral",
+    emoji: "🛍️",
+    title: "Lojinha nova",
+    text: "A Lojinha (e os Prêmios da turma) ganhou o visual novo: seu saldo em destaque, um banner com a capivara do mimo que você já pode resgatar, a lista de mimos com a barra de quanto falta e as abas Mimos e Jogos. Pendentes e Histórico continuam logo ao lado.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";

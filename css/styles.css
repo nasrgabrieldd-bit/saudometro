@@ -1494,3 +1494,28 @@ html[data-theme="dark"] .vit-cap { filter: drop-shadow(0 6px 10px rgba(0,0,0,.45
 .mh-tile b { display: block; font: 700 15px var(--font-display); margin-top: 6px; }
 .mh-tile small { display: block; color: var(--text-muted); font-size: 12.5px; }
 .mh-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+
+/* ---------- Lojinha no visual novo ---------- */
+.shop-bal { margin: 4px 0 0; }
+.shop-bal-l { color: var(--text-muted); font-size: 13px; }
+.shop-bal-n { font: 800 42px/1.05 var(--font-display); letter-spacing: -.03em; display: flex; align-items: center; gap: 10px; font-variant-numeric: tabular-nums; }
+.shop-bal-n .vit-coin { width: 24px; height: 24px; }
+.shop-bal-o { color: var(--text-muted); font-size: 13px; margin-top: 2px; }
+.shop-tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--border); margin: 16px 0 0; overflow-x: auto; scrollbar-width: none; }
+.shop-tabs::-webkit-scrollbar { display: none; }
+.shop-tabs button { background: none; border: none; padding: 10px 0; color: var(--text-muted); font: 600 14px var(--font-body); min-height: 44px; white-space: nowrap; cursor: pointer; }
+.shop-tabs button[aria-selected="true"] { color: var(--text); box-shadow: inset 0 -3px 0 var(--accent-btn); }
+.shop-list { margin-top: 4px; }
+.shop-row { display: flex; align-items: center; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--border); }
+.shop-row:last-child { border-bottom: none; }
+.shop-row-body { flex: 1; min-width: 0; }
+.shop-row-title { font-weight: 700; }
+.shop-row-sub { color: var(--text-muted); font-size: 12.5px; }
+.shop-row-act { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: none; }
+.shop-row-act .btn { min-height: 38px; gap: 6px; font-variant-numeric: tabular-nums; }
+.shop-row-edit { background: none; border: none; color: var(--text-muted); font-size: 12px; padding: 4px 2px; cursor: pointer; min-height: 28px; }
+.shop-add { display: flex; gap: 12px; align-items: center; width: 100%; text-align: left; background: var(--surface); border: 1.5px dashed var(--border); border-radius: var(--radius-md); padding: 14px; margin-top: 14px; cursor: pointer; color: var(--text); font-family: var(--font-body); }
+.shop-add small { display: block; color: var(--text-muted); font-size: 12.5px; }
+.shop-add-ic { width: 40px; height: 40px; border-radius: 12px; background: var(--accent-soft); color: var(--accent-btn); display: grid; place-items: center; flex: none; }
+.flash { animation: shopflash 1s ease; }
+@keyframes shopflash { 30% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-btn) 35%, transparent); border-radius: 12px; } }

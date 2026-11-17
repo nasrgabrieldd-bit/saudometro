@@ -24,7 +24,7 @@ import * as capMart from "./games/capmart.js";
 import { cycleInfo, cycleRingSVG, cycleLegendHTML, cycleTilesHTML, cycleHelpHTML, cyclePhaseName, cycleTip, cyclePhaseOnDate, averageCycleLength, CYCLE_COLORS, CYCLE_DISCLAIMER } from "./cycle.js";
 import { pickSaudadeNudge } from "./nudges.js";
 import { periodStats, monthsStreak, parseTitleList, cleanTag, searchBooks, lookupBook, STATUS, SOURCES, BOOK_MOODS, BOOK_MOOD_BY_ID, MONTHS_PT } from "./books.js";
-import { pickVitrine, vitrineHTML, wireVitrine, perkThumbHTML } from "./vitrine.js";
+import { pickVitrine, vitrineHTML, wireVitrine, perkThumbHTML, slideHTML } from "./vitrine.js";
 import { saudadeLabel, saudadeAverage, thermoBarHTML } from "./saudade.js";
 import { buildCards, canvasToBlob, shareOrDownload } from "./bookCards.js";
 import { nameOf, genderOf, emojiOf, gen, genMixed, cleanName, setPeopleSettings, defaultEmojis, legacyPeople, feat, goalTarget, HOME_WIDGETS, homeOrder, homeWidgetOn, togetherSince, coinRule, luckyOn, perkHidden, COIN_DEFAULTS } from "./people.js";
@@ -575,7 +575,7 @@ function setActiveTab(tab) {
   State.activeTab = tab;
   if (tab === "notes") State.notesView = "hub";
   if (tab === "profile") State.profileView = "hub";
-  if (tab === "shop") State.shopView = "hub";
+  if (tab === "shop") { State.shopView = "hub"; State.shopTab = "mimos"; }
   if (tab === "shelf") { estante.mode = "couple"; estante.readonly = false; estante.role = State.role; }
   if (tab === "home") State.homeMonth = startOfMonth(new Date());
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
@@ -2723,17 +2723,10 @@ async function renderFriendsShop() {
     friends.listCustomPerks(State.friendGroup.id).catch(() => []),
   ]);
   const pending = redemptions.filter((r) => r.status === "pendente");
-  const allPerks = { ...FRIEND_PERK_BY_ID, ...Object.fromEntries(customPerks.map((p) => [p.id, p])) };
-
-  view.innerHTML = `
-    <div class="card" style="display:flex; align-items:center; gap:10px;">
-      <span class="icon-badge" style="background:var(--friends-accent-soft); color:var(--friends-accent-strong);">💰</span>
-      <div>
-        <div style="font-family:var(--font-display); font-weight:800; font-size:18px; color:var(--friends-accent-strong);">${balance} moedas</div>
-        <div class="hint-text" style="margin:0;">sua carteira</div>
-      </div>
-    </div>
-
+  const v2 = isV2();
+  const friendsTab = State.friendsShopTab === "jogos" ? "jogos" : "mimos";
+  const featuredPerk = [...FRIEND_PERKS].filter((p) => p.cost <= balance).sort((a, b) => b.cost - a.cost)[0] || FRIEND_PERKS[0];
+  const gamesHTML = `
     <div class="section-title">🎮 Games</div>
     <div class="card" id="btn-open-star-battle-friends" style="cursor:pointer;">
       <div class="row" style="align-items:center; gap:10px;">
@@ -2755,8 +2748,29 @@ async function renderFriendsShop() {
         </div>
       </div>
     </div>
+  `;
+  const allPerks = { ...FRIEND_PERK_BY_ID, ...Object.fromEntries(customPerks.map((p) => [p.id, p])) };
 
-    ${Object.entries(FRIEND_PERK_CATEGORIES).map(([catId, cat]) => `
+  view.innerHTML = `
+    ${v2 ? `
+      <div class="shop-bal">
+        <div class="shop-bal-l">Seu saldo</div>
+        <div class="shop-bal-n"><i class="vit-coin"></i> ${balance}</div>
+      </div>
+      <div class="shop-tabs" role="tablist">
+        <button role="tab" data-ftab="mimos" aria-selected="${friendsTab === "mimos"}">Prêmios</button>
+        <button role="tab" data-ftab="jogos" aria-selected="${friendsTab === "jogos"}">Jogos</button>
+      </div>
+      ${friendsTab === "jogos" ? gamesHTML : (featuredPerk ? `<div class="vit" style="margin-top:14px;"><div class="vit-track">${slideHTML(featuredPerk, balance, { xl: true })}</div></div>` : "")}
+    ` : `    <div class="card" style="display:flex; align-items:center; gap:10px;">
+      <span class="icon-badge" style="background:var(--friends-accent-soft); color:var(--friends-accent-strong);">💰</span>
+      <div>
+        <div style="font-family:var(--font-display); font-weight:800; font-size:18px; color:var(--friends-accent-strong);">${balance} moedas</div>
+        <div class="hint-text" style="margin:0;">sua carteira</div>
+      </div>
+    </div>`}
+    ${v2 ? "" : gamesHTML}
+    ${v2 && friendsTab === "jogos" ? "" : `${Object.entries(FRIEND_PERK_CATEGORIES).map(([catId, cat]) => `
       <div class="section-title">${cat.emoji} ${cat.label}</div>
       ${FRIEND_PERKS.filter((p) => p.category === catId).map((p) => perkCardHTML(p, balance)).join("")}
     `).join("")}
@@ -2781,13 +2795,15 @@ async function renderFriendsShop() {
           `).join("")}
         </div>
       </div>
-    ` : ""}
+    ` : ""}`}
   `;
-  $("#btn-open-star-battle-friends").addEventListener("click", () => renderStarBattleGame("amigos"));
-  $("#btn-open-capiverso-friends").addEventListener("click", () => renderGameHub("amigos", "cartas"));
-  $("#btn-open-capistop-friends").addEventListener("click", () => renderGameHub("amigos", "stop"));
-  $("#btn-open-capmart-friends").addEventListener("click", () => renderCapMartGame("amigos"));
-  $("#friends-new-perk-btn").addEventListener("click", openNewCustomPerkModal);
+  $("#btn-open-star-battle-friends")?.addEventListener("click", () => renderStarBattleGame("amigos"));
+  $("#btn-open-capiverso-friends")?.addEventListener("click", () => renderGameHub("amigos", "cartas"));
+  $("#btn-open-capistop-friends")?.addEventListener("click", () => renderGameHub("amigos", "stop"));
+  $("#btn-open-capmart-friends")?.addEventListener("click", () => renderCapMartGame("amigos"));
+  $("#friends-new-perk-btn")?.addEventListener("click", openNewCustomPerkModal);
+  view.querySelectorAll("[data-ftab]").forEach((b) => b.addEventListener("click", () => { State.friendsShopTab = b.dataset.ftab; renderFriendsShop(); }));
+  view.querySelector(".vit-slide")?.addEventListener("click", (ev) => { const el = view.querySelector(`[data-redeem="${CSS.escape(ev.currentTarget.dataset.vit)}"]`); el?.scrollIntoView({ behavior: "smooth", block: "center" }); });
   view.querySelectorAll("[data-redeem]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const perk = allPerks[btn.dataset.redeem];
@@ -8664,7 +8680,67 @@ async function renderShop() {
   (map[State.shopView] || renderShopHub)();
 }
 
+// linha de mimo no visual novo: capivara, nome, o que falta e o botão de resgatar
+function shopPerkRowHTML(p, myCoins) {
+  const left = p.cost - myCoins;
+  const onPromo = !!p.promoUntil;
+  return `<div class="shop-row" id="perk-row-${escapeHTML(p.id)}">
+    ${perkThumbHTML(p)}
+    <div class="shop-row-body">
+      <div class="shop-row-title">${escapeHTML(gen(p.title, genderOf(State.role)))}</div>
+      <div class="shop-row-sub">${onPromo ? `-${p.promoPct}% até ${humanDateShort(parseISODate(p.promoUntil))}` : left <= 0 ? "disponível agora" : `faltam ${left} ${left === 1 ? "moeda" : "moedas"}`}</div>
+      ${left > 0 ? `<div class="progress-track" style="height:5px; margin-top:6px;"><div class="progress-fill" style="width:${Math.round(myCoins / p.cost * 100)}%"></div></div>` : ""}
+    </div>
+    <div class="shop-row-act">
+      <button class="btn ${left <= 0 ? "btn-primary" : "btn-ghost"} btn-sm" data-act="redeem" data-perk="${escapeHTML(p.id)}" ${left > 0 ? "disabled" : ""}>${onPromo ? `<s>${p.originalCost}</s> ` : ""}<i class="vit-coin"></i> ${p.cost}</button>
+      ${p.custom
+        ? `<button class="shop-row-edit" data-act="edit-perk" data-id="${p.rowId}" aria-label="Editar">Editar</button>`
+        : `<button class="shop-row-edit" data-act="edit-cost" data-id="${p.id}" aria-label="Mudar o valor">Valor</button>`}
+    </div>
+  </div>`;
+}
+
+async function renderShopHubV2() {
+  view.innerHTML = `<div class="center-note">Carregando...</div>`;
+  const { coins, myCoins, pending, fulfilled, customRows, redemptions, perkById, rewardFor } = await loadShopData();
+  const tab = State.shopTab === "jogos" ? "jogos" : "mimos";
+  const base = PERKS.filter((x) => !perkHidden(x.id)).map((x) => perkById[x.id] || x);
+  const custom = customRows.map(customToPerk).map((x) => perkById[x.id] || x);
+  const all = [...base, ...custom].sort((a, b) => a.cost - b.cost);
+  const featured = [...all].filter((p) => p.cost <= myCoins).sort((a, b) => b.cost - a.cost)[0] || all[0];
+  view.innerHTML = `
+    <div class="shop-bal">
+      <div class="shop-bal-l">Seu saldo</div>
+      <div class="shop-bal-n"><i class="vit-coin"></i> ${myCoins}</div>
+      <div class="shop-bal-o">${escapeHTML(partnerDisplayName())}: ${coins[otherRole()] || 0} moedas</div>
+    </div>
+    <div class="shop-tabs" role="tablist">
+      <button role="tab" data-stab="mimos" aria-selected="${tab === "mimos"}">Mimos</button>
+      <button role="tab" data-stab="jogos" aria-selected="${tab === "jogos"}">Jogos</button>
+      <button role="tab" data-view="pending">Pendentes${pending.length ? ` (${pending.length})` : ""}</button>
+      <button role="tab" data-view="history">Histórico</button>
+    </div>
+    ${tab === "jogos" ? shopGamesCardsHTML() : `
+      ${featured ? `<div class="vit" style="margin-top:14px;"><div class="vit-track">${slideHTML(featured, myCoins, { xl: true })}</div></div>` : ""}
+      <div class="section-title">Todos os mimos</div>
+      <div class="shop-list">${all.map((p) => shopPerkRowHTML(p, myCoins)).join("")}</div>
+      <button class="shop-add" id="btn-shop-create"><span class="shop-add-ic">${icon("lightbulb", { size: 20 })}</span><span><b>Criar um mimo de vocês</b><small>${customRows.length ? `${customRows.length} criado${customRows.length === 1 ? "" : "s"} por vocês` : "com preço e regras do casal"}</small></span></button>`}
+  `;
+  view.querySelectorAll("[data-stab]").forEach((b) => b.addEventListener("click", () => { State.shopTab = b.dataset.stab; renderShopHubV2(); }));
+  view.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => { State.shopView = b.dataset.view; renderShop(); }));
+  if (tab === "jogos") { wireShopGames(); return; }
+  $("#btn-shop-create")?.addEventListener("click", () => { State.shopView = "custom"; renderShop(); });
+  view.querySelector(".vit-slide")?.addEventListener("click", (ev) => {
+    const row = $(`#perk-row-${CSS.escape(ev.currentTarget.dataset.vit)}`);
+    row?.scrollIntoView({ behavior: "smooth", block: "center" });
+    row?.classList.add("flash");
+    setTimeout(() => row?.classList.remove("flash"), 1200);
+  });
+  wireShopActions(redemptions, rewardFor, customRows, perkById);
+}
+
 async function renderShopHub() {
+  if (isV2()) return renderShopHubV2();
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const { coins, myCoins, pending, fulfilled, customRows } = await loadShopData();
 
@@ -8732,9 +8808,8 @@ function multiplayerGameCardHTML(gameType, btnId, subtitle) {
   `;
 }
 
-async function renderShopGames() {
-  view.innerHTML = `
-    ${shopSubHeader("🎮 Jogos")}
+function shopGamesCardsHTML() {
+  return `
     <div class="card" id="btn-open-star-battle" style="cursor:pointer;">
       <div class="row" style="align-items:center; gap:10px;">
         <img src="icons/capivarinhas.jpg" alt="Capibatman" style="width:48px; height:48px; border-radius:12px; object-fit:cover; flex:none;" />
@@ -8756,11 +8831,21 @@ async function renderShopGames() {
       </div>
     </div>
   `;
-  wireShopBack();
+}
+function wireShopGames() {
   $("#btn-open-star-battle").addEventListener("click", () => renderStarBattleGame("casal"));
   $("#btn-open-capiverso-casal").addEventListener("click", () => renderGameHub("casal", "cartas"));
   $("#btn-open-capistop-casal").addEventListener("click", () => renderGameHub("casal", "stop"));
   $("#btn-open-capmart-casal").addEventListener("click", () => renderCapMartGame("casal"));
+}
+
+async function renderShopGames() {
+  view.innerHTML = `
+    ${shopSubHeader("🎮 Jogos")}
+    ${shopGamesCardsHTML()}
+  `;
+  wireShopBack();
+  wireShopGames();
 }
 
 async function renderShopPerks() {
