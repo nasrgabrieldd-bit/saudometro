@@ -1173,3 +1173,16 @@ export async function saveBookSettings(coupleId, role, fields) {
   if (error) throw error;
   return data;
 }
+
+// ---------- Termômetro de saudade ----------
+
+export async function getSaudadeDay(coupleId, day) {
+  const { data, error } = await supabase.from("saudade_checks").select("role, level").eq("couple_id", coupleId).eq("day", day);
+  if (error) throw error;
+  return data || [];
+}
+export async function setSaudade(coupleId, role, day, level) {
+  const { error } = await supabase.from("saudade_checks")
+    .upsert({ couple_id: coupleId, role, day, level, updated_at: new Date().toISOString() }, { onConflict: "couple_id,role,day" });
+  if (error) throw error;
+}

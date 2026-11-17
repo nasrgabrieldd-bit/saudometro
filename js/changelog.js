@@ -425,6 +425,13 @@ export const CHANGELOG = [
     title: "Mais perguntas no Desafio do dia",
     text: "O banco de perguntas do Desafio do dia cresceu bastante: agora são mais de 140, então por meses você não vê a mesma pergunta duas vezes.",
   },
+  {
+    id: "termometro-vitrine-2026-11",
+    tag: "geral",
+    emoji: "🌡️",
+    title: "Termômetro de saudade e vitrine de mimos",
+    text: "No lugar da pergunta da semana, agora tem o Termômetro de saudade: marque de 0 a 10 quanta saudade está sentindo e veja a de quem você gosta. Na tela Hoje, uma vitrine mostra o que dá para trocar por moedas, com quanto falta para cada mimo. Chegaram também novos mimos para o casal: chocolate, noite de cinema e dia livre de maratona.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
