@@ -418,6 +418,13 @@ export const CHANGELOG = [
     title: "Estante e reações na turma",
     text: "A aba Estante chegou ao Modo Amigos: conte os livros que você leu (Kindle ou não), acompanhe a % de leitura, dê nota e gere a retrospectiva pro Instagram. Só você vê a sua estante — se quiser, libere pra turma e veja a dos amigos. Agora também dá pra reagir ao humor de cada amigo com um toque (❤️ 🤗 😂 …), e o menu ficou mais limpo: só a aba aberta mostra o nome.",
   },
+  {
+    id: "desafio-mais-perguntas-2026-11",
+    tag: "geral",
+    emoji: "🎯",
+    title: "Mais perguntas no Desafio do dia",
+    text: "O banco de perguntas do Desafio do dia cresceu bastante: agora são mais de 140, então por meses você não vê a mesma pergunta duas vezes.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
