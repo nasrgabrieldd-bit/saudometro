@@ -1523,8 +1523,9 @@ html[data-theme="dark"] .vit-cap { filter: drop-shadow(0 6px 10px rgba(0,0,0,.45
 /* ---------- Humor e Recados no visual novo ---------- */
 .mh-tile.static { cursor: inherit; }
 .mh-tile small:first-child { margin-bottom: 4px; }
-html.v2 .mood-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: visible; gap: 8px; padding: 2px 0 6px; }
-html.v2 .mood-btn { width: auto; flex: none; min-height: 72px; background: var(--surface-alt); border: 2px solid transparent; border-radius: var(--radius-md); padding: 10px 2px; }
+/* emoções do humor: deslizam para o lado, como antes (mais compacto) */
+html.v2 .mood-grid { padding: 2px 0 8px; margin: 0 -2px; }
+html.v2 .mood-btn { min-height: 76px; border-radius: var(--radius-md); }
 html.v2 .mood-btn.selected { border-color: var(--accent-btn); background: var(--accent-soft); }
 html.v2 .mood-btn .label { font-size: 11px; color: var(--text); }
 html.v2 .talk-options { flex-direction: row; gap: 8px; }
