@@ -99,3 +99,10 @@ test("página de exclusão de conta existe, é guardada offline e o app oferece 
   assert.ok(ler("js/app.js").includes("delete_my_account") || ler("js/db.js").includes("delete_my_account"), "o app não chama a função de exclusão");
   assert.ok(ler("supabase/migration_excluir_conta.sql").includes("delete_my_account"), "falta o SQL da exclusão");
 });
+
+test("página de créditos e direitos autorais existe, é guardada offline e o app aponta para ela", () => {
+  assert.ok(existsSync(join(raiz, "creditos.html")), "falta creditos.html");
+  assert.ok(ler("sw.js").includes("creditos.html"), "sw.js não guarda creditos.html");
+  assert.ok(ler("js/app.js").includes("creditos.html"), "o app não aponta pra página de créditos");
+  assert.ok(ler("privacidade.html").includes("creditos.html"), "a política não aponta pra página de créditos");
+});
