@@ -9235,7 +9235,7 @@ ${coinsOn() ? settingsRowHTML({ iconName: "wallet", title: "Moedas", sub: `💰 
 ${settingsRowHTML({ iconName: "lightbulb", title: "Rever as boas-vindas", sub: "Tour rápido do app de novo", id: "btn-replay-tour" })}
     </div>
 
-    <p class="hint-text" style="text-align:center; margin:22px 0 4px; font-size:11px; opacity:0.45;">© 2026 Gabriel Nascimento Santos</p>
+    <p class="hint-text" style="text-align:center; margin:22px 0 4px; font-size:11px; opacity:0.45;">Saudômetro, feito por Gabriel Nascimento Santos<br>© 2026 · Todos os direitos reservados · <a href="termos.html" target="_blank" rel="noopener" style="color:inherit;">Termos</a></p>
   `;
 
   // 5 toques rápidos no avatar abrem o modo dono (senha validada no servidor)

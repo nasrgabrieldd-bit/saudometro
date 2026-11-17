@@ -68,7 +68,7 @@ export const TALK_OPTIONS = [
   // os ids (sim/talvez/nao) ficam como estão pra não perder o que já foi registrado; só os nomes mudaram
   { id: "sim", emoji: "💬", label: "Falante" },
   { id: "talvez", emoji: "🤏", label: "Pouquinho" },
-  { id: "nao", emoji: "🤫", label: "Modo Manaus" },
+  { id: "nao", emoji: "🤫", label: "Modo avião" },
 ];
 
 export const TALK_BY_ID = Object.fromEntries(TALK_OPTIONS.map((t) => [t.id, t]));
