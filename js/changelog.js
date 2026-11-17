@@ -460,6 +460,13 @@ export const CHANGELOG = [
     title: "Excluir a conta quando quiser",
     text: "Em Perfil, Privacidade, agora dá para excluir a sua conta e tudo que você registrou, sem precisar pedir por e-mail.",
   },
+  {
+    id: "promocoes-datas-2026-11",
+    tag: "geral",
+    emoji: "🏷️",
+    title: "Promoções por data e oferta do dia",
+    text: "A Lojinha agora tem promoções nas datas especiais, com a capivara fantasiada: Black Friday (até 45% off), Natal, Ano Novo, Halloween e outras. Todo dia também tem uma oferta do dia com desconto. Dá para desligar as promoções na própria Lojinha.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
