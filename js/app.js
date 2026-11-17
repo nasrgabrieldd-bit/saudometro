@@ -24,6 +24,8 @@ import * as capMart from "./games/capmart.js";
 import { cycleInfo, cycleRingSVG, cycleLegendHTML, cycleTilesHTML, cycleHelpHTML, cyclePhaseName, cycleTip, cyclePhaseOnDate, averageCycleLength, CYCLE_COLORS, CYCLE_DISCLAIMER } from "./cycle.js";
 import { pickSaudadeNudge } from "./nudges.js";
 import { periodStats, monthsStreak, parseTitleList, cleanTag, searchBooks, lookupBook, STATUS, SOURCES, BOOK_MOODS, BOOK_MOOD_BY_ID, MONTHS_PT } from "./books.js";
+import { pickVitrine, vitrineHTML, wireVitrine } from "./vitrine.js";
+import { saudadeLabel, saudadeAverage, thermoBarHTML } from "./saudade.js";
 import { buildCards, canvasToBlob, shareOrDownload } from "./bookCards.js";
 import { nameOf, genderOf, emojiOf, gen, genMixed, cleanName, setPeopleSettings, defaultEmojis, legacyPeople, feat, goalTarget, HOME_WIDGETS, homeOrder, homeWidgetOn, togetherSince, coinRule, luckyOn, perkHidden, COIN_DEFAULTS } from "./people.js";
 import {
@@ -1586,6 +1588,7 @@ async function renderFriendsHome() {
   const roleTarget = monthPlan.target || 2;
 
   view.innerHTML = `
+    <div id="friends-vitrine">${vitrineHTML(pickVitrine(FRIEND_PERKS, balance), balance)}</div>
     ${nextEvents[0] ? nextRoleHeroHTML(nextEvents[0], byId) : emptyRoleHeroHTML()}
 
     <div class="card" style="margin-top:14px;">
@@ -1653,6 +1656,7 @@ async function renderFriendsHome() {
       </div>
     </div>
   `;
+  wireVitrine($("#friends-vitrine"), () => setFriendsTab("shop"));
   $("#friends-home-mood-card")?.addEventListener("click", () => setFriendsTab("mood"));
   $("#friends-home-role-card")?.addEventListener("click", () => setFriendsTab("roles"));
   $("#friends-home-ideas-card")?.addEventListener("click", () => setFriendsTab("together-ideas"));
@@ -1894,10 +1898,11 @@ async function renderFriendsMood() {
   const view = $("#friends-view");
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const today = todayISO();
-  const [members, todaysMoods, allMoodReactions] = await Promise.all([
+  const [members, todaysMoods, allMoodReactions, saudadeToday] = await Promise.all([
     friends.listGroupMembers(State.friendGroup.id),
     friends.getMoodsForDay(State.friendGroup.id, today).catch(() => []),
     friends.listMoodReactions(State.friendGroup.id).catch(() => []), // sem a tabela nova ainda: só não mostra reações
+    friends.getSaudadeDay(State.friendGroup.id, today).catch(() => null), // null = recurso ainda não ativado no banco
   ]);
   const nameById = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
   const moodReactions = allMoodReactions.filter((r) => todaysMoods.some((m) => m.id === r.mood_id));
@@ -1930,8 +1935,19 @@ async function renderFriendsMood() {
       </div>
     </div>
     <button class="btn btn-block" style="margin-top:14px; background:var(--friends-accent); color:var(--on-friends-accent);" id="friends-set-mood-btn">${myEntry ? "Mudar meu humor de hoje" : "Contar como você tá hoje"}</button>
+    ${saudadeToday ? (() => {
+      const lv = Object.fromEntries(saudadeToday.map((r) => [r.user_id, r.level]));
+      const avg = saudadeAverage(saudadeToday.map((r) => r.level));
+      return saudadeCardHTML({
+        rows: members.map((m) => ({ name: m.user_id === State.userId ? "Você" : escapeHTML(m.display_name), level: lv[m.user_id] ?? null, you: m.user_id === State.userId })),
+        myLevel: lv[State.userId] ?? null,
+        question: "Quanta saudade da turma você está sentindo agora?",
+        extra: avg != null ? `<div class="th-avg">Saudade da turma hoje: <b>${avg}</b> de 10</div>` : "",
+      });
+    })() : ""}
   `;
   $("#friends-set-mood-btn").addEventListener("click", () => openFriendsMoodPicker(myEntry));
+  wireSaudade((level) => friends.setSaudade(State.friendGroup.id, State.userId, today, level), renderFriendsMood);
   view.querySelectorAll(".react-bar[data-fmood]").forEach((bar) => {
     bar.addEventListener("click", async (ev) => {
       const btn = ev.target.closest(".react-btn");
@@ -4548,6 +4564,7 @@ async function renderHome() {
       </div>
     ` : ""}
 
+    <div id="home-vitrine"></div>
 ${(() => {
       const parts = widgetIds.map((id) => html[id] || "");
       const kissIdx = widgetIds.indexOf("kiss");
@@ -4564,6 +4581,7 @@ ${(() => {
     ${widgetIds.length ? "" : todayMoodCardHTML(recentMoods, todayStr)}
   `;
   renderHomeGameCard();
+  renderHomeVitrine();
 
   $("#btn-goto-define")?.addEventListener("click", () => setActiveTab("calendar"));
   $("#btn-home-month-prev")?.addEventListener("click", () => { State.homeMonth = addMonths(State.homeMonth, -1); renderHome(); });
@@ -5392,11 +5410,7 @@ async function renderMood() {
   const history = await db.getMoodHistory(State.coupleId, since);
   const myMoodStreak = countMoodStreakFromHistory(history, State.role);
 
-  const weekIndex = weekIndexSince(State.coupleCreatedAt);
-  const question = gen(questionForWeek(weekIndex), genderOf(State.role));
-  const weeklyAnswers = await db.getWeeklyAnswers(State.coupleId, weekIndex);
-  const myAnswer = weeklyAnswers.find((a) => a.role === State.role);
-  const theirAnswer = weeklyAnswers.find((a) => a.role !== State.role);
+  const saudadeToday = await db.getSaudadeDay(State.coupleId, today).catch(() => null); // null = recurso ainda não ativado no banco
   const moodReactions = await db.listReactions(State.coupleId, "mood").catch(() => null); // null = recurso ainda não ativado no banco
 
     const myMoodDays = history.filter((h) => h.role === State.role).map((h) => h.day).sort();
@@ -5485,25 +5499,14 @@ async function renderMood() {
       <button class="btn btn-secondary btn-block" style="margin-top:14px;" id="btn-mood-history">📅 Ver detalhes de ${ROLE_LABEL[otherRole()]} (com você, conversa, recadinhos)</button>
     </div>
 
-${feat("weekly") ? `    <div class="card-tab-wrap">
-      <span class="card-tab">💭 Pergunta da semana</span>
-    <div class="card">
-      <p class="hint-text" style="margin:-2px 0 10px;">Diferente do desafio do dia: essa é pra ir mais fundo, sem pressa pra responder.</p>
-      <div class="card-sub" style="font-size:15px; color:var(--text); font-weight:700;">${question}</div>
-      <textarea id="weekly-answer" rows="3" style="margin-top:10px;" placeholder="escreve sua resposta...">${escapeHTML(myAnswer?.answer || "")}</textarea>
-      <button class="btn btn-primary btn-block" style="margin-top:12px;" id="save-weekly">${myAnswer ? "Atualizar resposta" : `Responder${earnTag("weekly")}`}</button>
-      ${theirAnswer ? `
-        <div class="entry-item" style="margin-top:14px;">
-          <div class="entry-icon">💬</div>
-          <div class="entry-body">
-            <div class="entry-title">Resposta de ${ROLE_LABEL[otherRole()]}</div>
-            <div class="entry-meta" style="margin-top:4px;">"${escapeHTML(theirAnswer.answer)}"</div>
-          </div>
-        </div>
-      ` : `<p class="hint-text" style="margin-top:12px;">${ROLE_LABEL[otherRole()]} ainda não respondeu essa semana.</p>`}
-    </div>
-    </div>
-    <p class="hint-text" style="text-align:center; margin-top:-8px;">🔮 Semana que vem: "${gen(questionForWeek(weekIndex + 1), genderOf(State.role))}"</p>` : ""}
+${saudadeToday ? saudadeCardHTML({
+      rows: [
+        { name: "Você", level: saudadeToday.find((r) => r.role === State.role)?.level ?? null, you: true },
+        { name: escapeHTML(partnerDisplayName()), level: saudadeToday.find((r) => r.role !== State.role)?.level ?? null },
+      ],
+      myLevel: saudadeToday.find((r) => r.role === State.role)?.level ?? null,
+      question: "Quanta saudade você está sentindo agora?",
+    }) : ""}
   `;
 
   $("#partner-mood-tap").addEventListener("click", () => openMoodHistoryModal(history, otherRole()));
@@ -5552,22 +5555,7 @@ ${feat("weekly") ? `    <div class="card-tab-wrap">
     }
   });
 
-  $("#save-weekly")?.addEventListener("click", async () => {
-    const answer = $("#weekly-answer").value.trim();
-    if (!answer) { alert("Escreve uma resposta primeiro :)"); return; }
-    setBusy("#save-weekly", true);
-    try {
-      const saved = await db.saveWeeklyAnswer(State.coupleId, weekIndex, State.role, answer);
-      if (saved.isNew) {
-        await earnCoins(State.role, coinRule("weekly"), "respondeu a pergunta da semana");
-        alert(`💭 Resposta salva!${coinRule("weekly") > 0 ? cn(` +${coinWord(coinRule("weekly"))} pra você.`) : ""}`);
-      }
-      await renderMood();
-    } catch (e) {
-      alert("Não deu: " + (e.message || e));
-      setBusy("#save-weekly", false);
-    }
-  });
+  wireSaudade((level) => db.setSaudade(State.coupleId, State.role, today, level), renderMood);
 }
 
 // detalhe dos últimos 7 dias de uma pessoa: humor geral + como está "com o par" + vontade de conversar + recado
@@ -6251,6 +6239,40 @@ function openBookShareModal() {
       alert("Não consegui gerar os cartões: " + (e.message || e));
     }
   };
+}
+
+// ================= TERMÔMETRO DE SAUDADE (casal e turma) =================
+
+function saudadeCardHTML({ rows, myLevel, question, extra = "" }) {
+  const start = myLevel ?? 5;
+  return `
+    <div class="card th-card">
+      <div class="card-title">Termômetro de saudade</div>
+      <div class="card-sub">${question}</div>
+      <div class="th-bars">${rows.map((r) => thermoBarHTML(r.level, r.name, { you: r.you })).join("")}</div>
+      ${extra}
+      <div class="th-pick">
+        <div class="th-big" id="th-big" aria-live="polite">${start}</div>
+        <div class="th-phrase" id="th-phrase">${escapeHTML(saudadeLabel(start))}</div>
+      </div>
+      <input type="range" id="th-range" min="0" max="10" step="1" value="${start}" aria-label="Nível de saudade, de 0 a 10">
+      <div class="th-scale"><span>de boa</span><span>vem aqui</span></div>
+      <button class="btn btn-primary btn-block" style="margin-top:12px;" id="th-save">${myLevel == null ? "Marcar minha saudade" : "Atualizar"}</button>
+    </div>`;
+}
+
+function wireSaudade(save, rerender) {
+  const range = $("#th-range");
+  if (!range) return;
+  range.addEventListener("input", () => {
+    $("#th-big").textContent = range.value;
+    $("#th-phrase").textContent = saudadeLabel(range.value);
+  });
+  $("#th-save").addEventListener("click", async () => {
+    setBusy("#th-save", true);
+    try { await save(Number(range.value)); await rerender(); }
+    catch (e) { alert("Não foi possível salvar. Tente de novo."); setBusy("#th-save", false); }
+  });
 }
 
 // ================= CONVITES =================
@@ -8059,6 +8081,17 @@ function goToGame(renderFn, ...args) {
   renderFn(...args);
 }
 
+// vitrine de mimos no topo do Hoje (só quando a Lojinha está ligada); carrega depois, sem atrasar a tela
+async function renderHomeVitrine() {
+  const el = $("#home-vitrine");
+  if (!el || !coinsOn()) return;
+  const balances = await db.getCoinBalances(State.coupleId).catch(() => null);
+  if (!balances || !el.isConnected) return;
+  const balance = balances[State.role] || 0;
+  el.innerHTML = vitrineHTML(pickVitrine(PERKS, balance), balance);
+  wireVitrine(el, () => setActiveTab("shop"));
+}
+
 async function renderHomeGameCard() {
   const el = $("#home-game-card");
   if (!el) return;
@@ -9422,7 +9455,6 @@ const HOME_META = {
 
 const FEATURE_LIST = [
   { k: "miss", g: "Recados e brincadeiras", t: "Saudade", d: "Encontro de saudade no calendário e mensagens de saudade" },
-  { k: "weekly", g: "Recados e brincadeiras", t: "Pergunta da semana", d: "Uma pergunta nova por semana, na aba Humor" },
   { k: "daily", g: "Recados e brincadeiras", t: "Desafio do dia", d: "Uma pergunta por dia, no hub de Recados" },
   { k: "capsule", g: "Recados e brincadeiras", t: "Cápsula do tempo", d: "Mensagem que só abre numa data futura" },
   { k: "wishes", g: "Recados e brincadeiras", t: "Desejos secretos", d: "Desejos que o outro resgata às cegas" },
@@ -9543,7 +9575,6 @@ function specialCardHTML(n) {
 const RULE_LIST = [
   { k: "mood", t: "Registrar o humor do dia", kind: "earn" },
   { k: "note", t: "Mandar um recadinho fofo (1x por dia)", kind: "earn" },
-  { k: "weekly", t: "Responder a pergunta da semana", kind: "earn" },
   { k: "daily", t: "Responder o desafio do dia (1x por dia)", kind: "earn" },
   { k: "meet", t: "Encontro combinado aconteceu (pra cada um)", kind: "earn" },
   { k: "memory", t: "Lembrei de você: quando o par reage (pra cada um)", kind: "earn" },
@@ -9565,7 +9596,6 @@ function coinRulesHTML() {
   if (r("mood") > 0) earn.push(`registrar o humor do dia (+${r("mood")}, uma vez por dia)`);
   if (r("moodStreak") > 0) earn.push(`sequência de 7 dias de humor (+${r("moodStreak")} de bônus)`);
   if (r("note") > 0) earn.push(`mandar uma mensagem fofa (+${r("note")}, uma vez por dia)`);
-  if (feat("weekly") && r("weekly") > 0) earn.push(`responder a pergunta da semana (+${r("weekly")})`);
   if (feat("daily") && r("daily") > 0) earn.push(`responder o desafio do dia (+${r("daily")}, uma vez por dia)`);
   if (r("accept") > 0) earn.push(`aceitar um convite (+${r("accept")})`);
   if (r("memory") > 0) earn.push(`mandar ou reagir a uma lembrança em "Lembrei de você" (+${r("memory")} pra cada um)`);

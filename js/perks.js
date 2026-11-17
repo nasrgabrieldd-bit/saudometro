@@ -71,6 +71,30 @@ export const PERKS = [
     cost: 10,
     fulfillReward: 3,
   },
+  {
+    id: "chocolate",
+    emoji: "🍫",
+    title: "Um chocolate pra você",
+    desc: "Seu par compra o seu chocolate favorito e entrega em mãos.",
+    cost: 10,
+    fulfillReward: 3,
+  },
+  {
+    id: "cinema",
+    emoji: "🎬",
+    title: "Noite de cinema",
+    desc: "Seu par leva você ao cinema, com direito a pipoca.",
+    cost: 30,
+    fulfillReward: 8,
+  },
+  {
+    id: "maratona",
+    emoji: "📺",
+    title: "Dia livre de maratona",
+    desc: "Um dia inteiro para maratonar série sem cobrança nenhuma.",
+    cost: 22,
+    fulfillReward: 6,
+  },
 ];
 
 export const PERK_BY_ID = Object.fromEntries(PERKS.map((p) => [p.id, p]));

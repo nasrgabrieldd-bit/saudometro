@@ -657,3 +657,16 @@ export async function removeMoodReaction(moodId, userId) {
   const { error } = await supabase.from("friend_mood_reactions").delete().eq("mood_id", moodId).eq("user_id", userId);
   if (error) throw error;
 }
+
+// ---------- Termômetro de saudade da turma ----------
+
+export async function getSaudadeDay(groupId, day) {
+  const { data, error } = await supabase.from("friend_saudade_checks").select("user_id, level").eq("friend_group_id", groupId).eq("day", day);
+  if (error) throw error;
+  return data || [];
+}
+export async function setSaudade(groupId, userId, day, level) {
+  const { error } = await supabase.from("friend_saudade_checks")
+    .upsert({ friend_group_id: groupId, user_id: userId, day, level, updated_at: new Date().toISOString() }, { onConflict: "friend_group_id,user_id,day" });
+  if (error) throw error;
+}
