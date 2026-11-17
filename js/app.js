@@ -5547,12 +5547,6 @@ async function renderMood() {
       <button class="btn btn-primary btn-block" style="margin-top:16px;" id="save-mood">Salvar humor de hoje</button>
     </div>
 
-    <div class="section-title">Últimos 7 dias</div>
-    <div class="card">
-      ${historyStripHTML(history)}
-      <button class="btn btn-secondary btn-block" style="margin-top:14px;" id="btn-mood-history">📅 Ver detalhes de ${ROLE_LABEL[otherRole()]} (com você, conversa, recadinhos)</button>
-    </div>
-
 ${saudadeToday ? saudadeCardHTML({
       rows: [
         { name: "Você", level: saudadeToday.find((r) => r.role === State.role)?.level ?? null, you: true },
@@ -5561,6 +5555,13 @@ ${saudadeToday ? saudadeCardHTML({
       myLevel: saudadeToday.find((r) => r.role === State.role)?.level ?? null,
       question: "Quanta saudade você está sentindo agora?",
     }) : `<div class="card"><div class="card-title">Termômetro de saudade</div><p class="hint-text" style="margin:0;">Ainda não está ativado neste app. Falta rodar o SQL do termômetro no Supabase.</p></div>`}
+
+    <div class="section-title">Últimos 7 dias</div>
+    <div class="card">
+      ${historyStripHTML(history)}
+      <button class="btn btn-secondary btn-block" style="margin-top:14px;" id="btn-mood-history">📅 Ver detalhes de ${ROLE_LABEL[otherRole()]} (com você, conversa, recadinhos)</button>
+    </div>
+
   `;
 
   $("#partner-mood-tap").addEventListener("click", () => openMoodHistoryModal(history, otherRole()));
