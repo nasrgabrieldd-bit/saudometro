@@ -8199,10 +8199,10 @@ const friendPerksPromoted = () => withAutoPromos(FRIEND_PERKS, "turma");
 // banner da campanha (Black Friday, Natal, Ano Novo...) com a capivara na fantasia da data
 const CAMP_ART = {
   black: { img: "thug", hat: "tag", deco: "BLACK" },
-  natal: { img: "mochila", hat: "santa", deco: "snow" },
-  anonovo: { img: "oi", hat: "party", deco: "spark" },
-  halloween: { img: "brava", hat: "witch", deco: "spark" },
-  namorados: { img: "apaixonada", hat: null, deco: "hearts" },
+  natal: { photo: "natal", deco: "snow" },
+  anonovo: { photo: "anonovo", deco: "spark" },
+  halloween: { photo: "halloween", deco: "spark" },
+  namorados: { photo: "namorados", deco: "hearts" },
   carnaval: { img: "laptop", hat: "party", deco: "spark" },
   pascoa: { img: "oi", hat: null, deco: "spark" },
   amigo: { img: "gamer", hat: null, deco: "spark" },
@@ -8225,7 +8225,7 @@ function campaignBannerHTML(c, { cta = true } = {}) {
       <small>${escapeHTML(c.tagline)}</small>
       ${cta ? '<span class="camp-cta">Ver mimos</span>' : ""}
     </div>
-    <div class="camp-art" data-hat="${art.hat || ""}"><img src="img/capi/${art.img}.webp" alt="" width="180" height="180">${art.hat ? `<span class="camp-hat camp-hat-${art.hat}">${HAT_SVG[art.hat]}</span>` : ""}</div>
+    ${art.photo ? `<div class="camp-art camp-photo"><img src="img/tema/${art.photo}.webp" alt="" width="170" height="170"></div>` : `<div class="camp-art" data-hat="${art.hat || ""}"><img src="img/capi/${art.img}.webp" alt="" width="180" height="180">${art.hat ? `<span class="camp-hat camp-hat-${art.hat}">${HAT_SVG[art.hat]}</span>` : ""}</div>`}
   </section>`;
 }
 // aviso da próxima campanha quando não tem nenhuma ativa ("Black Friday começa em 6 dias")
