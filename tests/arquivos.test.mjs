@@ -91,3 +91,11 @@ test("todo arquivo de fonte citado no css existe", () => {
     assert.ok(existsSync(resolve(raiz, "css", m[1])), `fonts.css cita ${m[1]}, que não existe`);
   }
 });
+
+test("página de exclusão de conta existe, é guardada offline e o app oferece a exclusão", () => {
+  assert.ok(existsSync(join(raiz, "excluir-conta.html")), "falta excluir-conta.html");
+  assert.ok(ler("sw.js").includes("excluir-conta.html"), "sw.js não guarda excluir-conta.html");
+  assert.ok(ler("privacidade.html").includes("excluir-conta.html"), "a política não aponta pra página de exclusão");
+  assert.ok(ler("js/app.js").includes("delete_my_account") || ler("js/db.js").includes("delete_my_account"), "o app não chama a função de exclusão");
+  assert.ok(ler("supabase/migration_excluir_conta.sql").includes("delete_my_account"), "falta o SQL da exclusão");
+});

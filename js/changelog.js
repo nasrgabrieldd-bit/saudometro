@@ -453,6 +453,13 @@ export const CHANGELOG = [
     title: "Humor e Recados renovados",
     text: "No Humor, as emoções do seu dia ficaram separadas das emoções com o par (as fofas de casal), e o topo mostra o humor dele(a) “comigo” e “em geral”. Em “Quer conversar?” são Modo Manaus, Pouquinho e Falante. Nos Recados, o Desafio do dia é o primeiro bloco: a resposta do par só aparece depois que você responde.",
   },
+  {
+    id: "excluir-conta-2026-11",
+    tag: "geral",
+    emoji: "🔒",
+    title: "Excluir a conta quando quiser",
+    text: "Em Perfil, Privacidade, agora dá para excluir a sua conta e tudo que você registrou, sem precisar pedir por e-mail.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";

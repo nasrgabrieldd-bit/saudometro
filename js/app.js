@@ -14,7 +14,7 @@ import { weekIndexSince, questionForWeek } from "./questions.js";
 import { dayIndexSince, challengeForDay, friendChallengeForDay } from "./challenges.js";
 import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush, subscribeToFriendPush, unsubscribeFromFriendPush, needsHomeScreenFirst } from "./push.js";
 import { PERKS, PERK_BY_ID, customToPerk, suggestedReward } from "./perks.js";
-import { planLabel } from "./plans.js";
+import { planLabel, isPlayApp } from "./plans.js";
 import { emptyGrid, markCell, revealCell, countFound, CELL_EMPTY, CELL_MARK, CELL_CAT } from "./games/starBattle.js";
 import { STAR_BATTLE_LEVELS } from "./games/starBattleLevels.js";
 import * as cardGame from "./games/cardGame.js";
@@ -3923,7 +3923,7 @@ async function renderFriendsGroup() {
         <button class="btn btn-ghost btn-sm" id="friends-edit-group-btn">Editar</button>
       </div>
     </div>
-    <div class="card" style="margin-top:14px; border-color:var(--friends-accent-soft);">
+    ${isPlayApp() ? "" : `    <div class="card" style="margin-top:14px; border-color:var(--friends-accent-soft);">
       <p class="field-label" style="color:var(--friends-accent-strong);">Sua assinatura</p>
       <p class="card-sub" style="margin-bottom:8px;">Plano atual: <strong>${planLabel(myPlan)}</strong>${myPlan.plan_source && myPlan.plan_source !== "legado" && myPlan.plan_expires_at ? ` · renova em ${humanDateShort(parseISODate(myPlan.plan_expires_at.slice(0, 10)))}` : ""}</p>
       ${myPlan.plan_source === "legado" ? `
@@ -3936,7 +3936,7 @@ async function renderFriendsGroup() {
         </div>
         <p class="hint-text" style="margin-top:8px;">É individual: só o seu benefício, mas vale em qualquer turma sua.</p>
       `}
-    </div>
+    </div>`}
     <div class="section-title">Você</div>
     <div class="shortcut-grid">
       <button class="shortcut-card" data-friends-settings="install">
@@ -4111,8 +4111,14 @@ async function renderFriendsPrivacy() {
       <div class="card-sub">Seus dados são seus. Você pode ler como cuidamos deles na nossa política.</div>
       <p class="hint-text" style="text-align:center; margin:10px 0 0;"><a href="privacidade.html" target="_blank" rel="noopener" style="color:var(--friends-accent-strong);">Política de privacidade</a></p>
     </div>
+    <div class="card">
+      <div class="card-title" style="font-size:15px;">Excluir minha conta</div>
+      <div class="card-sub">Apaga a sua conta e tudo que você registrou. Não dá para desfazer.</div>
+      <button class="btn btn-ghost btn-block" id="btn-delete-account" style="color:var(--danger-text);">Excluir minha conta e meus dados</button>
+    </div>
   `;
   wireFriendsSettingsBack();
+  $("#btn-delete-account")?.addEventListener("click", openDeleteAccountModal);
 }
 
 async function renderFriendsWallet() {
@@ -9143,7 +9149,7 @@ ${feat("streaks") ? settingsRowHTML({ iconName: "flame", title: "Sequências", s
 ${settingsRowHTML({ iconName: "key", title: "Código do casal", sub: "Ver e copiar", dataView: "code" })}
 ${settingsRowHTML({ iconName: "lock", title: "Conta Google", sub: googleLinked ? "✅ Ligada" : "Ligar agora", dataView: "google" })}
 ${settingsRowHTML({ iconName: "users", title: "Modo Amigos", sub: !googleLinked ? "Precisa do Google" : myFriendGroups.length ? `${myFriendGroups.length} turma${myFriendGroups.length === 1 ? "" : "s"}` : "Criar ou entrar", dataView: "friendsMode" })}
-${settingsRowHTML({ iconName: "credit-card", title: "Assinatura", sub: planLabel(couplePlan), dataView: "subscription" })}
+${isPlayApp() ? "" : settingsRowHTML({ iconName: "credit-card", title: "Assinatura", sub: planLabel(couplePlan), dataView: "subscription" })}
 ${settingsRowHTML({ iconName: "shield", title: "Privacidade", sub: "Seus dados e política", dataView: "privacy" })}
 ${settingsRowHTML({ iconName: "smartphone", title: "Instalar no celular", sub: isInstalled() ? "✅ Instalado" : "Ver passo a passo", dataView: "install" })}
 ${settingsRowHTML({ iconName: "bell", title: "Notificações", sub: pushPerm === "unsupported" ? "Não suportado" : alreadySubscribed ? "✅ Ativadas" : "Ativar agora", dataView: "notifications" })}
@@ -9311,6 +9317,37 @@ async function renderProfileStreaks() {
   wireProfileBack();
 }
 
+
+// Excluir conta: confirmação digitando EXCLUIR; depois sai, limpa o aparelho e volta pra tela de entrada
+function openDeleteAccountModal() {
+  openModal(`
+    <h3 class="modal-title">Excluir minha conta</h3>
+    <p class="card-sub">Isso apaga a sua conta Google no Saudômetro e tudo que você registrou: humor, recados, fotos, estante, moedas e o que escreveu nas turmas. Se você é a última pessoa do casal ou da turma, o casal ou a turma também são apagados. Não dá para desfazer.</p>
+    <p class="card-sub">Se você assina um plano, cancele a assinatura antes.</p>
+    <label class="field-label" for="delete-confirm">Para confirmar, digite EXCLUIR</label>
+    <input id="delete-confirm" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="EXCLUIR">
+    <button class="btn btn-block" style="margin-top:14px; background:var(--danger-text); color:#fff;" id="btn-delete-account-go" disabled>Excluir para sempre</button>
+    <button class="btn btn-ghost btn-block" style="margin-top:8px;" id="btn-delete-account-cancel">Cancelar</button>
+  `);
+  const input = $("#delete-confirm"), go = $("#btn-delete-account-go");
+  input.addEventListener("input", () => { go.disabled = input.value.trim().toUpperCase() !== "EXCLUIR"; });
+  $("#btn-delete-account-cancel").addEventListener("click", closeModal);
+  go.addEventListener("click", async () => {
+    go.disabled = true; go.textContent = "Excluindo…";
+    try {
+      await db.deleteMyAccount();
+    } catch (e) {
+      go.disabled = false; go.textContent = "Excluir para sempre";
+      alert("Não foi possível excluir agora. Tente de novo, ou peça pelo e-mail nasrgabrieldd@gmail.com.");
+      return;
+    }
+    try { await supabase.auth.signOut(); } catch (e) { /* a conta já foi apagada */ }
+    try { localStorage.clear(); } catch (e) { /* sem storage */ }
+    alert("Conta excluída. Sentiremos sua falta.");
+    location.reload();
+  });
+}
+
 async function renderProfilePrivacy() {
   view.innerHTML = `
     ${profileSubHeader("🔒 Privacidade")}
@@ -9319,9 +9356,15 @@ async function renderProfilePrivacy() {
       <button class="btn btn-secondary btn-block" id="btn-export-data">Baixar meus dados</button>
       <p class="hint-text" style="text-align:center; margin:10px 0 0;"><a href="privacidade.html" target="_blank" rel="noopener" style="color:var(--accent-strong);">Política de privacidade</a></p>
     </div>
+    <div class="card">
+      <div class="card-title" style="font-size:15px;">Excluir minha conta</div>
+      <div class="card-sub">Apaga a sua conta e tudo que você registrou. Não dá para desfazer.</div>
+      <button class="btn btn-ghost btn-block" id="btn-delete-account" style="color:var(--danger-text);">Excluir minha conta e meus dados</button>
+    </div>
   `;
   wireProfileBack();
   $("#btn-export-data")?.addEventListener("click", openMyDataModal);
+  $("#btn-delete-account")?.addEventListener("click", openDeleteAccountModal);
 }
 
 async function renderProfileInstall() {

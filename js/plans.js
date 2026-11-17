@@ -20,3 +20,15 @@ export function planLabel(planInfo) {
   if (planInfo?.plan_source === "legado") return "Legado (acesso total)";
   return PLAN_LABEL[planInfo?.plan || "gratis"];
 }
+
+// App instalado pela Google Play (Android abre o site como app e informa a origem em document.referrer).
+// Guardado no aparelho porque o referrer só vem na primeira abertura. Na Play, as assinaturas ficam escondidas:
+// a política de pagamentos do Google exige o Google Play Billing pra vender recursos digitais dentro do app.
+export function isPlayApp() {
+  let fromPlay = false;
+  try { fromPlay = (document.referrer || "").startsWith("android-app://"); } catch (e) { /* sem referrer */ }
+  try {
+    if (fromPlay) localStorage.setItem("saudometro-play", "1");
+    return fromPlay || localStorage.getItem("saudometro-play") === "1";
+  } catch (e) { return fromPlay; }
+}
