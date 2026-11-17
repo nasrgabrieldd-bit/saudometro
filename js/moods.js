@@ -72,3 +72,13 @@ export const TALK_OPTIONS = [
 ];
 
 export const TALK_BY_ID = Object.fromEntries(TALK_OPTIONS.map((t) => [t.id, t]));
+
+// Visual novo: duas listas bem diferentes pra escolher. As emoções "de casal" saem do humor geral e ficam só
+// na lista "com o par". Os ids antigos continuam existindo em MOOD_BY_ID/PARTNER_MOOD_BY_ID, então o que já foi
+// registrado continua aparecendo certo.
+const COUPLE_MOOD_IDS = new Set(["apaixonada", "saudade", "carinhosa", "ciumenta", "safadinha", "fofuxa", "melosa", "cheirinho", "grata"]);
+const GENERAL_FIRST = ["feliz", "animada", "tranquila", "cansada", "estressada", "ansiosa", "triste", "confiante", "inspirada", "pensativa", "mal", "de_boa"];
+const generalRest = MOODS.filter((m) => !COUPLE_MOOD_IDS.has(m.id) && !GENERAL_FIRST.includes(m.id));
+export const GENERAL_MOODS = [...GENERAL_FIRST.map((id) => MOOD_BY_ID[id]).filter(Boolean), ...generalRest];
+const PARTNER_FIRST = ["apaixonada", "carinhosa", "grudenta", "derretida", "saudade", "queria_colo", "cheirinho", "quietinha", "apaixonada_de_novo", "safadinha", "grata", "ciumenta", "melosa", "fofuxa"];
+export const PARTNER_PICKER = PARTNER_FIRST.map((id) => PARTNER_MOOD_BY_ID[id]).filter(Boolean);

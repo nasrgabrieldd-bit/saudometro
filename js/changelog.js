@@ -446,6 +446,13 @@ export const CHANGELOG = [
     title: "Lojinha nova",
     text: "A Lojinha (e os Prêmios da turma) ganhou o visual novo: seu saldo em destaque, um banner com a capivara do mimo que você já pode resgatar, a lista de mimos com a barra de quanto falta e as abas Mimos e Jogos. Pendentes e Histórico continuam logo ao lado.",
   },
+  {
+    id: "humor-recados-2026-11",
+    tag: "casal",
+    emoji: "💬",
+    title: "Humor e Recados renovados",
+    text: "No Humor, as emoções do seu dia ficaram separadas das emoções com o par (as fofas de casal), e o topo mostra o humor dele(a) “comigo” e “em geral”. Em “Quer conversar?” são Modo Manaus, Pouquinho e Falante. Nos Recados, o Desafio do dia é o primeiro bloco: a resposta do par só aparece depois que você responde.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";

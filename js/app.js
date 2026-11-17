@@ -9,7 +9,7 @@ import * as gameRooms from "./gameRooms.js";
 import { unseenChangelogFor, markChangelogSeen } from "./changelog.js";
 import { FRIEND_PERKS, FRIEND_PERK_BY_ID, FRIEND_PERK_CATEGORIES } from "./friendsPerks.js";
 import * as db from "./db.js";
-import { MOODS, MOOD_BY_ID, PARTNER_MOODS, PARTNER_MOOD_BY_ID, TALK_OPTIONS, TALK_BY_ID } from "./moods.js";
+import { MOODS, MOOD_BY_ID, PARTNER_MOODS, PARTNER_MOOD_BY_ID, GENERAL_MOODS, PARTNER_PICKER, TALK_OPTIONS, TALK_BY_ID } from "./moods.js";
 import { weekIndexSince, questionForWeek } from "./questions.js";
 import { dayIndexSince, challengeForDay, friendChallengeForDay } from "./challenges.js";
 import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush, subscribeToFriendPush, unsubscribeFromFriendPush, needsHomeScreenFirst } from "./push.js";
@@ -5458,6 +5458,35 @@ function openEditEventModal(entry) {
 
 // ================= HUMOR =================
 
+
+// bloco do topo da aba Humor: o humor do par "comigo" e "em geral" lado a lado (sem reações)
+function partnerMoodHeroHTML(theirs) {
+  const g = genderOf(otherRole());
+  const general = theirs ? MOOD_BY_ID[theirs.mood] : null;
+  const withMe = theirs?.mood_partner ? PARTNER_MOOD_BY_ID[theirs.mood_partner] : null;
+  const talk = theirs ? TALK_BY_ID[theirs.wants_to_talk] : null;
+  return `<div class="mh" id="partner-mood-tap" role="button" tabindex="0" style="cursor:pointer;">
+    <h3 class="mh-title">Humor de ${escapeHTML(partnerDisplayName())} hoje</h3>
+    ${theirs ? `
+      <div class="mh-pair">
+        <div class="mh-tile"><small>Comigo</small><span class="e">${withMe ? withMe.emoji : "🤔"}</span><b>${withMe ? escapeHTML(gen(withMe.label, g)) : "não disse"}</b></div>
+        <div class="mh-tile"><small>Em geral</small><span class="e">${general ? general.emoji : "🤔"}</span><b>${general ? escapeHTML(gen(general.label, g)) : escapeHTML(theirs.mood)}</b></div>
+      </div>
+      ${talk ? `<p class="hint-text" style="margin:12px 0 0;">${talk.emoji} ${escapeHTML(talk.label)}</p>` : ""}
+      ${theirs.note ? `<p style="margin:8px 0 0; font-size:14px;">“${escapeHTML(theirs.note)}”</p>` : ""}
+    ` : `<div class="empty-state"><span class="emoji">🤔</span>${escapeHTML(partnerDisplayName())} ainda não registrou o humor de hoje.</div>`}
+    <p class="hint-text" style="margin:12px 0 0; font-weight:800; color:var(--accent-strong);">Toque para ver os últimos 7 dias</p>
+  </div>`;
+}
+// grade de emoções; se o humor já salvo não está mais na lista (ex.: um humor antigo), ele continua aparecendo marcado
+function moodTilesHTML(list, selectedId, byId, gender) {
+  const items = selectedId && !list.some((m) => m.id === selectedId) && byId[selectedId] ? [...list, byId[selectedId]] : list;
+  return items.map((m) => `
+    <button class="mood-btn ${selectedId === m.id ? "selected" : ""}" data-mood="${m.id}">
+      <span class="emoji">${m.emoji}</span><span class="label">${escapeHTML(gen(m.label, gender))}</span>
+    </button>`).join("");
+}
+
 async function renderMood() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const today = todayISO();
@@ -5488,53 +5517,19 @@ async function renderMood() {
       <div style="font-size:15px; font-weight:800; color:var(--accent-strong);">${moodStreakText}</div>
     </div>
 
-    <div class="section-title">Humor de ${ROLE_LABEL[otherRole()]} hoje</div>
-    <div class="card" id="partner-mood-tap" role="button" tabindex="0" style="cursor:pointer;">
-      ${theirs ? `
-        <div class="partner-mood-card">
-          <span class="emoji-big">${MOOD_BY_ID[theirs.mood]?.emoji || "❔"}</span>
-          <div>
-            <div class="card-title" style="font-size:15px;">${gen(MOOD_BY_ID[theirs.mood]?.label || theirs.mood, genderOf(otherRole()))}</div>
-            <div class="card-sub" style="margin-bottom:0;">${TALK_BY_ID[theirs.wants_to_talk]?.emoji || ""} ${TALK_BY_ID[theirs.wants_to_talk]?.label || ""}</div>
-            ${theirs.note ? `<div class="entry-meta" style="margin-top:6px;">"${escapeHTML(theirs.note)}"</div>` : ""}
-          </div>
-        </div>
-        ${theirs.mood_partner ? `
-          <div class="partner-mood-card" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
-            <span class="emoji-big">${PARTNER_MOOD_BY_ID[theirs.mood_partner]?.emoji || "❔"}</span>
-            <div>
-              <div class="card-title" style="font-size:15px;">Com você: ${gen(PARTNER_MOOD_BY_ID[theirs.mood_partner]?.label || theirs.mood_partner, genderOf(otherRole()))}</div>
-            </div>
-          </div>
-        ` : ""}
-      ` : `<div class="empty-state"><span class="emoji">🤔</span>${ROLE_LABEL[otherRole()]} ainda não registrou o humor de hoje.</div>`}
-      <p class="hint-text" style="margin:12px 0 0; text-align:center; font-weight:800; color:var(--accent-strong);">Toque pra ver os últimos 7 dias 📅 ›</p>
-    </div>
-
-    ${moodReactions && theirs ? `
-      <div class="card react-card">
-        <div class="card-sub" style="margin-bottom:8px;">Mande um carinho pra ${ROLE_LABEL[otherRole()]}</div>
-        ${reactionBarHTML("mood", theirs.id, moodReactions)}
-      </div>` : ""}
-    ${(() => { const got = moodReactions && mine ? reactionGotHTML(mine.id, moodReactions, "ao seu humor de hoje") : ""; return got ? `<div class="card react-card">${got}</div>` : ""; })()}
+    ${partnerMoodHeroHTML(theirs)}
 
     <div class="card">
       <div class="card-title">Como você está?</div>
+      <p class="hint-text" style="margin:-4px 0 10px;">As emoções do seu dia, sem relação com ${ROLE_LABEL[otherRole()]}.</p>
       <div class="mood-grid" id="mood-grid">
-        ${MOODS.map((m) => `
-          <button class="mood-btn ${mine?.mood === m.id ? "selected" : ""}" data-mood="${m.id}">
-            <span class="emoji">${m.emoji}</span><span class="label">${gen(m.label, genderOf(State.role))}</span>
-          </button>
-        `).join("")}
+        ${moodTilesHTML(GENERAL_MOODS, mine?.mood, MOOD_BY_ID, genderOf(State.role))}
       </div>
 
       <div class="section-title">Como você está com ${ROLE_LABEL[otherRole()]} hoje?</div>
+      <p class="hint-text" style="margin:-4px 0 10px;">O que você está sentindo por ${genderOf(otherRole()) === "mulher" ? "ela" : "ele"} hoje.</p>
       <div class="mood-grid" id="mood-grid-partner">
-        ${PARTNER_MOODS.map((m) => `
-          <button class="mood-btn ${mine?.mood_partner === m.id ? "selected" : ""}" data-mood="${m.id}">
-            <span class="emoji">${m.emoji}</span><span class="label">${gen(m.label, genderOf(State.role))}</span>
-          </button>
-        `).join("")}
+        ${moodTilesHTML(PARTNER_PICKER, mine?.mood_partner, PARTNER_MOOD_BY_ID, genderOf(State.role))}
       </div>
 
       <div class="section-title">Quer conversar?</div>
@@ -5565,7 +5560,7 @@ ${saudadeToday ? saudadeCardHTML({
       ],
       myLevel: saudadeToday.find((r) => r.role === State.role)?.level ?? null,
       question: "Quanta saudade você está sentindo agora?",
-    }) : ""}
+    }) : `<div class="card"><div class="card-title">Termômetro de saudade</div><p class="hint-text" style="margin:0;">Ainda não está ativado neste app. Falta rodar o SQL do termômetro no Supabase.</p></div>`}
   `;
 
   $("#partner-mood-tap").addEventListener("click", () => openMoodHistoryModal(history, otherRole()));
@@ -6469,10 +6464,27 @@ async function renderNotesHub() {
   const iSentToday = notes.some((n) => n.role === State.role && n.created_at.slice(0, 10) === todayStr);
   const theirNoteToday = notes.find((n) => n.role !== State.role && n.created_at.slice(0, 10) === todayStr);
   const myAnswerToday = todayAnswers.find((a) => a.role === State.role);
+  const dqTheir = todayAnswers.find((a) => a.role !== State.role);
+  const dqText = genMixed(challengeForDay(dayIndexSince(State.coupleCreatedAt)), genderOf(State.role), genderOf(otherRole()));
   const pendingInvites = invites.filter((e) => e.status === "pendente" && e.created_by !== State.role);
   const readyRedemptions = redemptions.filter((r) => r.redeemed_by === State.role && r.reveal_on <= todayStr && !r.fulfilled);
 
   view.innerHTML = `
+    ${feat("daily") ? `
+    <div class="dq">
+      <div class="dq-kicker">Desafio do dia${earnTag("daily")}</div>
+      <h3 class="dq-q">“${dqText}”</h3>
+      ${myAnswerToday ? `
+        <div class="bubble"><b>Você</b>${escapeHTML(myAnswerToday.answer)}</div>
+        ${dqTheir ? `<div class="bubble"><b>${escapeHTML(partnerDisplayName())}</b>${escapeHTML(dqTheir.answer)}</div>` : `<p class="hint-text" style="margin:8px 0 0;">${escapeHTML(partnerDisplayName())} ainda não respondeu hoje.</p>`}
+      ` : `
+        <label for="dq-answer" class="sr-only">Sua resposta</label>
+        <textarea id="dq-answer" rows="3" placeholder="Escreva sua resposta…"></textarea>
+        <p class="dq-lock">${dqTheir ? `<b>${escapeHTML(partnerDisplayName())} já respondeu.</b> Responda para ver.` : `${escapeHTML(partnerDisplayName())} ainda não respondeu hoje.`}</p>
+        <button class="btn btn-primary btn-block" id="btn-dq-answer">Responder</button>
+      `}
+    </div>` : ""}
+
     <div class="card-tab-wrap">
       <span class="card-tab">💌 Recadinho fofo</span>
     <div class="card">
@@ -6498,6 +6510,19 @@ ${settingsRowHTML({ emoji: "💌", title: "Capisurpresa", sub: "Um carinho surpr
   `;
 
   $("#btn-send-note")?.addEventListener("click", () => openSweetNoteModal(iSentToday));
+  $("#btn-dq-answer")?.addEventListener("click", async () => {
+    const answer = $("#dq-answer").value.trim();
+    if (!answer) { alert("Escreva uma resposta antes de enviar."); return; }
+    setBusy("#btn-dq-answer", true);
+    try {
+      await db.upsertChallengeAnswer(State.coupleId, todayStr, State.role, answer);
+      await earnCoins(State.role, coinRule("daily"), "respondeu o desafio do dia");
+      await renderNotes();
+    } catch (e) {
+      alert("Não foi possível enviar. Tente de novo.");
+      setBusy("#btn-dq-answer", false);
+    }
+  });
   wireReactions();
   $("#btn-notes-history")?.addEventListener("click", () => { State.notesView = "history"; renderNotes(); });
   $("#btn-open-capisurpresa")?.addEventListener("click", () => openCapisurpresa("casal"));
@@ -6555,7 +6580,7 @@ async function renderChallengeView() {
   view.innerHTML = `
     ${subViewHeader("🎯 Desafio do dia")}
     <div class="card" style="background:var(--warm-soft);">
-      <p class="hint-text" style="margin:0 0 10px;">Rapidinho, sem pensar muito — a pergunta mais profunda da semana fica na aba Humor.</p>
+      <p class="hint-text" style="margin:0 0 10px;">Rapidinho, sem pensar muito.</p>
       <div class="card-title" style="font-size:15.5px; font-family:var(--font-display);">"${todayChallenge}"</div>
       ${myAnswerToday ? `
         <div class="entry-meta" style="margin-top:8px; color:var(--text);">Você: "${escapeHTML(myAnswerToday.answer)}"</div>
