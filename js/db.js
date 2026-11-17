@@ -1186,3 +1186,11 @@ export async function setSaudade(coupleId, role, day, level) {
     .upsert({ couple_id: coupleId, role, day, level, updated_at: new Date().toISOString() }, { onConflict: "couple_id,role,day" });
   if (error) throw error;
 }
+
+// ---------- excluir conta ----------
+
+// apaga a conta de quem está logado e tudo que ela escreveu (função no banco: supabase/migration_excluir_conta.sql)
+export async function deleteMyAccount() {
+  const { error } = await supabase.rpc("delete_my_account");
+  if (error) throw error;
+}
