@@ -24,7 +24,7 @@ import * as capMart from "./games/capmart.js";
 import { cycleInfo, cycleRingSVG, cycleLegendHTML, cycleTilesHTML, cycleHelpHTML, cyclePhaseName, cycleTip, cyclePhaseOnDate, averageCycleLength, CYCLE_COLORS, CYCLE_DISCLAIMER } from "./cycle.js";
 import { pickSaudadeNudge } from "./nudges.js";
 import { periodStats, monthsStreak, parseTitleList, cleanTag, searchBooks, lookupBook, STATUS, SOURCES, BOOK_MOODS, BOOK_MOOD_BY_ID, MONTHS_PT } from "./books.js";
-import { pickVitrine, vitrineHTML, wireVitrine } from "./vitrine.js";
+import { pickVitrine, vitrineHTML, wireVitrine, perkThumbHTML } from "./vitrine.js";
 import { saudadeLabel, saudadeAverage, thermoBarHTML } from "./saudade.js";
 import { buildCards, canvasToBlob, shareOrDownload } from "./bookCards.js";
 import { nameOf, genderOf, emojiOf, gen, genMixed, cleanName, setPeopleSettings, defaultEmojis, legacyPeople, feat, goalTarget, HOME_WIDGETS, homeOrder, homeWidgetOn, togetherSince, coinRule, luckyOn, perkHidden, COIN_DEFAULTS } from "./people.js";
@@ -867,7 +867,7 @@ function createCodeStep(st) {
   $("#onboarding-flow").innerHTML = `
     <div class="stack">
       <label class="field-label">Código do casal (pode trocar por uma frase de vocês dois, com pelo menos 8 caracteres)</label>
-      <input type="text" id="couple-code" value="${escapeHTML(st.code)}" maxlength="40" style="text-align:center; font-family:'Baloo 2'; font-size:20px; letter-spacing:0.04em;" />
+      <input type="text" id="couple-code" value="${escapeHTML(st.code)}" maxlength="40" style="text-align:center; font-family:var(--font-display); font-size:20px; letter-spacing:0.04em;" />
       <p class="hint-text">Guarde ou mande pra ${escapeHTML(partner)}, vai precisar dele pra entrar no app pelo outro celular. Ele é a chave do casal: quanto mais difícil de adivinhar, mais protegido. Evite palavras simples como o nome de vocês.</p>
       <button class="btn btn-primary btn-block" id="confirm-create">Criar e entrar</button>
       <button class="btn btn-ghost btn-block" id="code-back">Voltar</button>
@@ -909,7 +909,7 @@ function startJoinFlow() {
   $("#onboarding-flow").innerHTML = `
     <div class="stack">
       <label class="field-label">Código do casal</label>
-      <input type="text" id="join-code" placeholder="ex: AB12CD ou a palavra de vocês" style="text-transform:uppercase; text-align:center; letter-spacing:0.04em; font-family:'Baloo 2'; font-size:20px;" maxlength="40" />
+      <input type="text" id="join-code" placeholder="ex: AB12CD ou a palavra de vocês" style="text-transform:uppercase; text-align:center; letter-spacing:0.04em; font-family:var(--font-display); font-size:20px;" maxlength="40" />
       <button class="btn btn-secondary btn-block" id="btn-check-code">Procurar</button>
       <p class="error-text" id="onboarding-error"></p>
       <div id="join-step2"></div>
@@ -1088,7 +1088,7 @@ function friendsJoinStep() {
   $("#onboarding-flow").innerHTML = `
     <div class="stack">
       <label class="field-label">Código da turma</label>
-      <input type="text" id="friends-join-code" placeholder="ex: AB12CD34" style="text-transform:uppercase; text-align:center; letter-spacing:0.04em; font-family:'Baloo 2'; font-size:20px;" maxlength="40" />
+      <input type="text" id="friends-join-code" placeholder="ex: AB12CD34" style="text-transform:uppercase; text-align:center; letter-spacing:0.04em; font-family:var(--font-display); font-size:20px;" maxlength="40" />
       <label class="field-label">Seu nome</label>
       <input type="text" id="friends-my-name" maxlength="24" placeholder="seu nome" />
       <button class="btn btn-block" id="friends-confirm-join" style="background:var(--friends-accent); color:var(--on-friends-accent);">Entrar na turma</button>
@@ -1181,7 +1181,7 @@ function friendsModalJoinStep() {
     <h3 class="modal-title">👥 Entrar numa turma</h3>
     <div class="stack">
       <label class="field-label">Código da turma</label>
-      <input type="text" id="fm-join-code" placeholder="ex: AB12CD34" style="text-transform:uppercase; text-align:center; letter-spacing:0.04em; font-family:'Baloo 2'; font-size:20px;" maxlength="40" />
+      <input type="text" id="fm-join-code" placeholder="ex: AB12CD34" style="text-transform:uppercase; text-align:center; letter-spacing:0.04em; font-family:var(--font-display); font-size:20px;" maxlength="40" />
       <label class="field-label">Seu nome</label>
       <input type="text" id="fm-my-name" maxlength="24" placeholder="seu nome" value="${escapeHTML(myDisplayName() || "")}" />
       <button class="btn btn-block" id="fm-confirm-join" style="background:var(--friends-accent); color:var(--on-friends-accent);">Entrar na turma</button>
@@ -1529,7 +1529,7 @@ function rsvpAvatarsHTML(rsvps, byId) {
   const confirmed = (rsvps || []).filter((r) => r.status === "sim");
   const shown = confirmed.slice(0, 3);
   const extra = confirmed.length - shown.length;
-  const chip = (label, i) => `<span style="width:26px; height:26px; border-radius:50%; background:rgba(255,255,255,.9); color:var(--friends-accent-strong); font-family:'Baloo 2'; font-weight:700; font-size:11px; display:flex; align-items:center; justify-content:center; border:2px solid rgba(255,255,255,.5); ${i > 0 ? "margin-left:-10px;" : ""}">${escapeHTML(label)}</span>`;
+  const chip = (label, i) => `<span style="width:26px; height:26px; border-radius:50%; background:rgba(255,255,255,.9); color:var(--friends-accent-strong); font-family:var(--font-display); font-weight:700; font-size:11px; display:flex; align-items:center; justify-content:center; border:2px solid rgba(255,255,255,.5); ${i > 0 ? "margin-left:-10px;" : ""}">${escapeHTML(label)}</span>`;
   if (!confirmed.length) return `<p style="font-size:12.5px; opacity:.85; margin:0;">Ninguém confirmou ainda.</p>`;
   return `<div style="display:flex; gap:0;">
     ${shown.map((r, i) => chip((byId[r.user_id] || "?")[0].toUpperCase(), i)).join("")}
@@ -1543,7 +1543,7 @@ function nextRoleHeroHTML(event, byId) {
   return `
     <div class="card" style="background:linear-gradient(135deg, var(--friends-accent-strong), var(--friends-accent)); color:var(--on-friends-accent); cursor:pointer;" id="friends-home-role-card">
       <div style="font-size:12.5px; font-weight:800; letter-spacing:.04em; text-transform:uppercase;">Próximo rolê</div>
-      <div style="font-family:'Baloo 2'; font-weight:800; font-size:${days <= 1 ? "26px" : "34px"}; margin:2px 0;">${days <= 1 ? dayLabel : `${days} <span style="font-family:'Nunito'; font-weight:700; font-size:15px;">dias</span>`}</div>
+      <div style="font-family:var(--font-display); font-weight:800; font-size:${days <= 1 ? "26px" : "34px"}; margin:2px 0;">${days <= 1 ? dayLabel : `${days} <span style="font-family:var(--font-body); font-weight:700; font-size:15px;">dias</span>`}</div>
       <div style="font-size:14px; font-weight:700; margin-bottom:2px;">${escapeHTML(event.title)}</div>
       <div style="font-size:12.5px; opacity:.9; margin-bottom:10px;">${escapeHTML(eventDateLine(event))}</div>
       ${rsvpAvatarsHTML(event.friend_event_rsvps, byId)}
@@ -1588,6 +1588,9 @@ async function renderFriendsHome() {
   const roleTarget = monthPlan.target || 2;
 
   view.innerHTML = `
+    ${isV2() ? `<div class="mh"><h3 class="mh-title">Como a turma está hoje</h3>
+      <div class="mini-members" style="display:flex; gap:8px; flex-wrap:wrap;">${members.map((m) => { const e = todaysMoods.find((x) => x.user_id === m.user_id); const i = e ? MOOD_BY_ID[e.mood] : null; return `<button type="button" class="mh-tile" style="flex:1 1 70px; min-height:0; text-align:center;" data-mh-go="mood"><span class="e" style="font-size:28px;">${i ? i.emoji : "🤔"}</span><small>${m.user_id === State.userId ? "Você" : escapeHTML(m.display_name)}</small></button>`; }).join("")}</div>
+      <div class="mh-actions"><button type="button" class="btn btn-primary" data-mh-go="mood">${todaysMoods.some((x) => x.user_id === State.userId) ? "Mudar meu humor" : "Contar como estou"}</button></div></div>` : ""}
     <div id="friends-vitrine">${vitrineHTML(pickVitrine(FRIEND_PERKS, balance), balance)}</div>
     ${nextEvents[0] ? nextRoleHeroHTML(nextEvents[0], byId) : emptyRoleHeroHTML()}
 
@@ -1641,22 +1644,23 @@ async function renderFriendsHome() {
 
     <div class="card" style="margin-top:14px; position:relative; padding-top:26px; cursor:pointer;" id="friends-home-challenge-card">
       <span style="position:absolute; top:-14px; left:16px; background:var(--friends-accent-strong); color:var(--on-friends-accent); font-size:11.5px; font-weight:800; padding:6px 12px; border-radius:999px;">Desafio do dia</span>
-      <div class="card-title" style="font-size:14.5px; font-family:'Baloo 2', sans-serif;">"${escapeHTML(todayChallenge)}"</div>
+      <div class="card-title" style="font-size:14.5px; font-family:var(--font-display);">"${escapeHTML(todayChallenge)}"</div>
       <p class="card-sub" style="margin-bottom:0;">${myChallengeAnswer ? `✅ Você já respondeu · ${challengeAnswers.length} da turma responderam` : `Toque pra responder${challengeAnswers.length ? ` · ${challengeAnswers.length} já respondeu(ram)` : ""}`}</p>
     </div>
 
     <div class="row" style="gap:12px; margin-top:14px;">
       <div class="card" style="flex:1; text-align:center; padding:16px 10px;">
-        <div style="font-family:'Baloo 2'; font-weight:800; font-size:22px; color:var(--friends-accent-strong);">${balance}</div>
+        <div style="font-family:var(--font-display); font-weight:800; font-size:22px; color:var(--friends-accent-strong);">${balance}</div>
         <div class="hint-text" style="margin:0;">suas moedas</div>
       </div>
       <div class="card" style="flex:1; text-align:center; padding:16px 10px;">
-        <div style="font-family:'Baloo 2'; font-weight:800; font-size:22px; color:var(--friends-accent-strong);">${members.length}</div>
+        <div style="font-family:var(--font-display); font-weight:800; font-size:22px; color:var(--friends-accent-strong);">${members.length}</div>
         <div class="hint-text" style="margin:0;">na turma</div>
       </div>
     </div>
   `;
   wireVitrine($("#friends-vitrine"), () => setFriendsTab("shop"));
+  view.querySelectorAll("[data-mh-go]").forEach((b) => b.addEventListener("click", () => setFriendsTab("mood")));
   $("#friends-home-mood-card")?.addEventListener("click", () => setFriendsTab("mood"));
   $("#friends-home-role-card")?.addEventListener("click", () => setFriendsTab("roles"));
   $("#friends-home-ideas-card")?.addEventListener("click", () => setFriendsTab("together-ideas"));
@@ -1751,7 +1755,7 @@ async function renderFriendsTogetherIdeas() {
   view.innerHTML = `
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
       <button class="btn btn-ghost btn-sm" id="btn-friends-ideas-back" style="flex:none; padding:9px 12px;">← Voltar</button>
-      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">🎯 Fazer juntos</h2>
+      <h2 style="font-family:var(--font-display); font-size:19px; margin:0;">🎯 Fazer juntos</h2>
     </div>
     <div class="card">
       <div class="card-sub">Ideias de coisas pra turma fazer, com link e foto. Avaliem com estrelas e o ranking se forma sozinho.</div>
@@ -2699,7 +2703,7 @@ function perkCardHTML(p, myCoins) {
   return `
     <div class="card" style="margin-bottom:12px;">
       <div class="row" style="align-items:flex-start; gap:10px;">
-        <span style="font-size:26px;">${p.emoji}</span>
+        ${isV2() ? perkThumbHTML(p) : `<span style="font-size:26px;">${p.emoji}</span>`}
         <div style="flex:1;">
           <div style="font-weight:800; font-size:14.5px;">${escapeHTML(p.title)}</div>
           <div class="hint-text" style="margin:0;">${escapeHTML(p.sub || p.description || "")}</div>
@@ -2725,7 +2729,7 @@ async function renderFriendsShop() {
     <div class="card" style="display:flex; align-items:center; gap:10px;">
       <span class="icon-badge" style="background:var(--friends-accent-soft); color:var(--friends-accent-strong);">💰</span>
       <div>
-        <div style="font-family:'Baloo 2'; font-weight:800; font-size:18px; color:var(--friends-accent-strong);">${balance} moedas</div>
+        <div style="font-family:var(--font-display); font-weight:800; font-size:18px; color:var(--friends-accent-strong);">${balance} moedas</div>
         <div class="hint-text" style="margin:0;">sua carteira</div>
       </div>
     </div>
@@ -2953,7 +2957,7 @@ async function renderGameHub(ctx, preselectedGame) {
       view.innerHTML = `
         <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
           <button class="btn btn-ghost btn-sm" id="btn-gamehub-back" style="flex:none; padding:9px 12px;">← Voltar</button>
-          <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">🎮 Jogar ${State.roomCtx === "casal" ? "a dois" : "com amigos"}</h2>
+          <h2 style="font-family:var(--font-display); font-size:19px; margin:0;">🎮 Jogar ${State.roomCtx === "casal" ? "a dois" : "com amigos"}</h2>
         </div>
         <div class="card" style="text-align:center; padding:24px 16px;">
           <div>${gameIconImg(active.game_type, 56)}</div>
@@ -2979,7 +2983,7 @@ async function renderGameHub(ctx, preselectedGame) {
     view.innerHTML = `
       <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
         <button class="btn btn-ghost btn-sm" id="btn-gamehub-back" style="flex:none; padding:9px 12px;">← Voltar</button>
-        <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">${gameIconImg(preselectedGame, 22)} ${GAME_LABEL[preselectedGame]}</h2>
+        <h2 style="font-family:var(--font-display); font-size:19px; margin:0;">${gameIconImg(preselectedGame, 22)} ${GAME_LABEL[preselectedGame]}</h2>
       </div>
     `;
     $("#btn-gamehub-back").addEventListener("click", () => roomBack());
@@ -2990,7 +2994,7 @@ async function renderGameHub(ctx, preselectedGame) {
   view.innerHTML = `
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
       <button class="btn btn-ghost btn-sm" id="btn-gamehub-back" style="flex:none; padding:9px 12px;">← Voltar</button>
-      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">🎮 Jogar ${State.roomCtx === "casal" ? "a dois" : "com amigos"}</h2>
+      <h2 style="font-family:var(--font-display); font-size:19px; margin:0;">🎮 Jogar ${State.roomCtx === "casal" ? "a dois" : "com amigos"}</h2>
     </div>
     <div class="rm-hub">
       <div class="rm-gamecard cards" data-game="cartas">
@@ -3053,7 +3057,7 @@ function renderRoomJoin(gameType) {
   view.innerHTML = `
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
       <button class="btn btn-ghost btn-sm" id="btn-join-back" style="flex:none; padding:9px 12px;">← Voltar</button>
-      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">${gameIconImg(gameType, 22)} ${label}</h2>
+      <h2 style="font-family:var(--font-display); font-size:19px; margin:0;">${gameIconImg(gameType, 22)} ${label}</h2>
     </div>
     <div class="rm-join-box">
       <p class="field-label" style="margin-bottom:6px;">Digite o código da sala</p>
@@ -3109,7 +3113,7 @@ async function renderRoomLobbyScreen(room) {
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
       <div>
         <div class="hint-text" style="margin:0; text-transform:uppercase; font-weight:800; letter-spacing:.03em;">Sala</div>
-        <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0; color:${roomAccentStrong()};">${gameIconImg(room.game_type, 22)} ${GAME_LABEL[room.game_type]}</h2>
+        <h2 style="font-family:var(--font-display); font-size:19px; margin:0; color:${roomAccentStrong()};">${gameIconImg(room.game_type, 22)} ${GAME_LABEL[room.game_type]}</h2>
       </div>
       <button class="btn btn-ghost btn-sm" id="btn-leave-room" style="color:${roomAccentStrong()}; font-weight:800;">SAIR ✕</button>
     </div>
@@ -3354,7 +3358,7 @@ async function renderCardMatchScreen(matchId) {
         ${myTurn ? `<span class="cg-turn-pill">Sua vez${match.has_drawn_this_turn ? " · já comprou" : ""}</span>` : `<span class="cg-turn-pill" style="opacity:.5;">Vez de ${escapeHTML(byId[match.current_turn_user_id]?.display_name || "alguém")}</span>`}
         ${myRow?.hand_count === 1 ? (
           iNeedToCallUno
-            ? `<button class="btn btn-block" id="btn-call-uno" style="margin:6px 0; background:linear-gradient(135deg, #ffd15c, #e0433d); color:#fff; font-family:'Baloo 2',sans-serif; font-weight:800; letter-spacing:.04em;">🃏 UNO!</button>`
+            ? `<button class="btn btn-block" id="btn-call-uno" style="margin:6px 0; background:linear-gradient(135deg, #ffd15c, #e0433d); color:#fff; font-family:var(--font-display); font-weight:800; letter-spacing:.04em;">🃏 UNO!</button>`
             : `<span class="hint-text" style="margin:6px 0;">✅ UNO chamado</span>`
         ) : ""}
         <div class="cg-hand">
@@ -3701,7 +3705,7 @@ async function renderStopResults(matchId, match) {
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
       <div>
         <div class="hint-text" style="margin:0; text-transform:uppercase; font-weight:800; letter-spacing:.03em;">Rodada ${match.round_number}/${match.total_rounds} · Letra ${escapeHTML(match.current_letter)}${isSpicy ? " · 🌶️ picante" : ""}</div>
-        <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0; color:${roomAccentStrong()};">Resultado</h2>
+        <h2 style="font-family:var(--font-display); font-size:19px; margin:0; color:${roomAccentStrong()};">Resultado</h2>
       </div>
     </div>
     ${categories.map((c) => `
@@ -3948,7 +3952,7 @@ async function renderFriendsGroup() {
 
     <div class="card" style="margin-top:14px; border-color:var(--friends-accent-soft);">
       <p class="field-label" style="color:var(--friends-accent-strong);">Código da turma</p>
-      <p style="font-family:'Baloo 2'; font-size:22px; letter-spacing:0.04em;">${escapeHTML(State.friendGroup.code || "")}</p>
+      <p style="font-family:var(--font-display); font-size:22px; letter-spacing:0.04em;">${escapeHTML(State.friendGroup.code || "")}</p>
       <p class="hint-text">Compartilhe esse código pra mais gente entrar na turma.</p>
       <button class="btn btn-ghost btn-sm" style="margin-top:8px;" id="friends-regen-code-btn">Trocar código</button>
     </div>
@@ -4060,7 +4064,7 @@ function friendsSettingsHeader(title) {
   return `
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
       <button class="btn btn-ghost btn-sm" id="btn-friends-settings-back" style="flex:none; padding:9px 12px;">← Voltar</button>
-      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">${title}</h2>
+      <h2 style="font-family:var(--font-display); font-size:19px; margin:0;">${title}</h2>
     </div>
   `;
 }
@@ -4227,7 +4231,7 @@ async function renderFriendsCapsule() {
   view.innerHTML = `
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
       <button class="btn btn-ghost btn-sm" id="btn-friends-capsule-back" style="flex:none; padding:9px 12px;">← Voltar</button>
-      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">🕰️ Cápsula do tempo</h2>
+      <h2 style="font-family:var(--font-display); font-size:19px; margin:0;">🕰️ Cápsula do tempo</h2>
     </div>
     <div class="card">
       <div class="card-sub">Escreva algo agora, só pode ser aberta na data que você escolher — a turma toda abre junto.</div>
@@ -4281,10 +4285,10 @@ async function renderFriendsChallenge() {
   view.innerHTML = `
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
       <button class="btn btn-ghost btn-sm" id="btn-friends-challenge-back" style="flex:none; padding:9px 12px;">← Voltar</button>
-      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">🎯 Desafio do dia</h2>
+      <h2 style="font-family:var(--font-display); font-size:19px; margin:0;">🎯 Desafio do dia</h2>
     </div>
     <div class="card" style="background:var(--friends-accent-soft);">
-      <div class="card-title" style="font-size:15.5px; font-family:'Baloo 2', sans-serif;">"${escapeHTML(todayChallenge)}"</div>
+      <div class="card-title" style="font-size:15.5px; font-family:var(--font-display);">"${escapeHTML(todayChallenge)}"</div>
       ${myAnswer ? `
         <div class="entry-meta" style="margin-top:8px; color:var(--text);">Você: "${escapeHTML(myAnswer.answer)}"</div>
       ` : `
@@ -4417,15 +4421,52 @@ function checklistCardHTML(done) {
     </div>`;
 }
 
+
+// Visual novo: ligado por padrão (classe v2 no <html>); Perfil permite voltar ao visual antigo.
+const isV2 = () => document.documentElement.classList.contains("v2");
+
+// Humor em destaque no topo do Hoje: o humor geral de cada um, o humor "com o par" e a saudade do dia
+function humorHeroHTML(recentMoods, todayStr, saude) {
+  const mine = recentMoods.find((m) => m.role === State.role && m.day === todayStr);
+  const theirs = recentMoods.find((m) => m.role !== State.role && m.day === todayStr);
+  const tile = (row, gender, who, withWho) => {
+    const info = row ? MOOD_BY_ID[row.mood] : null;
+    const w = row?.mood_partner ? PARTNER_MOOD_BY_ID[row.mood_partner] : null;
+    return `<button type="button" class="mh-tile" data-mh-go="mood">
+      <span class="e">${info ? info.emoji : "🤔"}</span>
+      <b>${info ? escapeHTML(gen(info.label, gender)) : "ainda não registrou"}</b>
+      <small>${who}${row ? "" : ", toque para ver"}</small>
+      ${w ? `<small>${withWho}: ${w.emoji} ${escapeHTML(gen(w.label, gender))}</small>` : ""}
+    </button>`;
+  };
+  const lv = (role) => saude?.find((r) => r.role === role)?.level ?? null;
+  return `<div class="mh">
+    <h3 class="mh-title">Como vocês estão hoje</h3>
+    <div class="mh-pair">
+      ${tile(mine, genderOf(State.role), "Você", `com ${escapeHTML(partnerDisplayName())}`)}
+      ${tile(theirs, genderOf(otherRole()), escapeHTML(partnerDisplayName()), "com você")}
+    </div>
+    ${saude ? `<div class="th-bars" style="margin-top:12px;">${thermoBarHTML(lv(State.role), "Você", { you: true })}${thermoBarHTML(lv(otherRole()), escapeHTML(partnerDisplayName()))}</div>` : ""}
+    <div class="mh-actions">
+      <button type="button" class="btn btn-primary" data-mh-go="mood">${mine ? "Mudar meu humor" : "Registrar meu humor"}</button>
+      ${saude ? `<button type="button" class="btn btn-ghost" data-mh-go="mood">Marcar saudade</button>` : ""}
+    </div>
+  </div>`;
+}
+function wireHumorHero(root) {
+  root.querySelectorAll("[data-mh-go]").forEach((b) => b.addEventListener("click", () => setActiveTab("mood")));
+}
+
 async function renderHome() {
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const mk = monthKey(State.homeMonth);
   const isCurrentMonth = mk === monthKey(new Date());
-  const [plan, encounters, stats, recentMoods] = await Promise.all([
+  const [plan, encounters, stats, recentMoods, saudeHoje] = await Promise.all([
     db.ensureMonthPlan(State.coupleId, mk, goalTarget()),
     db.listEncountersForMonth(State.coupleId, mk),
     db.getCoupleStats(State.coupleId),
     db.getMoodHistory(State.coupleId, toISODate(addDays(new Date(), -6))),
+    db.getSaudadeDay(State.coupleId, todayISO()).catch(() => null), // null = termômetro ainda não ativado no banco
   ]);
   const todayStr = todayISO();
 
@@ -4527,7 +4568,7 @@ async function renderHome() {
       <div class="card-title" style="font-size:15px;">🔋 Recarregar a bateria</div>
       ${rechargeStateHTML(rechargePeriod)}
     </div>` : "";
-  html.mood = todayMoodCardHTML(recentMoods, todayStr);
+  html.mood = isV2() ? "" : todayMoodCardHTML(recentMoods, todayStr);
   html.together = togetherCardHTML();
   html.special = specialCardHTML(nextSpecial);
   html.checklist = checklistNotes ? checklistCardHTML({
@@ -4564,6 +4605,7 @@ async function renderHome() {
       </div>
     ` : ""}
 
+    ${isV2() ? humorHeroHTML(recentMoods, todayStr, saudeHoje) : ""}
     <div id="home-vitrine"></div>
 ${(() => {
       const parts = widgetIds.map((id) => html[id] || "");
@@ -4582,6 +4624,7 @@ ${(() => {
   `;
   renderHomeGameCard();
   renderHomeVitrine();
+  wireHumorHero(view);
 
   $("#btn-goto-define")?.addEventListener("click", () => setActiveTab("calendar"));
   $("#btn-home-month-prev")?.addEventListener("click", () => { State.homeMonth = addMonths(State.homeMonth, -1); renderHome(); });
@@ -5774,7 +5817,7 @@ function subViewHeader(title) {
   return `
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
       <button class="btn btn-ghost btn-sm" id="btn-notes-back" style="flex:none; padding:9px 12px;">← Voltar</button>
-      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">${title}</h2>
+      <h2 style="font-family:var(--font-display); font-size:19px; margin:0;">${title}</h2>
     </div>
   `;
 }
@@ -5786,7 +5829,7 @@ function profileSubHeader(title) {
   return `
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
       <button class="btn btn-ghost btn-sm" id="btn-profile-back" style="flex:none; padding:9px 12px;">← Voltar</button>
-      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">${title}</h2>
+      <h2 style="font-family:var(--font-display); font-size:19px; margin:0;">${title}</h2>
     </div>
   `;
 }
@@ -5798,7 +5841,7 @@ function shopSubHeader(title) {
   return `
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
       <button class="btn btn-ghost btn-sm" id="btn-shop-back" style="flex:none; padding:9px 12px;">← Voltar</button>
-      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">${title}</h2>
+      <h2 style="font-family:var(--font-display); font-size:19px; margin:0;">${title}</h2>
     </div>
   `;
 }
@@ -6427,7 +6470,7 @@ async function renderNotesHub() {
 
     <div class="section-title">Atalhos</div>
     <div class="settings-list">
-${settingsRowHTML({ emoji: "🎂", title: "Recadinho de Aniversário", sub: birthdaySub, dataView: "birthday", dot: visibleBirthdayNotes.some((n) => n.deliver_on === todayStr) })}
+${(myBirthdayNotes.length || visibleBirthdayNotes.length || pendingBirthdayNotes.length) ? settingsRowHTML({ emoji: "🎂", title: "Recadinho de Aniversário", sub: birthdaySub, dataView: "birthday", dot: visibleBirthdayNotes.some((n) => n.deliver_on === todayStr) }) : ""}
 ${feat("daily") ? settingsRowHTML({ iconName: "target", title: "Desafio do dia", sub: myAnswerToday ? "Respondido ✓" : "Responder agora", dataView: "challenge" }) : ""}
 ${feat("capsule") ? settingsRowHTML({ iconName: "clock", title: "Cápsula do tempo", sub: capsules.length ? `${capsules.length} guardada${capsules.length === 1 ? "" : "s"}` : "Nenhuma ainda", dataView: "capsule" }) : ""}
 ${feat("wishes") ? settingsRowHTML({ iconName: "gift", title: "Desejos secretos", sub: readyRedemptions.length ? "Tem resgate revelado!" : "Ver desejos", dataView: "wishes", dot: !!readyRedemptions.length }) : ""}
@@ -6497,7 +6540,7 @@ async function renderChallengeView() {
     ${subViewHeader("🎯 Desafio do dia")}
     <div class="card" style="background:var(--warm-soft);">
       <p class="hint-text" style="margin:0 0 10px;">Rapidinho, sem pensar muito — a pergunta mais profunda da semana fica na aba Humor.</p>
-      <div class="card-title" style="font-size:15.5px; font-family:'Baloo 2', sans-serif;">"${todayChallenge}"</div>
+      <div class="card-title" style="font-size:15.5px; font-family:var(--font-display);">"${todayChallenge}"</div>
       ${myAnswerToday ? `
         <div class="entry-meta" style="margin-top:8px; color:var(--text);">Você: "${escapeHTML(myAnswerToday.answer)}"</div>
       ` : `
@@ -6934,7 +6977,7 @@ function capiHeaderHTML(title) {
   return `
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
       <button class="btn btn-ghost btn-sm" id="btn-capi-back" style="flex:none; padding:9px 12px;">← Voltar</button>
-      <h2 style="font-family:'Baloo 2', sans-serif; font-size:19px; margin:0;">${title}</h2>
+      <h2 style="font-family:var(--font-display); font-size:19px; margin:0;">${title}</h2>
     </div>
   `;
 }
@@ -7131,7 +7174,7 @@ async function renderCapiEditor() {
     el.innerHTML = `
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
         <button class="btn btn-ghost btn-sm" id="capi-back-to-edit">← Voltar ao editor</button>
-        <h2 style="font-family:'Baloo 2', sans-serif; font-size:17px; margin:0;">Tudo pronto?</h2>
+        <h2 style="font-family:var(--font-display); font-size:17px; margin:0;">Tudo pronto?</h2>
         <span style="width:1px;"></span>
       </div>
       <div id="capi-canvas-mount"></div>
@@ -7148,7 +7191,7 @@ async function renderCapiEditor() {
   el.innerHTML = `
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; gap:8px;">
       <button class="btn btn-ghost btn-sm" id="capi-exit-editor">← Modelos</button>
-      <h2 style="font-family:'Baloo 2', sans-serif; font-size:17px; margin:0; flex:1; text-align:center;">${escapeHTML(tpl?.name || "")}</h2>
+      <h2 style="font-family:var(--font-display); font-size:17px; margin:0; flex:1; text-align:center;">${escapeHTML(tpl?.name || "")}</h2>
       <span style="width:70px;"></span>
     </div>
     <div id="capi-canvas-mount"></div>
@@ -7707,7 +7750,7 @@ function openDateIdeaRoulette(ideas) {
   openModal(`
     <h3 class="modal-title" style="text-align:center;">🎡 Sorteando...</h3>
     <div class="card" style="text-align:center; padding:28px 16px;">
-      <div id="roulette-spin" style="font-family:'Baloo 2', sans-serif; font-weight:800; font-size:17px; min-height:50px; display:flex; align-items:center; justify-content:center;">🎯</div>
+      <div id="roulette-spin" style="font-family:var(--font-display); font-weight:800; font-size:17px; min-height:50px; display:flex; align-items:center; justify-content:center;">🎯</div>
     </div>
   `);
   const titles = ideas.map((i) => i.title);
@@ -7964,7 +8007,7 @@ async function renderStarBattleGame(scope) {
   container.innerHTML = `
     <button class="btn btn-ghost btn-sm" id="sbg-back" style="margin-bottom:10px;">← Voltar</button>
     <div class="card" style="background:${accentSoft}; text-align:center; padding:14px;">
-      <div style="font-family:'Baloo 2',sans-serif; font-weight:800; font-size:16px; color:${accentStrong};"><img src="icons/capivarinhas.jpg" alt="" style="width:30px; height:30px; border-radius:8px; object-fit:cover; vertical-align:-8px;" /> Capibatman · Fase ${currentLevel}</div>
+      <div style="font-family:var(--font-display); font-weight:800; font-size:16px; color:${accentStrong};"><img src="icons/capivarinhas.jpg" alt="" style="width:30px; height:30px; border-radius:8px; object-fit:cover; vertical-align:-8px;" /> Capibatman · Fase ${currentLevel}</div>
       ${offline ? `<p class="hint-text" style="margin:4px 0 0;">📴 Sem internet agora, mas dá pra jogar. Assim que voltar, sincroniza sozinho.</p>` : ""}
       <div class="row" style="justify-content:center; gap:14px; margin-top:8px;">
         <span id="sbg-counter" style="font-weight:800; color:${accentStrong};"></span>
@@ -8041,7 +8084,7 @@ async function renderStarBattleGame(scope) {
     openModal(`
       <div class="sbg-celebrate" style="text-align:center;">
         <div style="font-size:36px; letter-spacing:8px;">${"⭐".repeat(stars)}${"☆".repeat(STAR_BATTLE_LIVES - stars)}</div>
-        <div style="font-family:'Baloo 2',sans-serif; font-weight:800; font-size:22px; color:${accentStrong}; margin-top:8px;">Fase ${currentLevel} completa!</div>
+        <div style="font-family:var(--font-display); font-weight:800; font-size:22px; color:${accentStrong}; margin-top:8px;">Fase ${currentLevel} completa!</div>
         <div style="margin-top:12px; font-size:18px; font-weight:800; color:${accentStrong};"><span class="sbg-coin-float">💰</span> +${reward} moedas</div>
         <button class="btn btn-block" style="margin-top:20px; background:${accentBtn}; color:${onAccentBtn};" id="sbg-continue">OK, fase ${nextLevel}</button>
       </div>
@@ -8221,7 +8264,7 @@ function renderCapMartMap(scope, isAmigos, container, theme, backFn, unlocked) {
     container.innerHTML = `
       <button class="btn btn-ghost btn-sm" id="cm-back" style="margin-bottom:10px;">← Voltar</button>
       <div class="card" style="background:${theme.accentSoft}; text-align:center; padding:14px;">
-        <div style="font-family:'Baloo 2',sans-serif; font-weight:800; font-size:17px; color:${theme.accentStrong};"><img src="icons/capmart-capivara.jpg" alt="" style="width:26px; height:26px; border-radius:7px; object-fit:contain; vertical-align:-7px;" /> CapMart</div>
+        <div style="font-family:var(--font-display); font-weight:800; font-size:17px; color:${theme.accentStrong};"><img src="icons/capmart-capivara.jpg" alt="" style="width:26px; height:26px; border-radius:7px; object-fit:contain; vertical-align:-7px;" /> CapMart</div>
         <p class="hint-text" style="margin:4px 0 0;">Mercadinho da capivara · organize os produtos em trios</p>
       </div>
       <div class="row" style="gap:6px; margin:12px 0; overflow-x:auto; padding-bottom:4px;">
@@ -8429,7 +8472,7 @@ function renderCapMartPlay(scope, isAmigos, container, theme, onBack, level, unl
     openModal(`
       <div style="text-align:center;">
         <div style="font-size:34px; letter-spacing:6px;">${"⭐".repeat(earnedStars)}${"☆".repeat(3 - earnedStars)}</div>
-        <div style="font-family:'Baloo 2',sans-serif; font-weight:800; font-size:20px; color:${theme.accentStrong}; margin-top:6px;">Fase ${level.id} completa!</div>
+        <div style="font-family:var(--font-display); font-weight:800; font-size:20px; color:${theme.accentStrong}; margin-top:6px;">Fase ${level.id} completa!</div>
         <div class="hint-text" style="margin-top:4px;">${finalScore} pontos</div>
         <div style="margin-top:10px; font-size:17px; font-weight:800; color:${theme.accentStrong};">💰 +${reward} moedas</div>
         <button class="btn btn-block" style="margin-top:18px; background:${theme.accentBtn}; color:${theme.onAccentBtn};" id="cm-continue">${level.id < capMart.LEVELS.length ? `OK, fase ${nextLevel}` : "OK"}</button>
@@ -8520,7 +8563,7 @@ function shopPerkCardHTML(p, myCoins) {
     <div class="card" style="${onPromo ? "position:relative; overflow:visible;" : ""}">
       ${onPromo ? `<span style="position:absolute; top:-14px; left:16px; background:var(--warm); color:#4a2c07; font-size:11.5px; font-weight:800; padding:6px 12px; border-radius:999px; box-shadow:var(--shadow-tap);">🔥 -${p.promoPct}% até ${humanDateShort(parseISODate(p.promoUntil))}</span>` : ""}
       <div class="row" style="align-items:flex-start; ${onPromo ? "margin-top:6px;" : ""}">
-        <div style="flex:0 0 auto; font-size:30px;">${escapeHTML(p.emoji)}</div>
+        <div style="flex:0 0 auto; font-size:30px;">${isV2() ? perkThumbHTML(p) : escapeHTML(p.emoji)}</div>
         <div style="flex:1; min-width:0;">
           <div class="card-title" style="font-size:15px;">${escapeHTML(gen(p.title, genderOf(State.role)))}</div>
           ${p.desc ? `<div class="card-sub">${escapeHTML(p.desc)}</div>` : ""}
@@ -8962,6 +9005,11 @@ async function renderProfileHub() {
       </div>
     </div>
 
+    <label class="card" style="display:flex; gap:12px; align-items:center; cursor:pointer;">
+      <input type="checkbox" id="toggle-visual-novo" ${isV2() ? "checked" : ""} style="width:22px; height:22px; flex:none;">
+      <span><strong>Visual novo</strong><span class="card-sub" style="display:block; margin:2px 0 0;">Fontes, cores e cartões do novo design. Desmarque para voltar ao visual antigo.</span></span>
+    </label>
+
 ${googleLinked && myFriendGroups.length ? `    <button class="btn btn-block" id="btn-quick-friends" style="background:var(--friends-accent); color:var(--on-friends-accent);">
       👥 ${myFriendGroups.length === 1 ? `Ir pra turma "${escapeHTML(myFriendGroups[0].name)}"` : "Ir pro Modo Amigos"}
     </button>` : ""}
@@ -9002,6 +9050,11 @@ ${settingsRowHTML({ iconName: "lightbulb", title: "Rever as boas-vindas", sub: "
   });
 
   $("#btn-edit-names")?.addEventListener("click", openNamesEditor);
+  $("#toggle-visual-novo")?.addEventListener("change", (e) => {
+    document.documentElement.classList.toggle("v2", e.target.checked);
+    try { localStorage.setItem("saudometro-visual", e.target.checked ? "1" : "0"); } catch (err) { /* sem storage: vale só até fechar */ }
+    renderActiveTab();
+  });
   $("#btn-personalize")?.addEventListener("click", openPersonalizeModal);
   $("#btn-replay-tour")?.addEventListener("click", replayFeatureTour);
   $("#btn-quick-friends")?.addEventListener("click", async () => {
@@ -9494,7 +9547,7 @@ function togetherCardHTML() {
   return `
     <div class="card" id="together-card" style="cursor:pointer; text-align:center;">
       <div class="card-title" style="font-size:15px;">💞 Dias juntos</div>
-      <div style="font-family:'Baloo 2', sans-serif; font-size:36px; font-weight:800; color:var(--accent-strong); line-height:1.2;">${days.toLocaleString("pt-BR")}</div>
+      <div style="font-family:var(--font-display); font-size:36px; font-weight:800; color:var(--accent-strong); line-height:1.2;">${days.toLocaleString("pt-BR")}</div>
       <div class="card-sub" style="margin-bottom:0;">${parts ? `${parts} · ` : ""}desde ${parseISODate(since).toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" })}</div>
     </div>`;
 }
@@ -10207,7 +10260,7 @@ async function showAdminStats(key) {
     try { sessionStorage.setItem("adminKey", key); } catch (e) { /* sem storage */ }
     const fmt = (iso) => (iso ? humanDateShort(parseISODate(String(iso).slice(0, 10))) : "-");
     const REPORT_KIND_LABEL = { achado: "🎬 Achado", feed_post: "📷 Foto do feed", feed_comment: "💬 Comentário (feed)", find_comment: "💬 Comentário (achado)" };
-    const stat = (n, label) => `<div class="card" style="text-align:center; margin:0;"><div style="font-family:'Baloo 2',sans-serif; font-size:28px; font-weight:800; color:var(--accent-strong);">${n}</div><div class="hint-text" style="margin:0;">${label}</div></div>`;
+    const stat = (n, label) => `<div class="card" style="text-align:center; margin:0;"><div style="font-family:var(--font-display); font-size:28px; font-weight:800; color:var(--accent-strong);">${n}</div><div class="hint-text" style="margin:0;">${label}</div></div>`;
     openModal(`
       <h3 class="modal-title">🔐 Modo dono</h3>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">

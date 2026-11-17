@@ -2,13 +2,17 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, interactive-widget=resizes-content" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
   <title>Saudômetro</title>
   <meta name="description" content="O encontrômetro do casal. Combine os encontros do mês, registre o humor do dia e mande sinais de saudade." />
   <meta name="theme-color" content="#ff6f91" />
   <link rel="icon" href="icons/icon.png" />
   <link rel="apple-touch-icon" href="icons/icon.png" />
   <link rel="manifest" href="manifest.json" />
+  <script>
+    /* Visual novo: ligado por padrão; "0" guardado no aparelho volta ao visual antigo (Perfil). Roda antes de pintar pra não piscar. */
+    try { if (localStorage.getItem("saudometro-visual") !== "0") document.documentElement.classList.add("v2"); } catch (e) { document.documentElement.classList.add("v2"); }
+  </script>
   <link rel="stylesheet" href="css/fonts.css" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>

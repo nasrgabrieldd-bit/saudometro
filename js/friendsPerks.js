@@ -16,6 +16,8 @@ export const FRIEND_PERKS = [
   { id: "coroa_resenha", emoji: "👑", title: "Rei/rainha da resenha (1 semana)", sub: "Título honorário, sem função real.", cost: 15, category: "zoeira" },
   { id: "vale_carona", emoji: "🚗", title: "Vale carona", sub: "Alguém da turma te busca no próximo rolê.", cost: 15, category: "pratico" },
   { id: "paga_rodada", emoji: "💸", title: "Alguém paga sua rodada", sub: "Só uma, não abusa.", cost: 12, category: "pratico" },
+  { id: "playlist", emoji: "🎧", title: "Escolhe a playlist do rolê", sub: "Ninguém reclama da música.", cost: 8, category: "role" },
+  { id: "rap10t", emoji: "🛵", title: "Pede o lanche do rolê", sub: "Alguém da turma pede o delivery pra você.", cost: 14, category: "pratico" },
   { id: "chega_atrasado", emoji: "⏰", title: "Chega atrasado sem climinha", sub: "Passe livre de até 30 min.", cost: 6, category: "pratico" },
 ];
 

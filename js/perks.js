@@ -95,6 +95,15 @@ export const PERKS = [
     cost: 22,
     fulfillReward: 6,
   },
+  { id: "curinga", emoji: "🤷", title: "Curinga do “não sei”", desc: "Uma pergunta difícil vira “depois eu respondo”, sem insistir.", cost: 8, fulfillReward: 2 },
+  { id: "batata", emoji: "🍟", title: "Batata frita por conta do par", desc: "Uma porção só sua, com o molho que quiser.", cost: 8, fulfillReward: 2 },
+  { id: "leitura", emoji: "📖", title: "2 horas de leitura em paz", desc: "Duas horas sem mensagem e sem ligação, só você e o seu livro.", cost: 12, fulfillReward: 3 },
+  { id: "academia", emoji: "🏋️", title: "Academia sem cobrança", desc: "Treinar em paz, sem “já vai?” nem “quando volta?”.", cost: 14, fulfillReward: 4 },
+  { id: "taco", emoji: "🌮", title: "Taco ou burrito de sexta", desc: "O par paga o lanche da sexta, do jeito que você escolher.", cost: 14, fulfillReward: 4 },
+  { id: "briga", emoji: "😤", title: "Direito a uma briga leve", desc: "5 minutos para reclamar de uma bobagem. O outro escuta, sem rebater, e depois vocês riem.", cost: 15, fulfillReward: 4 },
+  { id: "pizza", emoji: "🍕", title: "Pizza de sexta por conta do par", desc: "Sabor à sua escolha, sem veto.", cost: 16, fulfillReward: 4 },
+  { id: "games", emoji: "🎮", title: "Noite de games sem culpa", desc: "Três horas de jogo, sem olhar torto.", cost: 20, fulfillReward: 5 },
+  { id: "rap10", emoji: "🛵", title: "Faz um Rap10 pra mim", desc: "Um delivery por conta do par, do que você quiser.", cost: 20, fulfillReward: 5 },
 ];
 
 export const PERK_BY_ID = Object.fromEntries(PERKS.map((p) => [p.id, p]));

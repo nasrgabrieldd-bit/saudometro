@@ -1,5 +1,5 @@
 // bump isso a cada deploy relevante: força limpar cache velho do celular
-const CACHE_VERSION = "v111";
+const CACHE_VERSION = "v112";
 const CACHE_NAME = `saudometro-${CACHE_VERSION}`;
 
 // o "casco" do app: guardado no aparelho pra o app abrir mesmo sem internet
@@ -7,8 +7,9 @@ const CACHE_NAME = `saudometro-${CACHE_VERSION}`;
 // O teste tests/arquivos.test.mjs garante que esta lista está completa e sem arquivo faltando.
 const SHELL = [
   "./", "index.html", "manifest.json", "privacidade.html", "termos.html", "icons/icon.png",
+  "img/capi/cobertor.webp", "img/capi/peso.webp", "img/capi/brava.webp", "img/capi/confusa.webp", "img/capi/gamer.webp", "img/capi/leitura.webp", "img/capi/batata.webp", "img/capi/hamburguer.webp", "img/capi/taco.webp",
   "css/fonts.css", "css/styles.css",
-  "fonts/baloo2-latin-ext.woff2", "fonts/baloo2-latin.woff2", "fonts/nunito-latin-ext.woff2", "fonts/nunito-latin.woff2",
+  "fonts/baloo2-latin-ext.woff2", "fonts/baloo2-latin.woff2", "fonts/nunito-latin-ext.woff2", "fonts/nunito-latin.woff2", "fonts/bricolage-latin.woff2", "fonts/dmsans-latin.woff2",
   "js/app.js", "js/saudade.js", "js/vitrine.js", "js/bookCards.js", "js/books.js", "js/captcha.js", "js/challenges.js", "js/changelog.js", "js/cycle.js", "js/db.js", "js/errors.js", "js/friends.js", "js/friendsPerks.js", "js/gameRooms.js", "js/icons.js", "js/install.js", "js/moods.js",
   "js/nudges.js", "js/people.js", "js/perks.js", "js/photo.js", "js/plans.js", "js/push.js", "js/questions.js", "js/supabaseClient.js",
   "js/theme.js", "js/util.js", "js/vendor/supabase.js",

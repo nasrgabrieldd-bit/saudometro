@@ -65,9 +65,10 @@ export const PARTNER_MOODS = [
 export const PARTNER_MOOD_BY_ID = Object.fromEntries(PARTNER_MOODS.map((m) => [m.id, m]));
 
 export const TALK_OPTIONS = [
-  { id: "sim", emoji: "💬", label: "Quero conversar" },
-  { id: "talvez", emoji: "🤏", label: "Só rapidinho" },
-  { id: "nao", emoji: "🤫", label: "Só carinho à distância hoje" },
+  // os ids (sim/talvez/nao) ficam como estão pra não perder o que já foi registrado; só os nomes mudaram
+  { id: "sim", emoji: "💬", label: "Falante" },
+  { id: "talvez", emoji: "🤏", label: "Pouquinho" },
+  { id: "nao", emoji: "🤫", label: "Modo Manaus" },
 ];
 
 export const TALK_BY_ID = Object.fromEntries(TALK_OPTIONS.map((t) => [t.id, t]));
