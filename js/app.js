@@ -15,6 +15,7 @@ import { dayIndexSince, challengeForDay, friendChallengeForDay } from "./challen
 import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush, subscribeToFriendPush, unsubscribeFromFriendPush, needsHomeScreenFirst } from "./push.js";
 import { PERKS, PERK_BY_ID, customToPerk, suggestedReward } from "./perks.js";
 import { planLabel, isPlayApp } from "./plans.js";
+import { activeCampaign, nextCampaign, applyAutoPromos } from "./promos.js";
 import { emptyGrid, markCell, revealCell, countFound, CELL_EMPTY, CELL_MARK, CELL_CAT } from "./games/starBattle.js";
 import { STAR_BATTLE_LEVELS } from "./games/starBattleLevels.js";
 import * as cardGame from "./games/cardGame.js";
@@ -1591,7 +1592,8 @@ async function renderFriendsHome() {
     ${isV2() ? `<div class="mh"><h3 class="mh-title">Como a turma está hoje</h3>
       <div class="mini-members" style="display:flex; gap:8px; flex-wrap:wrap;">${members.map((m) => { const e = todaysMoods.find((x) => x.user_id === m.user_id); const i = e ? MOOD_BY_ID[e.mood] : null; return `<button type="button" class="mh-tile" style="flex:1 1 70px; min-height:0; text-align:center;" data-mh-go="mood"><span class="e" style="font-size:28px;">${i ? i.emoji : "🤔"}</span><small>${m.user_id === State.userId ? "Você" : escapeHTML(m.display_name)}</small></button>`; }).join("")}</div>
       <div class="mh-actions"><button type="button" class="btn btn-primary" data-mh-go="mood">${todaysMoods.some((x) => x.user_id === State.userId) ? "Mudar meu humor" : "Contar como estou"}</button></div></div>` : ""}
-    <div id="friends-vitrine">${vitrineHTML(pickVitrine(FRIEND_PERKS, balance), balance)}</div>
+    <div id="friends-campaign">${(() => { const c = currentCampaign("turma"); return c ? campaignBannerHTML(c) : campaignTeaserHTML("turma"); })()}</div>
+    <div id="friends-vitrine">${vitrineHTML(pickVitrine(friendPerksPromoted(), balance), balance)}</div>
     ${nextEvents[0] ? nextRoleHeroHTML(nextEvents[0], byId) : emptyRoleHeroHTML()}
 
     <div class="card" style="margin-top:14px;">
@@ -1660,6 +1662,7 @@ async function renderFriendsHome() {
     </div>
   `;
   wireVitrine($("#friends-vitrine"), () => setFriendsTab("shop"));
+  $("#camp-banner")?.addEventListener("click", () => setFriendsTab("shop"));
   view.querySelectorAll("[data-mh-go]").forEach((b) => b.addEventListener("click", () => setFriendsTab("mood")));
   $("#friends-home-mood-card")?.addEventListener("click", () => setFriendsTab("mood"));
   $("#friends-home-role-card")?.addEventListener("click", () => setFriendsTab("roles"));
@@ -2705,8 +2708,8 @@ function perkCardHTML(p, myCoins) {
       <div class="row" style="align-items:flex-start; gap:10px;">
         ${isV2() ? perkThumbHTML(p) : `<span style="font-size:26px;">${p.emoji}</span>`}
         <div style="flex:1;">
-          <div style="font-weight:800; font-size:14.5px;">${escapeHTML(p.title)}</div>
-          <div class="hint-text" style="margin:0;">${escapeHTML(p.sub || p.description || "")}</div>
+          <div style="font-weight:800; font-size:14.5px;">${escapeHTML(p.title)}${p.promoPct ? ` <span class="pill" style="background:var(--warm-soft); color:#7a4a00;">-${p.promoPct}% ${escapeHTML(p.promoName || "")}</span>` : ""}</div>
+          <div class="hint-text" style="margin:0;">${escapeHTML(p.sub || p.description || "")}${p.originalCost ? ` De ${p.originalCost} por ${p.cost} moedas.` : ""}</div>
         </div>
         ${p.created_by === State.userId ? `<button class="btn btn-ghost btn-sm" style="padding:4px 8px;" data-delete-perk="${p.id}">Apagar</button>` : ""}
       </div>
@@ -2723,9 +2726,12 @@ async function renderFriendsShop() {
     friends.listCustomPerks(State.friendGroup.id).catch(() => []),
   ]);
   const pending = redemptions.filter((r) => r.status === "pendente");
+  const promoted = friendPerksPromoted();
+  const promotedCustom = withAutoPromos(customPerks, "turma");
+  const campaignNow = currentCampaign("turma");
   const v2 = isV2();
   const friendsTab = State.friendsShopTab === "jogos" ? "jogos" : "mimos";
-  const featuredPerk = [...FRIEND_PERKS].filter((p) => p.cost <= balance).sort((a, b) => b.cost - a.cost)[0] || FRIEND_PERKS[0];
+  const featuredPerk = [...promoted].filter((p) => p.cost <= balance).sort((a, b) => b.cost - a.cost)[0] || promoted[0];
   const gamesHTML = `
     <div class="section-title">🎮 Games</div>
     <div class="card" id="btn-open-star-battle-friends" style="cursor:pointer;">
@@ -2749,7 +2755,7 @@ async function renderFriendsShop() {
       </div>
     </div>
   `;
-  const allPerks = { ...FRIEND_PERK_BY_ID, ...Object.fromEntries(customPerks.map((p) => [p.id, p])) };
+  const allPerks = { ...Object.fromEntries(promoted.map((p) => [p.id, p])), ...Object.fromEntries(promotedCustom.map((p) => [p.id, p])) };
 
   view.innerHTML = `
     ${v2 ? `
@@ -2761,7 +2767,7 @@ async function renderFriendsShop() {
         <button role="tab" data-ftab="mimos" aria-selected="${friendsTab === "mimos"}">Prêmios</button>
         <button role="tab" data-ftab="jogos" aria-selected="${friendsTab === "jogos"}">Jogos</button>
       </div>
-      ${friendsTab === "jogos" ? gamesHTML : (featuredPerk ? `<div class="vit" style="margin-top:14px;"><div class="vit-track">${slideHTML(featuredPerk, balance, { xl: true })}</div></div>` : "")}
+      ${friendsTab === "jogos" ? gamesHTML : `${campaignNow ? `<div style="margin-top:14px;">${campaignBannerHTML(campaignNow, { cta: false })}</div>` : ""}<label class="shop-promo-toggle"><input type="checkbox" id="toggle-friends-promos" ${friendsPromosOn() ? "checked" : ""}><span>Promoções por data e oferta do dia<small>Só neste aparelho.</small></span></label>` + (featuredPerk ? `<div class="vit" style="margin-top:14px;"><div class="vit-track">${slideHTML(featuredPerk, balance, { xl: true })}</div></div>` : "")}
     ` : `    <div class="card" style="display:flex; align-items:center; gap:10px;">
       <span class="icon-badge" style="background:var(--friends-accent-soft); color:var(--friends-accent-strong);">💰</span>
       <div>
@@ -2772,11 +2778,11 @@ async function renderFriendsShop() {
     ${v2 ? "" : gamesHTML}
     ${v2 && friendsTab === "jogos" ? "" : `${Object.entries(FRIEND_PERK_CATEGORIES).map(([catId, cat]) => `
       <div class="section-title">${cat.emoji} ${cat.label}</div>
-      ${FRIEND_PERKS.filter((p) => p.category === catId).map((p) => perkCardHTML(p, balance)).join("")}
+      ${promoted.filter((p) => p.category === catId).map((p) => perkCardHTML(p, balance)).join("")}
     `).join("")}
 
     <div class="section-title">🙋 Criados pela turma</div>
-    ${customPerks.map((p) => perkCardHTML(p, balance)).join("")}
+    ${promotedCustom.map((p) => perkCardHTML(p, balance)).join("")}
     <button class="btn btn-block" style="margin-bottom:12px; background:var(--friends-accent); color:var(--on-friends-accent);" id="friends-new-perk-btn">+ Criar prêmio pra turma</button>
 
     ${pending.length ? `
@@ -2802,6 +2808,7 @@ async function renderFriendsShop() {
   $("#btn-open-capistop-friends")?.addEventListener("click", () => renderGameHub("amigos", "stop"));
   $("#btn-open-capmart-friends")?.addEventListener("click", () => renderCapMartGame("amigos"));
   $("#friends-new-perk-btn")?.addEventListener("click", openNewCustomPerkModal);
+  $("#toggle-friends-promos")?.addEventListener("change", (e) => { try { localStorage.setItem("saudometro-promos-turma", e.target.checked ? "1" : "0"); } catch (err) { /* sem storage */ } renderFriendsShop(); });
   view.querySelectorAll("[data-ftab]").forEach((b) => b.addEventListener("click", () => { State.friendsShopTab = b.dataset.ftab; renderFriendsShop(); }));
   view.querySelector(".vit-slide")?.addEventListener("click", (ev) => { const el = view.querySelector(`[data-redeem="${CSS.escape(ev.currentTarget.dataset.vit)}"]`); el?.scrollIntoView({ behavior: "smooth", block: "center" }); });
   view.querySelectorAll("[data-redeem]").forEach((btn) => {
@@ -4628,6 +4635,7 @@ async function renderHome() {
     ` : ""}
 
     ${isV2() ? humorHeroHTML(recentMoods, todayStr, saudeHoje) : ""}
+    <div id="home-campaign">${coinsOn() ? (() => { const c = currentCampaign("casal"); return c ? campaignBannerHTML(c) : campaignTeaserHTML("casal"); })() : ""}</div>
     <div id="home-vitrine"></div>
 ${(() => {
       const parts = widgetIds.map((id) => html[id] || "");
@@ -4647,6 +4655,7 @@ ${(() => {
   renderHomeGameCard();
   renderHomeVitrine();
   wireHumorHero(view);
+  $("#camp-banner")?.addEventListener("click", () => setActiveTab("shop"));
 
   $("#btn-goto-define")?.addEventListener("click", () => setActiveTab("calendar"));
   $("#btn-home-month-prev")?.addEventListener("click", () => { State.homeMonth = addMonths(State.homeMonth, -1); renderHome(); });
@@ -8173,13 +8182,66 @@ function goToGame(renderFn, ...args) {
 }
 
 // vitrine de mimos no topo do Hoje (só quando a Lojinha está ligada); carrega depois, sem atrasar a tela
+// ---------- promoções por data e oferta do dia (ligadas por padrão; o casal pode desligar) ----------
+const DEAL_POOL_C = PERKS.map((x) => x.id);
+const DEAL_POOL_T = FRIEND_PERKS.map((x) => x.id);
+function friendsPromosOn() { try { return localStorage.getItem("saudometro-promos-turma") !== "0"; } catch (e) { return true; } }
+function autoPromoOpts(scope) {
+  return scope === "turma"
+    ? { scope: "turma", enabled: friendsPromosOn(), dealPool: DEAL_POOL_T }
+    : { scope: "casal", anniversary: togetherSince(), enabled: State.settings?.features?.holiday_promos !== false, dealPool: DEAL_POOL_C };
+}
+const currentCampaign = (scope) => activeCampaign(new Date(), autoPromoOpts(scope));
+const withAutoPromos = (perks, scope) => applyAutoPromos(perks, new Date(), autoPromoOpts(scope));
+const friendPerksPromoted = () => withAutoPromos(FRIEND_PERKS, "turma");
+
+// banner da campanha (Black Friday, Natal, Ano Novo...) com a capivara na fantasia da data
+const CAMP_ART = {
+  black: { img: "gamer", hat: "tag", deco: "BLACK" },
+  natal: { img: "confusa", hat: "santa", deco: "snow" },
+  anonovo: { img: "peso", hat: "party", deco: "spark" },
+  halloween: { img: "brava", hat: "witch", deco: "spark" },
+  namorados: { img: "cobertor", hat: null, deco: "hearts" },
+  carnaval: { img: "gamer", hat: "party", deco: "spark" },
+  pascoa: { img: "batata", hat: null, deco: "spark" },
+  amigo: { img: "gamer", hat: null, deco: "spark" },
+};
+const HAT_SVG = {
+  santa: '<svg viewBox="0 0 100 80" aria-hidden="true"><path d="M10 62Q18 10 60 12Q90 16 92 54Z" fill="#e0312f" stroke="#6b3a22" stroke-width="3" stroke-linejoin="round"/><rect x="6" y="54" width="90" height="20" rx="10" fill="#fff" stroke="#6b3a22" stroke-width="3"/><circle cx="88" cy="24" r="10" fill="#fff" stroke="#6b3a22" stroke-width="3"/></svg>',
+  party: '<svg viewBox="0 0 100 90" aria-hidden="true"><path d="M50 6L84 80H16Z" fill="#ffd24d" stroke="#6b3a22" stroke-width="3" stroke-linejoin="round"/><path d="M34 46l32 0M26 64l48 0" stroke="#e0527f" stroke-width="6" stroke-linecap="round"/><circle cx="50" cy="8" r="8" fill="#6d6bd8" stroke="#6b3a22" stroke-width="3"/></svg>',
+  witch: '<svg viewBox="0 0 120 90" aria-hidden="true"><ellipse cx="60" cy="74" rx="52" ry="12" fill="#2b1740" stroke="#6b3a22" stroke-width="3"/><path d="M36 72L58 6L84 72Z" fill="#3b2260" stroke="#6b3a22" stroke-width="3" stroke-linejoin="round"/><rect x="40" y="56" width="42" height="10" fill="#e8751a"/></svg>',
+  tag: '<svg viewBox="0 0 120 70" aria-hidden="true"><path d="M8 8h70l36 27-36 27H8z" fill="#ffd24d" stroke="#1a1730" stroke-width="3" stroke-linejoin="round"/><circle cx="24" cy="35" r="6" fill="#1a1730"/><text x="42" y="42" font-size="22" font-weight="800" fill="#1a1730" font-family="Bricolage Grotesque,system-ui,sans-serif">%</text></svg>',
+};
+function campaignBannerHTML(c, { cta = true } = {}) {
+  const art = CAMP_ART[c.theme] || CAMP_ART.amigo;
+  const until = c.until.split("-").reverse().slice(0, 2).join("/");
+  const left = c.daysLeft === 0 ? "termina hoje" : c.daysLeft === 1 ? "termina amanhã" : `até ${until}`;
+  return `<section class="camp" data-camp="${c.theme}" ${cta ? 'role="button" tabindex="0" id="camp-banner"' : ""} aria-label="${escapeHTML(c.name)}">
+    <div class="camp-deco" aria-hidden="true"></div>
+    <div class="camp-t">
+      <span class="camp-k">${escapeHTML(c.name)}, ${left}</span>
+      <b class="camp-title">${c.theme === "black" ? `Black Friday<br>até ${c.pct}% off` : `${escapeHTML(c.name)}<br>${c.pct}% off`}</b>
+      <small>${escapeHTML(c.tagline)}</small>
+      ${cta ? '<span class="camp-cta">Ver mimos</span>' : ""}
+    </div>
+    <div class="camp-art" data-hat="${art.hat || ""}"><img src="img/capi/${art.img}.webp" alt="" width="180" height="180">${art.hat ? `<span class="camp-hat camp-hat-${art.hat}">${HAT_SVG[art.hat]}</span>` : ""}</div>
+  </section>`;
+}
+// aviso da próxima campanha quando não tem nenhuma ativa ("Black Friday começa em 6 dias")
+function campaignTeaserHTML(scope) {
+  const n = nextCampaign(new Date(), autoPromoOpts(scope));
+  if (!n || n.inDays > 10) return "";
+  return `<div class="camp-teaser">${escapeHTML(n.name)} começa ${n.inDays === 1 ? "amanhã" : `em ${n.inDays} dias`}, com até ${n.pct}% de desconto nos mimos.</div>`;
+}
+
 // mimos que aparecem na vitrine: só os que o casal não escondeu, com o valor que o casal ajustou e o nome no gênero certo
 function vitrinePerks() {
   const costs = State.settings?.features?.perk_costs || {};
-  return PERKS.filter((x) => !perkHidden(x.id)).map((x) => {
+  const list = PERKS.filter((x) => !perkHidden(x.id)).map((x) => {
     const ov = costs[x.id];
     return { ...x, title: gen(x.title, genderOf(State.role)), cost: Number.isInteger(ov) && ov >= 1 && ov <= 200 ? ov : x.cost };
   });
+  return withAutoPromos(list, "casal");
 }
 async function renderHomeVitrine() {
   const el = $("#home-vitrine");
@@ -8608,6 +8670,11 @@ async function loadShopData() {
     const discounted = Math.max(1, Math.round(original * (1 - promo.pct / 100)));
     perkById[id] = { ...perkById[id], cost: discounted, originalCost: original, fulfillReward: suggestedReward(discounted), promoPct: promo.pct, promoUntil: promo.until };
   }
+  // promoções por data e oferta do dia (por cima do valor do casal; promoção feita pelo casal tem prioridade)
+  const autoIds = Object.keys(perkById);
+  withAutoPromos(autoIds.map((id) => perkById[id]), "casal").forEach((p) => {
+    perkById[p.id] = p.promoName ? { ...p, fulfillReward: suggestedReward(p.cost) } : p;
+  });
   // item apagado depois de resgatado: usa a recompensa sugerida pelo custo que ficou registrado
   const rewardFor = (r) => perkById[r.perk_id]?.fulfillReward ?? suggestedReward(r.cost);
   return { coins, redemptions, customRows, customPerks, perkById, myCoins, pending, fulfilled, rewardFor };
@@ -8761,15 +8828,25 @@ async function renderShopHubV2() {
       <button role="tab" data-view="history">Histórico</button>
     </div>
     ${tab === "jogos" ? shopGamesCardsHTML() : `
+      ${(() => { const c = currentCampaign("casal"); return c ? `<div style="margin-top:14px;">${campaignBannerHTML(c, { cta: false })}</div>` : campaignTeaserHTML("casal"); })()}
       ${featured ? `<div class="vit" style="margin-top:14px;"><div class="vit-track">${slideHTML({ ...featured, title: gen(featured.title, genderOf(State.role)) }, myCoins, { xl: true })}</div></div>` : ""}
       <div class="section-title">Todos os mimos</div>
       <div class="shop-list">${all.map((p) => shopPerkRowHTML(p, myCoins)).join("")}</div>
+      <label class="shop-promo-toggle"><input type="checkbox" id="toggle-holiday-promos" ${State.settings?.features?.holiday_promos !== false ? "checked" : ""}><span>Promoções por data e oferta do dia<small>Black Friday, Natal, Ano Novo e outras datas. Valem para vocês dois.</small></span></label>
       <button class="shop-add" id="btn-shop-create"><span class="shop-add-ic">${icon("lightbulb", { size: 20 })}</span><span><b>Criar um mimo de vocês</b><small>${customRows.length ? `${customRows.length} criado${customRows.length === 1 ? "" : "s"} por vocês` : "com preço e regras do casal"}</small></span></button>`}
   `;
   view.querySelectorAll("[data-stab]").forEach((b) => b.addEventListener("click", () => { State.shopTab = b.dataset.stab; renderShopHubV2(); }));
   view.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => { State.shopView = b.dataset.view; renderShop(); }));
   if (tab === "jogos") { wireShopGames(); return; }
   $("#btn-shop-create")?.addEventListener("click", () => { State.shopView = "custom"; renderShop(); });
+  $("#toggle-holiday-promos")?.addEventListener("change", async (e) => {
+    const on = e.target.checked;
+    try {
+      State.settings = await db.updateCoupleFeatures(State.coupleId, (f) => ({ ...f, holiday_promos: on }));
+      setPeopleSettings(State.settings);
+    } catch (err) { alert("Não foi possível salvar. Tente de novo."); e.target.checked = !on; return; }
+    renderShopHubV2();
+  });
   view.querySelector(".vit-slide")?.addEventListener("click", (ev) => {
     const row = $(`#perk-row-${CSS.escape(ev.currentTarget.dataset.vit)}`);
     row?.scrollIntoView({ behavior: "smooth", block: "center" });
