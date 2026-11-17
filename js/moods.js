@@ -80,5 +80,10 @@ const COUPLE_MOOD_IDS = new Set(["apaixonada", "saudade", "carinhosa", "ciumenta
 const GENERAL_FIRST = ["feliz", "animada", "tranquila", "cansada", "estressada", "ansiosa", "triste", "confiante", "inspirada", "pensativa", "mal", "de_boa"];
 const generalRest = MOODS.filter((m) => !COUPLE_MOOD_IDS.has(m.id) && !GENERAL_FIRST.includes(m.id));
 export const GENERAL_MOODS = [...GENERAL_FIRST.map((id) => MOOD_BY_ID[id]).filter(Boolean), ...generalRest];
-const PARTNER_FIRST = ["apaixonada", "carinhosa", "grudenta", "derretida", "saudade", "queria_colo", "cheirinho", "quietinha", "apaixonada_de_novo", "safadinha", "grata", "ciumenta", "melosa", "fofuxa"];
+// primeiro as fofas de casal; depois as do dia a dia (tranquila, feliz, brava, triste...) pra quando o sentimento com o par é comum, não só romântico
+const PARTNER_FIRST = [
+  "apaixonada", "carinhosa", "grudenta", "derretida", "saudade", "queria_colo", "cheirinho", "quietinha", "apaixonada_de_novo", "safadinha", "grata", "melosa", "fofuxa",
+  "tranquila", "feliz", "de_boa", "animada", "confiante", "inspirada", "entediada", "pensativa", "confusa", "envergonhada",
+  "brava", "triste", "ciumenta", "ansiosa", "estressada",
+];
 export const PARTNER_PICKER = PARTNER_FIRST.map((id) => PARTNER_MOOD_BY_ID[id]).filter(Boolean);
