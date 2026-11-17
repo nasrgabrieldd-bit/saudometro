@@ -8167,13 +8167,21 @@ function goToGame(renderFn, ...args) {
 }
 
 // vitrine de mimos no topo do Hoje (só quando a Lojinha está ligada); carrega depois, sem atrasar a tela
+// mimos que aparecem na vitrine: só os que o casal não escondeu, com o valor que o casal ajustou e o nome no gênero certo
+function vitrinePerks() {
+  const costs = State.settings?.features?.perk_costs || {};
+  return PERKS.filter((x) => !perkHidden(x.id)).map((x) => {
+    const ov = costs[x.id];
+    return { ...x, title: gen(x.title, genderOf(State.role)), cost: Number.isInteger(ov) && ov >= 1 && ov <= 200 ? ov : x.cost };
+  });
+}
 async function renderHomeVitrine() {
   const el = $("#home-vitrine");
   if (!el || !coinsOn()) return;
   const balances = await db.getCoinBalances(State.coupleId).catch(() => null);
   if (!balances || !el.isConnected) return;
   const balance = balances[State.role] || 0;
-  el.innerHTML = vitrineHTML(pickVitrine(PERKS, balance), balance);
+  el.innerHTML = vitrineHTML(pickVitrine(vitrinePerks(), balance), balance);
   wireVitrine(el, () => setActiveTab("shop"));
 }
 
@@ -8747,7 +8755,7 @@ async function renderShopHubV2() {
       <button role="tab" data-view="history">Histórico</button>
     </div>
     ${tab === "jogos" ? shopGamesCardsHTML() : `
-      ${featured ? `<div class="vit" style="margin-top:14px;"><div class="vit-track">${slideHTML(featured, myCoins, { xl: true })}</div></div>` : ""}
+      ${featured ? `<div class="vit" style="margin-top:14px;"><div class="vit-track">${slideHTML({ ...featured, title: gen(featured.title, genderOf(State.role)) }, myCoins, { xl: true })}</div></div>` : ""}
       <div class="section-title">Todos os mimos</div>
       <div class="shop-list">${all.map((p) => shopPerkRowHTML(p, myCoins)).join("")}</div>
       <button class="shop-add" id="btn-shop-create"><span class="shop-add-ic">${icon("lightbulb", { size: 20 })}</span><span><b>Criar um mimo de vocês</b><small>${customRows.length ? `${customRows.length} criado${customRows.length === 1 ? "" : "s"} por vocês` : "com preço e regras do casal"}</small></span></button>`}

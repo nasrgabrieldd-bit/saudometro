@@ -1558,3 +1558,17 @@ html.v2 .day-cell.selected:not(.today) { background: var(--accent-soft); box-sha
 html.v2 .entry-item { padding: 12px 0; }
 html.v2 .entry-icon { width: 38px; height: 38px; border-radius: 12px; background: var(--accent-soft); display: grid; place-items: center; font-size: 18px; flex: none; }
 html.v2 .pill { font-weight: 700; }
+
+/* humor: emoções deslizantes com largura suficiente pro nome inteiro */
+html.v2 .mood-btn { flex: 0 0 90px; width: 90px; }
+html.v2 .mood-btn .label { font-size: 10.5px; overflow-wrap: normal; word-break: normal; hyphens: auto; }
+
+/* Modo Amigos: os componentes compartilhados (botões, abas, barras) usam a cor da turma, não o rosa do casal */
+#screen-friends {
+  --accent: var(--friends-accent);
+  --accent-strong: var(--friends-accent-strong);
+  --accent-soft: var(--friends-accent-soft);
+  --accent-btn: var(--friends-accent);
+  --on-accent-btn: var(--on-friends-accent);
+}
+#screen-friends .th-track i { background: var(--friends-accent) !important; }
