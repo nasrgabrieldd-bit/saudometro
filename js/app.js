@@ -4117,6 +4117,7 @@ async function renderFriendsPrivacy() {
     <div class="card">
       <div class="card-sub">Seus dados são seus. Você pode ler como cuidamos deles na nossa política.</div>
       <p class="hint-text" style="text-align:center; margin:10px 0 0;"><a href="privacidade.html" target="_blank" rel="noopener" style="color:var(--friends-accent-strong);">Política de privacidade</a></p>
+      <p class="hint-text" style="text-align:center; margin:6px 0 0;">Respeitamos quem cria: se alguma imagem for sua e você quiser crédito, autorização ou a retirada, <a href="creditos.html" target="_blank" rel="noopener" style="color:var(--friends-accent-strong);">fale com a gente</a>.</p>
     </div>
     <div class="card">
       <div class="card-title" style="font-size:15px;">Excluir minha conta</div>
@@ -9432,6 +9433,7 @@ async function renderProfilePrivacy() {
       <div class="card-sub">Seus dados são seus. Você pode baixar tudo que registrou aqui e ler como cuidamos deles.</div>
       <button class="btn btn-secondary btn-block" id="btn-export-data">Baixar meus dados</button>
       <p class="hint-text" style="text-align:center; margin:10px 0 0;"><a href="privacidade.html" target="_blank" rel="noopener" style="color:var(--accent-strong);">Política de privacidade</a></p>
+      <p class="hint-text" style="text-align:center; margin:6px 0 0;">Respeitamos quem cria: se alguma imagem for sua e você quiser crédito, autorização ou a retirada, <a href="creditos.html" target="_blank" rel="noopener" style="color:var(--accent-strong);">fale com a gente</a>.</p>
     </div>
     <div class="card">
       <div class="card-title" style="font-size:15px;">Excluir minha conta</div>
