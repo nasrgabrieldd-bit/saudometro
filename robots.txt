@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://nasrgabrieldd-bit.github.io/saudometro/sitemap.xml
