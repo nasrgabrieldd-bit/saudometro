@@ -2,18 +2,18 @@
 // Mostra o que dá pra trocar por moedas, com preço e quanto falta pro saldo. Tocar leva pra Lojinha/Prêmios.
 // Cada mimo tem uma capivara e uma cor (pastel no claro, versão profunda no escuro); mimo sem arte própria
 // (por exemplo os criados pelo casal) usa a Capi apaixonada.
-export const CAPI = ["thug", "brava", "confusa", "apaixonada", "dormindo", "gamer", "laptop", "leitura", "pipoca", "fitness", "mochila", "cafe", "festa", "oi", "envergonhada"];
+export const CAPI = ["thug", "brava", "apaixonada", "gamer", "laptop", "leitura", "pipoca", "fitness", "mochila", "cafe", "festa", "oi"];
 const ART = {
-  boa_noite_fofo: { img: "dormindo", bg: "lilac" },
+  boa_noite_fofo: { img: "cafe", bg: "lilac" },
   cafe_na_cama: { img: "cafe", bg: "rose" },
   tarefa_livre: { img: "mochila", bg: "mint", short: "Livre de uma tarefa chata" },
   surpresa: { img: "festa", bg: "butter" },
   fala_sincera: { img: "brava", bg: "rose" },
   passeio_surpresa: { img: "mochila", bg: "peach", short: "Passeio surpresa" },
   sem_recusa: { img: "apaixonada", bg: "peach" },
-  nao_dormir_brigados: { img: "dormindo", bg: "blue" },
+  nao_dormir_brigados: { img: "apaixonada", bg: "blue" },
   tempo_de_respiro: { img: "cafe", bg: "mint" },
-  chocolate: { img: "envergonhada", bg: "peach", tag: "Mais resgatado" },
+  chocolate: { img: "festa", bg: "peach", tag: "Mais resgatado" },
   cinema: { img: "pipoca", bg: "blue", tag: "Oferta do dia" },
   maratona: { img: "laptop", bg: "lilac" },
   curinga: { img: "thug", bg: "butter", tag: "Novo" },
@@ -34,7 +34,7 @@ const ART = {
   coroa_resenha: { img: "festa", bg: "butter", short: "Rei da resenha" },
   vale_carona: { img: "mochila", bg: "lilac" },
   paga_rodada: { img: "cafe", bg: "butter" },
-  chega_atrasado: { img: "dormindo", bg: "mint", short: "Atraso sem climinha" },
+  chega_atrasado: { img: "oi", bg: "mint", short: "Atraso sem climinha" },
   playlist: { img: "gamer", bg: "butter", tag: "Novo" },
 };
 const DEFAULT_ART = { img: "apaixonada", bg: "lilac", tag: "Criado por vocês" };
