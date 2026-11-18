@@ -50,6 +50,7 @@ p { margin: 0; }
 .nav { display: flex; align-items: center; gap: 26px; }
 .nav a { text-decoration: none; font-weight: 600; font-size: 15.5px; color: var(--mut); }
 .nav a:hover { color: var(--ink); }
+.nav-cta { display: none; }
 .nav-actions { display: flex; align-items: center; gap: 10px; }
 .icon-btn { width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; font-size: 18px; display: grid; place-items: center; }
 .menu-btn { display: none; }
@@ -59,6 +60,9 @@ p { margin: 0; }
   .nav a { padding: 14px 0; border-bottom: 1px solid var(--line); font-size: 17px; }
   .menu-btn { display: grid; }
   .nav-actions .btn { display: none; }
+  .nav a.nav-cta { display: inline-flex; margin-top: 14px; border-bottom: 0; color: var(--brand-ink); font-size: 16px; }
+  .top .wrap { padding-top: env(safe-area-inset-top); height: calc(68px + env(safe-area-inset-top)); }
+  .nav { top: calc(68px + env(safe-area-inset-top)); }
 }
 
 /* hero */
@@ -167,3 +171,13 @@ footer .small { margin-top: 30px; font-size: 13.5px; }
 .copy-row code { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; font-size: 14.5px; word-break: break-all; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } .btn:hover, .card:hover { transform: none; } }
+
+/* barra fixa com a ação principal, só no celular, depois de rolar um pouco */
+.dock { display: none; }
+@media (max-width: 880px) {
+  .dock { display: flex; gap: 10px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(12px); border-top: 1px solid var(--line); transform: translateY(110%); transition: transform .25s ease; }
+  .dock.on { transform: none; }
+  .dock .btn { flex: 1; min-height: 48px; padding: 0 14px; }
+  .dock .btn-primary { flex: 2; }
+  footer { padding-bottom: 110px; }
+}
