@@ -1614,3 +1614,6 @@ html.v2 .mood-btn .label { font-size: 10.5px; overflow-wrap: normal; word-break:
 .shop-promo-toggle { display: flex; gap: 12px; align-items: flex-start; margin-top: 14px; cursor: pointer; }
 .shop-promo-toggle input { width: 22px; height: 22px; flex: none; margin-top: 2px; accent-color: var(--accent-btn); }
 .shop-promo-toggle small { display: block; color: var(--text-muted); font-size: 12.5px; }
+
+/* capa da Capi nas telas de entrada */
+.app-cover { display: block; width: 100%; max-width: 420px; height: auto; aspect-ratio: 1024 / 500; object-fit: cover; border-radius: 26px; margin: 0 auto 16px; box-shadow: 0 12px 30px rgba(90,40,160,.28); }

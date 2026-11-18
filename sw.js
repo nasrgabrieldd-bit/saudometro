@@ -1,5 +1,5 @@
 // bump isso a cada deploy relevante: força limpar cache velho do celular
-const CACHE_VERSION = "v126";
+const CACHE_VERSION = "v127";
 const CACHE_NAME = `saudometro-${CACHE_VERSION}`;
 
 // o "casco" do app: guardado no aparelho pra o app abrir mesmo sem internet
@@ -7,7 +7,7 @@ const CACHE_NAME = `saudometro-${CACHE_VERSION}`;
 // O teste tests/arquivos.test.mjs garante que esta lista está completa e sem arquivo faltando.
 const SHELL = [
   "./", "index.html", "manifest.json", "privacidade.html", "termos.html", "excluir-conta.html", "creditos.html", "icons/icon.png", "icons/icon-maskable.png",
-  "img/tema/namorados.webp", "img/tema/natal.webp", "img/tema/anonovo.webp", "img/tema/halloween.webp", "img/capi/thug.webp", "img/capi/brava.webp", "img/capi/confusa.webp", "img/capi/apaixonada.webp", "img/capi/dormindo.webp", "img/capi/gamer.webp", "img/capi/laptop.webp", "img/capi/leitura.webp", "img/capi/pipoca.webp", "img/capi/fitness.webp", "img/capi/mochila.webp", "img/capi/cafe.webp", "img/capi/festa.webp", "img/capi/oi.webp", "img/capi/envergonhada.webp",
+  "img/capa-app.webp", "img/tema/namorados.webp", "img/tema/natal.webp", "img/tema/anonovo.webp", "img/tema/halloween.webp", "img/capi/thug.webp", "img/capi/brava.webp", "img/capi/confusa.webp", "img/capi/apaixonada.webp", "img/capi/dormindo.webp", "img/capi/gamer.webp", "img/capi/laptop.webp", "img/capi/leitura.webp", "img/capi/pipoca.webp", "img/capi/fitness.webp", "img/capi/mochila.webp", "img/capi/cafe.webp", "img/capi/festa.webp", "img/capi/oi.webp", "img/capi/envergonhada.webp",
   "css/fonts.css", "css/styles.css",
   "fonts/baloo2-latin-ext.woff2", "fonts/baloo2-latin.woff2", "fonts/nunito-latin-ext.woff2", "fonts/nunito-latin.woff2", "fonts/bricolage-latin.woff2", "fonts/dmsans-latin.woff2",
   "js/app.js", "js/promos.js", "js/saudade.js", "js/vitrine.js", "js/bookCards.js", "js/books.js", "js/captcha.js", "js/challenges.js", "js/changelog.js", "js/cycle.js", "js/db.js", "js/errors.js", "js/friends.js", "js/friendsPerks.js", "js/gameRooms.js", "js/icons.js", "js/install.js", "js/moods.js",

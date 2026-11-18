@@ -239,7 +239,7 @@ async function boot() {
 function renderGoogleGate() {
   $("#screen-onboarding").style.display = "flex";
   $("#screen-onboarding").innerHTML = `
-    <div class="logo" id="logo-egg" style="cursor:default;">💗</div>
+    <img class="app-cover" id="logo-egg" src="img/capa-app.webp" alt="Capi, a mascote do Saudômetro" width="1024" height="500" />
     <h1>Saudômetro</h1>
     <p class="tagline">o encontrômetro do casal (e, se quiser, da turma de amigos também). Entra com sua conta Google pra começar.</p>
     <div class="stack">
@@ -251,7 +251,7 @@ function renderGoogleGate() {
       <p class="error-text" id="onboarding-error"></p>
     </div>
     <p class="hint-text" id="egg-text" style="text-align:center; font-size:11.5px; font-style:italic; margin:14px 8px 0; display:none;">Um app feito com amor: o Gabriel quis entender melhor a Tata, e criou um jeito de matar a saudade e falar de sentimentos. Que ele ajude você e quem você ama também.</p>
-    <p class="hint-text" style="text-align:center; font-size:10.5px; opacity:.55; margin:10px 8px 0;">👆 toque no coração aí em cima</p>
+    <p class="hint-text" style="text-align:center; font-size:10.5px; opacity:.55; margin:10px 8px 0;">👆 toque na Capi aí em cima</p>
   `;
   $("#age-confirm").addEventListener("change", () => {
     $("#btn-google-gate").disabled = !$("#age-confirm").checked;
@@ -760,7 +760,7 @@ function replayFeatureTour() {
 function renderOnboardingChoices() {
   $("#screen-onboarding").style.display = "flex";
   $("#screen-onboarding").innerHTML = `
-    <div class="logo" id="logo-egg" style="cursor:default;">💗</div>
+    <img class="app-cover" id="logo-egg" src="img/capa-app.webp" alt="Capi, a mascote do Saudômetro" width="1024" height="500" />
     <h1>Saudômetro</h1>
     <p class="tagline">o encontrômetro do casal. Combinem os encontros do mês, guardem o humor do dia e mandem sinais de saudade um pro outro.</p>
     <div class="stack" id="onboarding-choices">
@@ -771,7 +771,7 @@ function renderOnboardingChoices() {
     <div id="onboarding-flow"></div>
     <p class="hint-text" style="text-align:center; font-size:11.5px; margin:16px 8px 0;"><a href="privacidade.html" target="_blank" rel="noopener" style="color:inherit;">Política de privacidade</a></p>
     <p class="hint-text" id="egg-text" style="text-align:center; font-size:11.5px; font-style:italic; margin:14px 8px 0; display:none;">Um app feito com amor: o Gabriel quis entender melhor a Tata, e criou um jeito de matar a saudade e falar de sentimentos. Que ele ajude você e quem você ama também.</p>
-    <p class="hint-text" style="text-align:center; font-size:10.5px; opacity:.55; margin:10px 8px 0;">👆 toque no coração aí em cima</p>
+    <p class="hint-text" style="text-align:center; font-size:10.5px; opacity:.55; margin:10px 8px 0;">👆 toque na Capi aí em cima</p>
   `;
   $("#btn-create").addEventListener("click", startCreateFlow);
   $("#btn-join").addEventListener("click", startJoinFlow);
