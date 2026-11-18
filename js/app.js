@@ -15,6 +15,7 @@ import { dayIndexSince, challengeForDay, friendChallengeForDay } from "./challen
 import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush, subscribeToFriendPush, unsubscribeFromFriendPush, needsHomeScreenFirst, isIOS } from "./push.js";
 import { PERKS, PERK_BY_ID, customToPerk, suggestedReward } from "./perks.js";
 import { planLabel, isPlayApp } from "./plans.js";
+import { applySeasonalDecor } from "./decor.js";
 import { activeCampaign, nextCampaign, applyAutoPromos } from "./promos.js";
 import { emptyGrid, markCell, revealCell, countFound, CELL_EMPTY, CELL_MARK, CELL_CAT } from "./games/starBattle.js";
 import { STAR_BATTLE_LEVELS } from "./games/starBattleLevels.js";
@@ -1328,6 +1329,7 @@ async function enterFriendsMode(group) {
   });
   setFriendsTab("home");
   updateFriendsStreakBadge();
+  applySeasonalDecor(friendsPromosOn());
   maybeShowFriendDateIdeaNudge().then(() => maybeShowChangelog("amigos")).then(() => maybeShowNewIconNotice());
   // dentro de uma sala de jogo, a tela é da sala: não re-renderiza a aba por baixo dela
   State.friendsGameUnsubscribe = friends.subscribeFriendGameChanges(group.id, () => { if (!State.roomView) renderFriendsActiveTab(); });
@@ -4489,6 +4491,7 @@ function wireHumorHero(root) {
 }
 
 async function renderHome() {
+  applySeasonalDecor(State.settings?.features?.holiday_promos !== false);
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const mk = monthKey(State.homeMonth);
   const isCurrentMonth = mk === monthKey(new Date());
@@ -8199,11 +8202,11 @@ const friendPerksPromoted = () => withAutoPromos(FRIEND_PERKS, "turma");
 
 // banner da campanha (Black Friday, Natal, Ano Novo...) com a capivara na fantasia da data
 const CAMP_ART = {
-  black: { img: "thug", hat: "tag", deco: "BLACK" },
-  natal: { photo: "natal", deco: "snow" },
-  anonovo: { photo: "anonovo", deco: "spark" },
-  halloween: { photo: "halloween", deco: "spark" },
-  namorados: { photo: "namorados", deco: "hearts" },
+  black: { banner: "black", deco: "BLACK" },
+  natal: { banner: "natal", deco: "snow" },
+  anonovo: { banner: "anonovo", deco: "spark" },
+  halloween: { banner: "halloween", deco: "spark" },
+  namorados: { banner: "namorados", deco: "hearts" },
   carnaval: { img: "laptop", hat: "party", deco: "spark" },
   pascoa: { img: "oi", hat: null, deco: "spark" },
   amigo: { img: "gamer", hat: null, deco: "spark" },
@@ -8218,7 +8221,7 @@ function campaignBannerHTML(c, { cta = true } = {}) {
   const art = CAMP_ART[c.theme] || CAMP_ART.amigo;
   const until = c.until.split("-").reverse().slice(0, 2).join("/");
   const left = c.daysLeft === 0 ? "termina hoje" : c.daysLeft === 1 ? "termina amanhã" : `até ${until}`;
-  return `<section class="camp" data-camp="${c.theme}" ${cta ? 'role="button" tabindex="0" id="camp-banner"' : ""} aria-label="${escapeHTML(c.name)}">
+  return `<section class="camp${art.banner ? " camp-wide" : ""}" data-camp="${c.theme}" ${art.banner ? `style="background-image:url(img/tema/banner-${art.banner}.webp)"` : ""} ${cta ? 'role="button" tabindex="0" id="camp-banner"' : ""} aria-label="${escapeHTML(c.name)}">
     <div class="camp-deco" aria-hidden="true"></div>
     <div class="camp-t">
       <span class="camp-k">${escapeHTML(c.name)}, ${left}</span>
@@ -8226,7 +8229,7 @@ function campaignBannerHTML(c, { cta = true } = {}) {
       <small>${escapeHTML(c.tagline)}</small>
       ${cta ? '<span class="camp-cta">Ver mimos</span>' : ""}
     </div>
-    ${art.photo ? `<div class="camp-art camp-photo"><img src="img/tema/${art.photo}.webp" alt="" width="170" height="170"></div>` : `<div class="camp-art" data-hat="${art.hat || ""}"><img src="img/capi/${art.img}.webp" alt="" width="180" height="180">${art.hat ? `<span class="camp-hat camp-hat-${art.hat}">${HAT_SVG[art.hat]}</span>` : ""}</div>`}
+    ${art.banner ? "" : `<div class="camp-art" data-hat="${art.hat || ""}"><img src="img/capi/${art.img}.webp" alt="" width="180" height="180">${art.hat ? `<span class="camp-hat camp-hat-${art.hat}">${HAT_SVG[art.hat]}</span>` : ""}</div>`}
   </section>`;
 }
 // aviso da próxima campanha quando não tem nenhuma ativa ("Black Friday começa em 6 dias")
@@ -10303,7 +10306,7 @@ async function maybeShowLoveDayNudge() {
 
 // aviso do ícone novo: o ícone da tela inicial só troca se a pessoa reinstalar o atalho. Aparece só
 // no app instalado pelo navegador (no app da Play, a atualização da loja troca o ícone), até 3 vezes.
-const NEW_ICON_KEY = "saudometro-icon-novo";
+const NEW_ICON_KEY = "saudometro-icon-natal";
 const NEW_ICON_URL = "https://nasrgabrieldd-bit.github.io/saudometro/";
 function maybeShowNewIconNotice() {
   let state = 0;
@@ -10317,15 +10320,15 @@ function maybeShowNewIconNotice() {
   return new Promise((resolve) => {
     openModal(`
       <div style="text-align:center;"><img src="icons/icon.png" alt="" width="72" height="72" style="border-radius:18px; box-shadow:0 6px 16px rgba(0,0,0,.2);" /></div>
-      <h3 class="modal-title" style="text-align:center;">Ícone novo na sua tela</h3>
-      <p class="card-sub" style="text-align:center;">A Capi mudou! O app já atualizou sozinho, mas o ícone na tela inicial só troca se você instalar de novo. Se o seu ainda é o antigo (capivara de óculos pixelados), faça assim:</p>
+      <h3 class="modal-title" style="text-align:center;">O ícone de Natal chegou! 🎄</h3>
+      <p class="card-sub" style="text-align:center;">A Capi entrou no clima de Natal! O app já atualizou sozinho, mas o ícone na tela inicial só troca se você instalar de novo. Se o seu ainda não está com o gorro de Natal, faça assim:</p>
       <ol style="margin:12px 0 0; padding-left:20px; font-size:14px; line-height:1.5;">${steps.map((s) => `<li>${s}</li>`).join("")}</ol>
       <p class="hint-text" style="margin-top:12px;">Seus dados ficam guardados na conta. É só entrar com o Google de novo.</p>
       <button class="btn btn-primary btn-block" id="btn-icon-open" style="margin-top:14px;">Abrir no navegador</button>
-      <button class="btn btn-block" id="btn-icon-copy" style="margin-top:8px;">Copiar endereço</button>
+      <button class="btn btn-secondary btn-block" id="btn-icon-copy" style="margin-top:8px;">Copiar endereço</button>
       <p class="hint-text" id="icon-open-msg" style="text-align:center; min-height:16px; margin:6px 0 0;"></p>
-      <button class="btn btn-secondary btn-block" id="btn-icon-done" style="margin-top:6px;">Já está o novo ícone</button>
-      <button class="btn btn-block" id="btn-icon-later" style="margin-top:8px;">Fazer depois</button>
+      <button class="btn btn-secondary btn-block" id="btn-icon-done" style="margin-top:6px;">Já está com o gorro de Natal</button>
+      <button class="btn btn-secondary btn-block" id="btn-icon-later" style="margin-top:8px;">Fazer depois</button>
     `, () => { save(state + 1); closeModal(); resolve(); });
     const msg = (t) => { const el = $("#icon-open-msg"); if (el) el.textContent = t; };
     $("#btn-icon-open").addEventListener("click", () => {

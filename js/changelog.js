@@ -467,6 +467,13 @@ export const CHANGELOG = [
     title: "Promoções por data e oferta do dia",
     text: "A Lojinha agora tem promoções nas datas especiais, com a capivara fantasiada: Black Friday (até 45% off), Natal, Ano Novo, Halloween e outras. Todo dia também tem uma oferta do dia com desconto. Dá para desligar as promoções na própria Lojinha.",
   },
+  {
+    id: "natal-capi-2026-12",
+    tag: "geral",
+    emoji: "🎄",
+    title: "A Capi veio de gorro de Natal",
+    text: "Nova Capi nos mimos, nos jogos e nas campanhas, banners de Natal, Ano Novo e Black Friday com arte nova e um pisca-pisca discreto no topo do app durante dezembro. Dá para desligar o clima de datas em Promoções, na Lojinha.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";

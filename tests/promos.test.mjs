@@ -60,3 +60,11 @@ test("próxima campanha", () => {
   assert.equal(n.id, "black_friday");
   assert.equal(n.inDays, 6);
 });
+
+import { seasonalDecor } from "../js/promos.js";
+test("pisca-pisca de Natal só de 1 a 26 de dezembro", () => {
+  assert.equal(seasonalDecor(new Date(2026, 11, 1)), "natal");
+  assert.equal(seasonalDecor(new Date(2026, 11, 26)), "natal");
+  assert.equal(seasonalDecor(new Date(2026, 11, 27)), null);
+  assert.equal(seasonalDecor(new Date(2026, 10, 30)), null);
+});
