@@ -2,7 +2,7 @@ import { initTheme } from "./theme.js";
 import { icon } from "./icons.js";
 import { compressImage } from "./photo.js";
 import { initErrorReporting, isAccessDenied } from "./errors.js";
-import { installGuideHTML, isInstalled, canPromptInstall, promptInstall, shouldShowInstallHint, dismissInstallHint } from "./install.js";
+import { installGuideHTML, isAndroid, isInstalled, canPromptInstall, promptInstall, shouldShowInstallHint, dismissInstallHint } from "./install.js";
 import { supabase, isConfigured } from "./supabaseClient.js";
 import * as friends from "./friends.js";
 import * as gameRooms from "./gameRooms.js";
@@ -12,7 +12,7 @@ import * as db from "./db.js";
 import { MOODS, MOOD_BY_ID, PARTNER_MOODS, PARTNER_MOOD_BY_ID, GENERAL_MOODS, PARTNER_PICKER, TALK_OPTIONS, TALK_BY_ID } from "./moods.js";
 import { weekIndexSince, questionForWeek } from "./questions.js";
 import { dayIndexSince, challengeForDay, friendChallengeForDay } from "./challenges.js";
-import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush, subscribeToFriendPush, unsubscribeFromFriendPush, needsHomeScreenFirst } from "./push.js";
+import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush, subscribeToFriendPush, unsubscribeFromFriendPush, needsHomeScreenFirst, isIOS } from "./push.js";
 import { PERKS, PERK_BY_ID, customToPerk, suggestedReward } from "./perks.js";
 import { planLabel, isPlayApp } from "./plans.js";
 import { activeCampaign, nextCampaign, applyAutoPromos } from "./promos.js";
@@ -239,7 +239,7 @@ async function boot() {
 function renderGoogleGate() {
   $("#screen-onboarding").style.display = "flex";
   $("#screen-onboarding").innerHTML = `
-    <div class="logo" id="logo-egg" style="cursor:default;">💗</div>
+    <img class="app-cover" id="logo-egg" src="img/capa-app.webp" alt="Capi, a mascote do Saudômetro" width="1024" height="500" />
     <h1>Saudômetro</h1>
     <p class="tagline">o encontrômetro do casal (e, se quiser, da turma de amigos também). Entra com sua conta Google pra começar.</p>
     <div class="stack">
@@ -251,7 +251,7 @@ function renderGoogleGate() {
       <p class="error-text" id="onboarding-error"></p>
     </div>
     <p class="hint-text" id="egg-text" style="text-align:center; font-size:11.5px; font-style:italic; margin:14px 8px 0; display:none;">Um app feito com amor: o Gabriel quis entender melhor a Tata, e criou um jeito de matar a saudade e falar de sentimentos. Que ele ajude você e quem você ama também.</p>
-    <p class="hint-text" style="text-align:center; font-size:10.5px; opacity:.55; margin:10px 8px 0;">👆 toque no coração aí em cima</p>
+    <p class="hint-text" style="text-align:center; font-size:10.5px; opacity:.55; margin:10px 8px 0;">👆 toque na Capi aí em cima</p>
   `;
   $("#age-confirm").addEventListener("change", () => {
     $("#btn-google-gate").disabled = !$("#age-confirm").checked;
@@ -386,6 +386,7 @@ async function enterApp(profile) {
   await maybeShowDateIdeaNudge();
   await maybeShowLoveDayNudge();
   await maybeShowChangelog("casal");
+  await maybeShowNewIconNotice();
 }
 
 // avisa assim que abre o app se o par te resgatou algo na lojinha que você ainda não cumpriu
@@ -760,7 +761,7 @@ function replayFeatureTour() {
 function renderOnboardingChoices() {
   $("#screen-onboarding").style.display = "flex";
   $("#screen-onboarding").innerHTML = `
-    <div class="logo" id="logo-egg" style="cursor:default;">💗</div>
+    <img class="app-cover" id="logo-egg" src="img/capa-app.webp" alt="Capi, a mascote do Saudômetro" width="1024" height="500" />
     <h1>Saudômetro</h1>
     <p class="tagline">o encontrômetro do casal. Combinem os encontros do mês, guardem o humor do dia e mandem sinais de saudade um pro outro.</p>
     <div class="stack" id="onboarding-choices">
@@ -771,7 +772,7 @@ function renderOnboardingChoices() {
     <div id="onboarding-flow"></div>
     <p class="hint-text" style="text-align:center; font-size:11.5px; margin:16px 8px 0;"><a href="privacidade.html" target="_blank" rel="noopener" style="color:inherit;">Política de privacidade</a></p>
     <p class="hint-text" id="egg-text" style="text-align:center; font-size:11.5px; font-style:italic; margin:14px 8px 0; display:none;">Um app feito com amor: o Gabriel quis entender melhor a Tata, e criou um jeito de matar a saudade e falar de sentimentos. Que ele ajude você e quem você ama também.</p>
-    <p class="hint-text" style="text-align:center; font-size:10.5px; opacity:.55; margin:10px 8px 0;">👆 toque no coração aí em cima</p>
+    <p class="hint-text" style="text-align:center; font-size:10.5px; opacity:.55; margin:10px 8px 0;">👆 toque na Capi aí em cima</p>
   `;
   $("#btn-create").addEventListener("click", startCreateFlow);
   $("#btn-join").addEventListener("click", startJoinFlow);
@@ -1327,7 +1328,7 @@ async function enterFriendsMode(group) {
   });
   setFriendsTab("home");
   updateFriendsStreakBadge();
-  maybeShowFriendDateIdeaNudge().then(() => maybeShowChangelog("amigos"));
+  maybeShowFriendDateIdeaNudge().then(() => maybeShowChangelog("amigos")).then(() => maybeShowNewIconNotice());
   // dentro de uma sala de jogo, a tela é da sala: não re-renderiza a aba por baixo dela
   State.friendsGameUnsubscribe = friends.subscribeFriendGameChanges(group.id, () => { if (!State.roomView) renderFriendsActiveTab(); });
 }
@@ -8198,13 +8199,13 @@ const friendPerksPromoted = () => withAutoPromos(FRIEND_PERKS, "turma");
 
 // banner da campanha (Black Friday, Natal, Ano Novo...) com a capivara na fantasia da data
 const CAMP_ART = {
-  black: { img: "gamer", hat: "tag", deco: "BLACK" },
-  natal: { img: "confusa", hat: "santa", deco: "snow" },
-  anonovo: { img: "peso", hat: "party", deco: "spark" },
-  halloween: { img: "brava", hat: "witch", deco: "spark" },
-  namorados: { img: "cobertor", hat: null, deco: "hearts" },
-  carnaval: { img: "gamer", hat: "party", deco: "spark" },
-  pascoa: { img: "batata", hat: null, deco: "spark" },
+  black: { img: "thug", hat: "tag", deco: "BLACK" },
+  natal: { photo: "natal", deco: "snow" },
+  anonovo: { photo: "anonovo", deco: "spark" },
+  halloween: { photo: "halloween", deco: "spark" },
+  namorados: { photo: "namorados", deco: "hearts" },
+  carnaval: { img: "laptop", hat: "party", deco: "spark" },
+  pascoa: { img: "oi", hat: null, deco: "spark" },
   amigo: { img: "gamer", hat: null, deco: "spark" },
 };
 const HAT_SVG = {
@@ -8225,7 +8226,7 @@ function campaignBannerHTML(c, { cta = true } = {}) {
       <small>${escapeHTML(c.tagline)}</small>
       ${cta ? '<span class="camp-cta">Ver mimos</span>' : ""}
     </div>
-    <div class="camp-art" data-hat="${art.hat || ""}"><img src="img/capi/${art.img}.webp" alt="" width="180" height="180">${art.hat ? `<span class="camp-hat camp-hat-${art.hat}">${HAT_SVG[art.hat]}</span>` : ""}</div>
+    ${art.photo ? `<div class="camp-art camp-photo"><img src="img/tema/${art.photo}.webp" alt="" width="170" height="170"></div>` : `<div class="camp-art" data-hat="${art.hat || ""}"><img src="img/capi/${art.img}.webp" alt="" width="180" height="180">${art.hat ? `<span class="camp-hat camp-hat-${art.hat}">${HAT_SVG[art.hat]}</span>` : ""}</div>`}
   </section>`;
 }
 // aviso da próxima campanha quando não tem nenhuma ativa ("Black Friday começa em 6 dias")
@@ -9235,7 +9236,7 @@ ${coinsOn() ? settingsRowHTML({ iconName: "wallet", title: "Moedas", sub: `💰 
 ${settingsRowHTML({ iconName: "lightbulb", title: "Rever as boas-vindas", sub: "Tour rápido do app de novo", id: "btn-replay-tour" })}
     </div>
 
-    <p class="hint-text" style="text-align:center; margin:22px 0 4px; font-size:11px; opacity:0.45;">© 2026 Gabriel Nascimento Santos</p>
+    <p class="hint-text" style="text-align:center; margin:22px 0 4px; font-size:11px; opacity:0.45;">Saudômetro, feito por Gabriel Nascimento Santos<br>© 2026 · Todos os direitos reservados · <a href="termos.html" target="_blank" rel="noopener" style="color:inherit;">Termos</a></p>
   `;
 
   // 5 toques rápidos no avatar abrem o modo dono (senha validada no servidor)
@@ -10297,6 +10298,52 @@ async function maybeShowLoveDayNudge() {
       closeModal();
       resolve();
     });
+  });
+}
+
+// aviso do ícone novo: o ícone da tela inicial só troca se a pessoa reinstalar o atalho. Aparece só
+// no app instalado pelo navegador (no app da Play, a atualização da loja troca o ícone), até 3 vezes.
+const NEW_ICON_KEY = "saudometro-icon-novo";
+const NEW_ICON_URL = "https://nasrgabrieldd-bit.github.io/saudometro/";
+function maybeShowNewIconNotice() {
+  let state = 0;
+  try { state = Number(localStorage.getItem(NEW_ICON_KEY) || 0); } catch (e) { state = 0; }
+  if (state >= 3 || state < 0 || !isInstalled() || isPlayApp()) return Promise.resolve();
+  const save = (v) => { try { localStorage.setItem(NEW_ICON_KEY, String(v)); } catch (e) { /* sem storage: volta a aparecer */ } };
+  const ios = isIOS();
+  const steps = ios
+    ? ["Segure o ícone do Saudômetro e toque em <b>Remover app</b>.", "Abra o Safari em <b>nasrgabrieldd-bit.github.io/saudometro</b>.", "Toque em <b>Compartilhar</b> e depois em <b>Adicionar à Tela de Início</b>."]
+    : ["Segure o ícone do Saudômetro e toque em <b>Desinstalar</b> ou <b>Remover</b>.", "Abra o Chrome em <b>nasrgabrieldd-bit.github.io/saudometro</b>.", "Toque no menu <b>⋮</b> e em <b>Instalar app</b>."];
+  return new Promise((resolve) => {
+    openModal(`
+      <div style="text-align:center;"><img src="icons/icon.png" alt="" width="72" height="72" style="border-radius:18px; box-shadow:0 6px 16px rgba(0,0,0,.2);" /></div>
+      <h3 class="modal-title" style="text-align:center;">Ícone novo na sua tela</h3>
+      <p class="card-sub" style="text-align:center;">A Capi mudou! O app já atualizou sozinho, mas o ícone na tela inicial só troca se você instalar de novo. Se o seu ainda é o antigo (capivara de óculos pixelados), faça assim:</p>
+      <ol style="margin:12px 0 0; padding-left:20px; font-size:14px; line-height:1.5;">${steps.map((s) => `<li>${s}</li>`).join("")}</ol>
+      <p class="hint-text" style="margin-top:12px;">Seus dados ficam guardados na conta. É só entrar com o Google de novo.</p>
+      <button class="btn btn-primary btn-block" id="btn-icon-open" style="margin-top:14px;">Abrir no navegador</button>
+      <button class="btn btn-block" id="btn-icon-copy" style="margin-top:8px;">Copiar endereço</button>
+      <p class="hint-text" id="icon-open-msg" style="text-align:center; min-height:16px; margin:6px 0 0;"></p>
+      <button class="btn btn-secondary btn-block" id="btn-icon-done" style="margin-top:6px;">Já está o novo ícone</button>
+      <button class="btn btn-block" id="btn-icon-later" style="margin-top:8px;">Fazer depois</button>
+    `, () => { save(state + 1); closeModal(); resolve(); });
+    const msg = (t) => { const el = $("#icon-open-msg"); if (el) el.textContent = t; };
+    $("#btn-icon-open").addEventListener("click", () => {
+      // no Android, o endereço "intent" força o Chrome (fora do app instalado); no iPhone o sistema não deixa
+      // sair do app por aqui, então o texto orienta a copiar o endereço e colar no Safari
+      if (isAndroid()) {
+        window.location.href = `intent://${NEW_ICON_URL.replace(/^https:\/\//, "")}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(NEW_ICON_URL)};end`;
+      } else {
+        const w = window.open(NEW_ICON_URL, "_blank", "noopener");
+        if (!w) msg("Copie o endereço e cole no Safari.");
+      }
+    });
+    $("#btn-icon-copy").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(NEW_ICON_URL); msg("Endereço copiado. Cole no navegador."); }
+      catch (e) { msg(NEW_ICON_URL); }
+    });
+    $("#btn-icon-done").addEventListener("click", () => { save(3); closeModal(); resolve(); });
+    $("#btn-icon-later").addEventListener("click", () => { save(state + 1); closeModal(); resolve(); });
   });
 }
 
