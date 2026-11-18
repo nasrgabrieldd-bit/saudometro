@@ -46,3 +46,9 @@ test("a página principal manda visitante novo pro site e deixa quem usa o app n
   }
   assert.ok(html.indexOf("location.replace") < html.indexOf('<link rel="stylesheet"'), "o redirecionamento deve rodar antes de carregar o app");
 });
+
+test("o site e a política não prometem ausência de anúncios (anúncios vêm em breve)", () => {
+  for (const f of ["site/index.html", "site/instalar.html", "privacidade.html"]) {
+    assert.doesNotMatch(ler(f), /sem an[uú]ncios|n[aã]o (usamos|mostramos|temos) (an[uú]ncios|propaganda)/i, `${f} promete que não terá anúncios`);
+  }
+});
