@@ -27,4 +27,10 @@
   };
   tabs.forEach((t) => t.addEventListener("click", () => show(t.dataset.tab)));
   if (tabs.length) show(/iPhone|iPad|iPod/.test(navigator.userAgent) ? "iphone" : /Android/.test(navigator.userAgent) ? "android" : "android");
+  const dock = document.getElementById("dock");
+  if (dock) {
+    const onScroll = () => dock.classList.toggle("on", window.scrollY > 520);
+    addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+  }
 })();
