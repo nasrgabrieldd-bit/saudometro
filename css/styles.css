@@ -1584,10 +1584,12 @@ html.v2 .mood-btn .label { font-size: 10.5px; overflow-wrap: normal; word-break:
 .camp-cta { align-self: flex-start; margin-top: 6px; background: #fff; color: #1a1730; border-radius: 999px; padding: 8px 16px; font: 700 13.5px var(--font-display); }
 .camp-art { position: absolute; right: 6px; bottom: 0; width: 46%; max-width: 190px; z-index: 1; }
 .camp-art img { display: block; width: 100%; height: auto; filter: drop-shadow(0 8px 10px rgba(0,0,0,.35)); }
-.camp:has(.camp-photo) .camp-t { max-width: 54%; }
-.camp:has(.camp-photo) .camp-title { font-size: 25px; }
-.camp-photo { right: 14px; top: 14px; bottom: 14px; width: 38%; max-width: 160px; display: flex; align-items: center; }
-.camp-photo img { border-radius: 24px; aspect-ratio: 1; object-fit: cover; box-shadow: 0 10px 24px rgba(0,0,0,.35); filter: none; }
+/* banner com a arte da Capi da data: a imagem ocupa o fundo, com o texto sobre a parte lisa à esquerda */
+.camp.camp-wide[data-camp] { background-size: cover; background-position: right center; background-repeat: no-repeat; min-height: 200px; }
+.camp-wide::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(20,8,40,.62) 0%, rgba(20,8,40,.38) 42%, transparent 66%); pointer-events: none; }
+.camp-wide .camp-deco { display: none; }
+.camp-wide .camp-title { font-size: 24px; }
+.camp-wide .camp-t { max-width: 58%; text-shadow: 0 2px 12px rgba(20,8,40,.55); }
 .camp-hat { position: absolute; display: block; filter: drop-shadow(0 4px 6px rgba(0,0,0,.3)); }
 .camp-hat svg { display: block; width: 100%; height: auto; }
 .camp-hat-santa { width: 44%; left: 20%; top: -4%; transform: rotate(-8deg); }
@@ -1617,3 +1619,11 @@ html.v2 .mood-btn .label { font-size: 10.5px; overflow-wrap: normal; word-break:
 
 /* capa da Capi nas telas de entrada */
 .app-cover { display: block; width: 100%; max-width: 420px; height: auto; aspect-ratio: 1024 / 500; object-fit: cover; border-radius: 26px; margin: 0 auto 16px; box-shadow: 0 12px 30px rgba(90,40,160,.28); }
+
+/* pisca-pisca de Natal (js/decor.js) */
+#seasonal-decor { position: fixed; top: env(safe-area-inset-top); left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; height: 22px; pointer-events: none; z-index: 45; }
+@media (min-width: 768px) { #seasonal-decor { max-width: 640px; } }
+#seasonal-decor .xl-wire { position: absolute; left: 2%; right: 2%; top: 3px; height: 8px; border-top: 1.5px solid rgba(60,40,40,.45); border-radius: 50% / 100% 100% 0 0; }
+#seasonal-decor i { position: absolute; width: 8px; height: 11px; margin-left: -4px; border-radius: 50% 50% 55% 55%; background: var(--c); box-shadow: 0 0 8px 2px var(--c); animation: xl-blink 1.6s ease-in-out infinite; }
+@keyframes xl-blink { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { #seasonal-decor i { animation: none; } }

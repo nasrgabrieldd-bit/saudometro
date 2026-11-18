@@ -113,3 +113,10 @@ export function applyAutoPromos(perks, date, { scope = "casal", anniversary = nu
     return { ...p, cost, originalCost: p.cost, promoPct: pct, promoUntil: until, promoName: name };
   });
 }
+
+// enfeite de data dentro do app (detalhes pequenos, sem desconto): 1 a 26 de dezembro = pisca-pisca de Natal
+export function seasonalDecor(date = new Date()) {
+  const m = date.getMonth(), d = date.getDate();
+  if (m === 11 && d <= 26) return "natal";
+  return null;
+}
