@@ -102,7 +102,7 @@ section { padding: 84px 0; }
 .card:hover { transform: translateY(-4px); box-shadow: var(--shadow); }
 .card img { width: 88px; height: 88px; object-fit: contain; }
 @media (max-width: 1000px) { .grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 560px) { .grid { grid-template-columns: 1fr; } .card { grid-template-columns: 76px 1fr; gap: 6px 16px; } .card img { grid-row: span 2; width: 76px; height: 76px; } }
+@media (max-width: 560px) { .grid { grid-template-columns: 1fr; } .grid .card { grid-template-columns: 76px minmax(0, 1fr); gap: 6px 16px; } .grid .card img { grid-row: span 2; width: 76px; height: 76px; } }
 
 /* telas do app */
 .phones { display: flex; gap: 22px; overflow-x: auto; padding: 10px 22px 26px; scroll-snap-type: x mandatory; justify-content: center; }
