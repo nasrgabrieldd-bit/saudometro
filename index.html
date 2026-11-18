@@ -2,6 +2,23 @@
 <html lang="pt-BR" class="v2">
 <head>
   <meta charset="UTF-8" />
+  <script>
+    /* Quem chega pelo navegador na página principal vê o site (site/); quem já usa o app (instalado, app da Play,
+       com conta, ou vindo com ?app) abre direto o app. Qualquer endereço com parâmetro (convite, login) fica no app. */
+    (function () {
+      try {
+        var q = location.search, hs = location.hash, ls = localStorage, ref = document.referrer || "";
+        if (ref.indexOf("android-app://") === 0) ls.setItem("saudometro-play", "1");
+        if (/(^|[?&])app(=|&|$)/.test(q)) ls.setItem("saudometro-web", "1");
+        var standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+        var hasSession = false;
+        for (var i = 0; i < ls.length; i++) { var k = ls.key(i) || ""; if (k.indexOf("sb-") === 0 && k.slice(-11) === "-auth-token") { hasSession = true; break; } }
+        var stay = standalone || hasSession || q || hs || ls.getItem("saudometro-play") || ls.getItem("saudometro-web");
+        var bot = /bot|crawl|spider|lighthouse/i.test(navigator.userAgent);
+        if (!stay && !bot && /\/(index\.html)?$/.test(location.pathname)) location.replace("site/");
+      } catch (e) { /* sem storage: abre o app normalmente */ }
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
   <title>Saudômetro</title>
   <meta name="description" content="O encontrômetro do casal. Combine os encontros do mês, registre o humor do dia e mande sinais de saudade." />
