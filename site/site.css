@@ -181,3 +181,14 @@ footer .small { margin-top: 30px; font-size: 13.5px; }
   .dock .btn-primary { flex: 2; }
   footer { padding-bottom: 110px; }
 }
+
+/* Modo Amigos: mesma estrutura, com o violeta da turma */
+.turma { background: radial-gradient(900px 420px at 10% 0%, var(--violet-soft), transparent 70%); }
+.turma .eyebrow { background: var(--violet); color: #fff; }
+.grid3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid3 .card:hover { border-color: var(--violet); }
+@media (max-width: 1000px) { .grid3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .grid3 { grid-template-columns: 1fr; } }
+.turma-extra { max-width: 760px; margin: 36px auto 0; text-align: center; display: grid; gap: 18px; justify-items: center; color: var(--mut); }
+.turma-extra b { color: var(--ink); }
+.turma .phones { margin-top: 40px; }
