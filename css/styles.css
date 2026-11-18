@@ -711,19 +711,19 @@ label.field-label:first-child { margin-top: 0; }
 
 .bottom-nav {
   position: fixed;
-  bottom: calc(10px + env(safe-area-inset-bottom));
+  bottom: 0;
   left: 50%;
   transform: translateX(-50%);
-  width: calc(100% - 20px);
-  max-width: 460px;
+  width: 100%;
+  max-width: 480px;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 6px;
-  box-shadow: 0 8px 28px rgba(180, 60, 110, 0.18);
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  box-shadow: 0 -6px 18px rgba(60, 30, 90, 0.08);
 }
 /* só a aba ativa mostra o nome (vira uma pílula rosa); as outras ficam só no ícone */
 .nav-btn {
