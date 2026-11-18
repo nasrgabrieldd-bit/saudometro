@@ -12,7 +12,7 @@ import * as db from "./db.js";
 import { MOODS, MOOD_BY_ID, PARTNER_MOODS, PARTNER_MOOD_BY_ID, GENERAL_MOODS, PARTNER_PICKER, TALK_OPTIONS, TALK_BY_ID } from "./moods.js";
 import { weekIndexSince, questionForWeek } from "./questions.js";
 import { dayIndexSince, challengeForDay, friendChallengeForDay } from "./challenges.js";
-import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush, subscribeToFriendPush, unsubscribeFromFriendPush, needsHomeScreenFirst } from "./push.js";
+import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush, subscribeToFriendPush, unsubscribeFromFriendPush, needsHomeScreenFirst, isIOS } from "./push.js";
 import { PERKS, PERK_BY_ID, customToPerk, suggestedReward } from "./perks.js";
 import { planLabel, isPlayApp } from "./plans.js";
 import { activeCampaign, nextCampaign, applyAutoPromos } from "./promos.js";
@@ -386,6 +386,7 @@ async function enterApp(profile) {
   await maybeShowDateIdeaNudge();
   await maybeShowLoveDayNudge();
   await maybeShowChangelog("casal");
+  await maybeShowNewIconNotice();
 }
 
 // avisa assim que abre o app se o par te resgatou algo na lojinha que você ainda não cumpriu
@@ -1327,7 +1328,7 @@ async function enterFriendsMode(group) {
   });
   setFriendsTab("home");
   updateFriendsStreakBadge();
-  maybeShowFriendDateIdeaNudge().then(() => maybeShowChangelog("amigos"));
+  maybeShowFriendDateIdeaNudge().then(() => maybeShowChangelog("amigos")).then(() => maybeShowNewIconNotice());
   // dentro de uma sala de jogo, a tela é da sala: não re-renderiza a aba por baixo dela
   State.friendsGameUnsubscribe = friends.subscribeFriendGameChanges(group.id, () => { if (!State.roomView) renderFriendsActiveTab(); });
 }
@@ -10297,6 +10298,33 @@ async function maybeShowLoveDayNudge() {
       closeModal();
       resolve();
     });
+  });
+}
+
+// aviso do ícone novo: o ícone da tela inicial só troca se a pessoa reinstalar o atalho. Aparece só
+// no app instalado pelo navegador (no app da Play, a atualização da loja troca o ícone), até 3 vezes.
+const NEW_ICON_KEY = "saudometro-icon-novo";
+function maybeShowNewIconNotice() {
+  let state = 0;
+  try { state = Number(localStorage.getItem(NEW_ICON_KEY) || 0); } catch (e) { state = 0; }
+  if (state >= 3 || state < 0 || !isInstalled() || isPlayApp()) return Promise.resolve();
+  const save = (v) => { try { localStorage.setItem(NEW_ICON_KEY, String(v)); } catch (e) { /* sem storage: volta a aparecer */ } };
+  const ios = isIOS();
+  const steps = ios
+    ? ["Segure o ícone do Saudômetro e toque em <b>Remover app</b>.", "Abra o Safari em <b>nasrgabrieldd-bit.github.io/saudometro</b>.", "Toque em <b>Compartilhar</b> e depois em <b>Adicionar à Tela de Início</b>."]
+    : ["Segure o ícone do Saudômetro e toque em <b>Desinstalar</b> ou <b>Remover</b>.", "Abra o Chrome em <b>nasrgabrieldd-bit.github.io/saudometro</b>.", "Toque no menu <b>⋮</b> e em <b>Instalar app</b>."];
+  return new Promise((resolve) => {
+    openModal(`
+      <div style="text-align:center;"><img src="icons/icon.png" alt="" width="72" height="72" style="border-radius:18px; box-shadow:0 6px 16px rgba(0,0,0,.2);" /></div>
+      <h3 class="modal-title" style="text-align:center;">Ícone novo na sua tela</h3>
+      <p class="card-sub" style="text-align:center;">A Capi mudou! O app já atualizou sozinho, mas o ícone na tela inicial só troca se você instalar de novo. Se o seu ainda é o antigo (capivara de óculos pixelados), faça assim:</p>
+      <ol style="margin:12px 0 0; padding-left:20px; font-size:14px; line-height:1.5;">${steps.map((s) => `<li>${s}</li>`).join("")}</ol>
+      <p class="hint-text" style="margin-top:12px;">Seus dados ficam guardados na conta. É só entrar com o Google de novo.</p>
+      <button class="btn btn-primary btn-block" id="btn-icon-done" style="margin-top:14px;">Já está o novo ícone</button>
+      <button class="btn btn-block" id="btn-icon-later" style="margin-top:8px;">Fazer depois</button>
+    `, () => { save(state + 1); closeModal(); resolve(); });
+    $("#btn-icon-done").addEventListener("click", () => { save(3); closeModal(); resolve(); });
+    $("#btn-icon-later").addEventListener("click", () => { save(state + 1); closeModal(); resolve(); });
   });
 }
 
