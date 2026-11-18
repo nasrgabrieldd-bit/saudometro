@@ -15,7 +15,8 @@ import { dayIndexSince, challengeForDay, friendChallengeForDay } from "./challen
 import { pushSupported, permissionState, isSubscribed, subscribeToPush, unsubscribeFromPush, subscribeToFriendPush, unsubscribeFromFriendPush, needsHomeScreenFirst, isIOS } from "./push.js";
 import { PERKS, PERK_BY_ID, customToPerk, suggestedReward } from "./perks.js";
 import { planLabel, isPlayApp } from "./plans.js";
-import { applySeasonalDecor } from "./decor.js";
+import { watchSeason } from "./seasons.js";
+import { initSeasonDecor } from "./decor.js";
 import { activeCampaign, nextCampaign, applyAutoPromos } from "./promos.js";
 import { emptyGrid, markCell, revealCell, countFound, CELL_EMPTY, CELL_MARK, CELL_CAT } from "./games/starBattle.js";
 import { STAR_BATTLE_LEVELS } from "./games/starBattleLevels.js";
@@ -183,6 +184,8 @@ function showBootError(e) {
 }
 
 async function boot() {
+  watchSeason();
+  initSeasonDecor();
   watchForAppUpdates();
   sbgSyncPending().catch(() => {}); // aproveita que abriu o app com internet pra tentar salvar vitórias do jogo que ficaram pendentes offline
   if (!isConfigured) {
@@ -1329,7 +1332,6 @@ async function enterFriendsMode(group) {
   });
   setFriendsTab("home");
   updateFriendsStreakBadge();
-  applySeasonalDecor(friendsPromosOn());
   maybeShowFriendDateIdeaNudge().then(() => maybeShowChangelog("amigos")).then(() => maybeShowNewIconNotice());
   // dentro de uma sala de jogo, a tela é da sala: não re-renderiza a aba por baixo dela
   State.friendsGameUnsubscribe = friends.subscribeFriendGameChanges(group.id, () => { if (!State.roomView) renderFriendsActiveTab(); });
@@ -4491,7 +4493,6 @@ function wireHumorHero(root) {
 }
 
 async function renderHome() {
-  applySeasonalDecor(State.settings?.features?.holiday_promos !== false);
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const mk = monthKey(State.homeMonth);
   const isCurrentMonth = mk === monthKey(new Date());
