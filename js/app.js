@@ -2,7 +2,7 @@ import { initTheme } from "./theme.js";
 import { icon } from "./icons.js";
 import { compressImage } from "./photo.js";
 import { initErrorReporting, isAccessDenied } from "./errors.js";
-import { installGuideHTML, isInstalled, canPromptInstall, promptInstall, shouldShowInstallHint, dismissInstallHint } from "./install.js";
+import { installGuideHTML, isAndroid, isInstalled, canPromptInstall, promptInstall, shouldShowInstallHint, dismissInstallHint } from "./install.js";
 import { supabase, isConfigured } from "./supabaseClient.js";
 import * as friends from "./friends.js";
 import * as gameRooms from "./gameRooms.js";
@@ -10304,6 +10304,7 @@ async function maybeShowLoveDayNudge() {
 // aviso do ícone novo: o ícone da tela inicial só troca se a pessoa reinstalar o atalho. Aparece só
 // no app instalado pelo navegador (no app da Play, a atualização da loja troca o ícone), até 3 vezes.
 const NEW_ICON_KEY = "saudometro-icon-novo";
+const NEW_ICON_URL = "https://nasrgabrieldd-bit.github.io/saudometro/";
 function maybeShowNewIconNotice() {
   let state = 0;
   try { state = Number(localStorage.getItem(NEW_ICON_KEY) || 0); } catch (e) { state = 0; }
@@ -10320,9 +10321,27 @@ function maybeShowNewIconNotice() {
       <p class="card-sub" style="text-align:center;">A Capi mudou! O app já atualizou sozinho, mas o ícone na tela inicial só troca se você instalar de novo. Se o seu ainda é o antigo (capivara de óculos pixelados), faça assim:</p>
       <ol style="margin:12px 0 0; padding-left:20px; font-size:14px; line-height:1.5;">${steps.map((s) => `<li>${s}</li>`).join("")}</ol>
       <p class="hint-text" style="margin-top:12px;">Seus dados ficam guardados na conta. É só entrar com o Google de novo.</p>
-      <button class="btn btn-primary btn-block" id="btn-icon-done" style="margin-top:14px;">Já está o novo ícone</button>
+      <button class="btn btn-primary btn-block" id="btn-icon-open" style="margin-top:14px;">Abrir no navegador</button>
+      <button class="btn btn-block" id="btn-icon-copy" style="margin-top:8px;">Copiar endereço</button>
+      <p class="hint-text" id="icon-open-msg" style="text-align:center; min-height:16px; margin:6px 0 0;"></p>
+      <button class="btn btn-secondary btn-block" id="btn-icon-done" style="margin-top:6px;">Já está o novo ícone</button>
       <button class="btn btn-block" id="btn-icon-later" style="margin-top:8px;">Fazer depois</button>
     `, () => { save(state + 1); closeModal(); resolve(); });
+    const msg = (t) => { const el = $("#icon-open-msg"); if (el) el.textContent = t; };
+    $("#btn-icon-open").addEventListener("click", () => {
+      // no Android, o endereço "intent" força o Chrome (fora do app instalado); no iPhone o sistema não deixa
+      // sair do app por aqui, então o texto orienta a copiar o endereço e colar no Safari
+      if (isAndroid()) {
+        window.location.href = `intent://${NEW_ICON_URL.replace(/^https:\/\//, "")}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(NEW_ICON_URL)};end`;
+      } else {
+        const w = window.open(NEW_ICON_URL, "_blank", "noopener");
+        if (!w) msg("Copie o endereço e cole no Safari.");
+      }
+    });
+    $("#btn-icon-copy").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(NEW_ICON_URL); msg("Endereço copiado. Cole no navegador."); }
+      catch (e) { msg(NEW_ICON_URL); }
+    });
     $("#btn-icon-done").addEventListener("click", () => { save(3); closeModal(); resolve(); });
     $("#btn-icon-later").addEventListener("click", () => { save(state + 1); closeModal(); resolve(); });
   });
