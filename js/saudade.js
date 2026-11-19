@@ -81,45 +81,47 @@ export const TREND_TEXT = { up: "📈 subindo", down: "📉 descendo", flat: "�
 // "2026-11-19" -> "19/11"
 export const shortDay = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 
-// gráfico de barras por dia: uma ou duas barras (series) por coluna, altura = nível * 10%
-// opts: { series: [{ id, label, cls }], showNumbers }
-export function saudadeChartHTML(points, opts) {
-  const { series, showNumbers = true } = opts;
+const WEEKDAYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+export function weekdayOf(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return WEEKDAYS[new Date(y, m - 1, d).getDay()];
+}
+
+// gráfico de uma pessoa (ou da média da turma): uma barra por dia, altura = nível * 10%.
+// opts: { id, label, cls, showNumbers }  (showNumbers: números em cima das barras e dia da semana embaixo)
+export function saudadeChartHTML(points, { id, label, cls, showNumbers = true }) {
   const cols = points.map((p, i) => {
-    const bars = series.map((s) => {
-      const v = p.values[s.id];
-      const label = v == null ? `${s.label}: não marcou` : `${s.label}: ${v} de 10`;
-      if (v == null) return `<span class="sh-bar sh-empty ${s.cls}" title="${shortDay(p.day)} · ${escapeAttr(label)}"></span>`;
-      return `<span class="sh-bar ${s.cls}" style="height:${Math.max(v * 10, 4)}%" title="${shortDay(p.day)} · ${escapeAttr(label)}">${showNumbers ? `<b>${v}</b>` : ""}</span>`;
-    }).join("");
-    const showLabel = points.length <= 10 || i % 5 === 0 || i === points.length - 1;
-    return `<div class="sh-col"><div class="sh-bars">${bars}</div><div class="sh-day">${showLabel ? shortDay(p.day) : ""}</div></div>`;
+    const v = p.values[id];
+    const tip = `${shortDay(p.day)} · ${v == null ? "não marcou" : `${v} de 10`}`;
+    const bar = v == null
+      ? `<span class="sh-bar sh-empty" title="${escapeAttr(tip)}"></span>`
+      : `<span class="sh-bar ${cls}" style="height:${Math.max(v * 10, 4)}%" title="${escapeAttr(tip)}">${showNumbers ? `<b>${v}</b>` : ""}</span>`;
+    const last = i === points.length - 1;
+    const lab = showNumbers
+      ? `<span class="sh-wd">${last ? "hoje" : weekdayOf(p.day)}</span><span class="sh-dn">${p.day.slice(8, 10)}</span>`
+      : (i % 5 === 0 || last ? `<span class="sh-dn">${shortDay(p.day)}</span>` : "");
+    return `<button type="button" class="sh-col${last ? " sh-now" : ""}" data-sh-day="${p.day}" aria-label="${escapeAttr(`${weekdayOf(p.day)} ${shortDay(p.day)}: ${v == null ? "não marcou" : `${v} de 10`}. Toque para ver os detalhes.`)}" aria-pressed="false"><div class="sh-bars">${bar}</div><div class="sh-day">${lab}</div></button>`;
   }).join("");
-  const legend = series.map((s) => `<span class="sh-key"><i class="sh-dot ${s.cls}"></i>${escapeAttr(s.label)}</span>`).join("");
-  return `<div class="sh-chart" role="img" aria-label="Histórico do termômetro de saudade dos últimos ${points.length} dias">${cols}</div><div class="sh-legend">${legend}</div>`;
+  return `<div class="sh-chart" role="img" aria-label="Saudade de ${escapeAttr(label)} nos últimos ${points.length} dias">${cols}</div>`;
 }
 
-// frases de resumo de uma pessoa (ou da média da turma)
-export function saudadeSummaryHTML(stats, who, total) {
-  if (!stats.days) return `<div class="sh-sum"><b>${escapeAttr(who)}</b>: nenhuma marcação nesse período.</div>`;
+// três caixinhas diretas (média, maior nível, dias marcados) + tendência
+export function saudadeStatsHTML(stats, total) {
+  if (!stats.days) return `<p class="sh-empty-msg">Nenhuma marcação nesse período.</p>`;
   const avg = String(stats.avg).replace(".", ",");
-  const parts = [
-    `média <b>${avg}</b>`,
-    `pico <b>${stats.peak}</b> em ${shortDay(stats.peakDay)}`,
-    `marcou <b>${stats.days}</b> de ${total} dias`,
-  ];
-  if (stats.trend) parts.push(TREND_TEXT[stats.trend]);
-  return `<div class="sh-sum"><b>${escapeAttr(who)}</b>: ${parts.join(" · ")}</div>`;
+  const trend = stats.trend ? `<div class="sh-trend sh-trend-${stats.trend}">${TREND_TEXT[stats.trend]} no período</div>` : "";
+  return `<div class="sh-stats">
+    <div class="sh-stat"><span class="sh-stat-n">${avg}</span><span class="sh-stat-l">média</span></div>
+    <div class="sh-stat"><span class="sh-stat-n">${stats.peak}</span><span class="sh-stat-l">maior, em ${shortDay(stats.peakDay)}</span></div>
+    <div class="sh-stat"><span class="sh-stat-n">${stats.days}<small>/${total}</small></span><span class="sh-stat-l">dias marcados</span></div>
+  </div>${trend}`;
 }
 
-// lista dia a dia (mais recente primeiro), só dias com alguma marcação
-export function saudadeListHTML(points, series) {
-  const rows = points.filter((p) => series.some((s) => p.values[s.id] != null)).reverse().map((p) => {
-    const cells = series.map((s) => {
-      const v = p.values[s.id];
-      return `<span class="sh-li-val"><i class="sh-dot ${s.cls}"></i>${escapeAttr(s.label)} <b>${v == null ? "—" : v}</b>${v == null ? "" : ` <em>${escapeAttr(saudadeLabel(Math.round(v)))}</em>`}</span>`;
-    }).join("");
-    return `<li><span class="sh-li-day">${shortDay(p.day)}</span>${cells}</li>`;
-  });
-  return rows.length ? `<ul class="sh-list">${rows.join("")}</ul>` : `<p class="hint-text" style="margin:8px 0 0;">Ainda não há marcações.</p>`;
+// detalhe de um dia: o que cada pessoa marcou (entries: [{ label, level }]), com a frase do termômetro
+export function saudadeDayDetailHTML(iso, entries, isToday = false) {
+  const title = `${isToday ? "hoje" : weekdayOf(iso)}, ${shortDay(iso)}`;
+  const rows = entries.map((e) => e.level == null
+    ? `<li><span class="sh-d-name">${escapeAttr(e.label)}</span><span class="sh-d-none">não marcou</span></li>`
+    : `<li><span class="sh-d-name">${escapeAttr(e.label)}</span><span class="sh-d-lv">${String(e.level).replace(".", ",")}<small>/10</small></span><span class="sh-d-ph">${escapeAttr(saudadeLabel(Math.round(e.level)))}</span></li>`).join("");
+  return `<div class="sh-d-title">${title}</div><ul class="sh-d-list">${rows}</ul>`;
 }
