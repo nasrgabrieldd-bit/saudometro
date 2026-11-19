@@ -10,7 +10,7 @@ import { QUESTIONS, questionForWeek, weekIndexSince } from "../js/questions.js";
 import { CHALLENGES, challengeForDay, dayIndexSince } from "../js/challenges.js";
 import { PERKS, PERK_BY_ID, suggestedReward, customToPerk } from "../js/perks.js";
 import { pickSaudadeNudge } from "../js/nudges.js";
-import { lastDays, saudadeSeries, saudadeStats, saudadeChartHTML, saudadeSummaryHTML, saudadeListHTML, shortDay } from "../js/saudade.js";
+import { lastDays, saudadeSeries, saudadeStats, saudadeChartHTML, saudadeStatsHTML, shortDay, weekdayOf } from "../js/saudade.js";
 
 const reset = () => people.setPeopleSettings(null);
 
@@ -286,19 +286,20 @@ test("histórico da saudade: média, pico, dias marcados e tendência", () => {
   assert.deepEqual(saudadeStats(mk([null, null]), "x"), { days: 0, avg: null, peak: null, peakDay: null, last: null, trend: null });
 });
 
-test("histórico da saudade: HTML do gráfico, resumo e lista escapam o texto e mostram os dias", () => {
-  const defs = [{ id: "x", label: "<b>Ana</b>", cls: "sh-you" }];
+test("histórico da saudade: HTML do gráfico (uma barra por dia) e das caixinhas, com texto escapado", () => {
   const pts = [
     { day: "2026-11-18", values: { x: null } },
     { day: "2026-11-19", values: { x: 8 } },
   ];
-  const chart = saudadeChartHTML(pts, { series: defs });
+  const chart = saudadeChartHTML(pts, { id: "x", label: "<b>Ana</b>", cls: "sh-you", showNumbers: true });
   assert.match(chart, /height:80%/);
   assert.match(chart, /sh-empty/);
+  assert.match(chart, /hoje/); // o último dia aparece como "hoje"
   assert.ok(!chart.includes("<b>Ana</b>"));
-  assert.match(saudadeSummaryHTML(saudadeStats(pts, "x"), "Ana", 2), /média <b>8<\/b>/);
-  assert.match(saudadeSummaryHTML(saudadeStats([], "x"), "Ana", 7), /nenhuma marcação/);
-  const list = saudadeListHTML(pts, defs);
-  assert.match(list, /19\/11/);
-  assert.ok(!list.includes("18/11")); // dia sem marcação não entra na lista
+  assert.equal(weekdayOf("2026-11-19"), "qui");
+  const box = saudadeStatsHTML(saudadeStats(pts, "x"), 2);
+  assert.match(box, /<span class="sh-stat-n">8<\/span><span class="sh-stat-l">média/);
+  assert.match(box, /maior, em 19\/11/);
+  assert.match(box, /1<small>\/2<\/small>/);
+  assert.match(saudadeStatsHTML(saudadeStats([], "x"), 7), /Nenhuma marcação/);
 });

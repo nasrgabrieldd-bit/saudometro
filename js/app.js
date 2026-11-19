@@ -27,7 +27,7 @@ import { cycleInfo, cycleRingSVG, cycleLegendHTML, cycleTilesHTML, cycleHelpHTML
 import { pickSaudadeNudge } from "./nudges.js";
 import { periodStats, monthsStreak, parseTitleList, cleanTag, searchBooks, lookupBook, STATUS, SOURCES, BOOK_MOODS, BOOK_MOOD_BY_ID, MONTHS_PT } from "./books.js";
 import { pickVitrine, vitrineHTML, wireVitrine, perkThumbHTML, slideHTML } from "./vitrine.js";
-import { saudadeLabel, saudadeAverage, thermoBarHTML, lastDays, saudadeSeries, saudadeStats, saudadeChartHTML, saudadeSummaryHTML, saudadeListHTML } from "./saudade.js";
+import { saudadeLabel, saudadeAverage, thermoBarHTML, lastDays, saudadeSeries, saudadeStats, saudadeChartHTML, saudadeStatsHTML } from "./saudade.js";
 import { buildCards, canvasToBlob, shareOrDownload } from "./bookCards.js";
 import { nameOf, genderOf, emojiOf, gen, genMixed, cleanName, setPeopleSettings, defaultEmojis, legacyPeople, feat, goalTarget, HOME_WIDGETS, homeOrder, homeWidgetOn, togetherSince, coinRule, luckyOn, perkHidden, COIN_DEFAULTS } from "./people.js";
 import {
@@ -6366,37 +6366,39 @@ function wireSaudade(save, rerender) {
   });
 }
 
-// histórico do termômetro (casal e turma): barras por dia, resumo e lista dia a dia
+// histórico do termômetro (casal e turma): escolhe quem e o período, vê as barras e 3 números
 function saudadeHistoryCardHTML(quem = "") {
   return `
     <div class="card sh-card" id="sh-card">
       <div class="card-title">Histórico da saudade${quem ? ` ${quem}` : ""}</div>
-      <div class="card-sub">Como o termômetro foi variando, dia a dia.</div>
-      <div class="sh-tabs" role="group" aria-label="Período">
-        <button type="button" class="sh-tab" data-sh-range="7">7 dias</button>
-        <button type="button" class="sh-tab" data-sh-range="30">30 dias</button>
+      <div class="sh-ctl">
+        <div class="sh-seg" id="sh-who" role="group" aria-label="De quem"></div>
+        <div class="sh-seg" role="group" aria-label="Período">
+          <button type="button" data-sh-range="7">7 dias</button>
+          <button type="button" data-sh-range="30">30 dias</button>
+        </div>
       </div>
       <div id="sh-body"></div>
-      <details class="sh-details"><summary>Ver dia a dia</summary><div id="sh-list"></div></details>
     </div>`;
 }
 
 function wireSaudadeHistory(rows, defs) {
   const card = $("#sh-card");
   if (!card) return;
-  const draw = (n) => {
+  let who = defs[0].id;
+  let n = 7;
+  $("#sh-who").innerHTML = defs.map((d) => `<button type="button" data-sh-who="${d.id}">${escapeHTML(d.label)}</button>`).join("");
+  const draw = () => {
+    const def = defs.find((d) => d.id === who);
     const points = saudadeSeries(rows, lastDays(new Date(), n), defs);
-    $("#sh-body").innerHTML = saudadeChartHTML(points, { series: defs, showNumbers: n <= 10 })
-      + defs.map((d) => saudadeSummaryHTML(saudadeStats(points, d.id), d.label, n)).join("");
-    $("#sh-list").innerHTML = saudadeListHTML(points, defs);
-    card.querySelectorAll("[data-sh-range]").forEach((b) => {
-      const on = Number(b.dataset.shRange) === n;
-      b.classList.toggle("selected", on);
-      b.setAttribute("aria-pressed", String(on));
-    });
+    $("#sh-body").innerHTML = saudadeChartHTML(points, { id: def.id, label: def.label, cls: def.cls, showNumbers: n <= 10 })
+      + saudadeStatsHTML(saudadeStats(points, def.id), n);
+    card.querySelectorAll("[data-sh-range]").forEach((b) => { const on = Number(b.dataset.shRange) === n; b.classList.toggle("selected", on); b.setAttribute("aria-pressed", String(on)); });
+    card.querySelectorAll("[data-sh-who]").forEach((b) => { const on = b.dataset.shWho === who; b.classList.toggle("selected", on); b.setAttribute("aria-pressed", String(on)); });
   };
-  card.querySelectorAll("[data-sh-range]").forEach((b) => b.addEventListener("click", () => draw(Number(b.dataset.shRange))));
-  draw(7);
+  card.querySelectorAll("[data-sh-range]").forEach((b) => b.addEventListener("click", () => { n = Number(b.dataset.shRange); draw(); }));
+  card.querySelectorAll("[data-sh-who]").forEach((b) => b.addEventListener("click", () => { who = b.dataset.shWho; draw(); }));
+  draw();
 }
 
 // ================= CONVITES =================

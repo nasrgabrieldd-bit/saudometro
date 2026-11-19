@@ -479,7 +479,7 @@ export const CHANGELOG = [
     tag: "geral",
     emoji: "📈",
     title: "Histórico da saudade",
-    text: "Na aba Humor, logo abaixo do termômetro, agora tem o histórico: veja como a saudade foi variando nos últimos 7 ou 30 dias, com média, pico e a lista dia a dia.",
+    text: "Na aba Humor, logo abaixo do termômetro, agora tem o histórico: escolha você ou seu par e veja como a saudade foi variando nos últimos 7 ou 30 dias.",
   },
 ];
 
