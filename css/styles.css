@@ -1394,6 +1394,36 @@ button.bk-tag { cursor: pointer; }
 .th-scale { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); }
 @media (prefers-reduced-motion: reduce) { .th-track i { transition: none; } }
 
+/* histórico da saudade */
+.sh-tabs { display: inline-flex; gap: 6px; margin: 4px 0 14px; padding: 4px; border-radius: 999px; background: var(--surface-sunk); }
+.sh-tab { border: 0; background: transparent; color: var(--text-muted); font: 800 13px var(--font-body); padding: 8px 16px; border-radius: 999px; cursor: pointer; min-height: 36px; }
+.sh-tab.selected { background: var(--surface); color: var(--text); box-shadow: var(--shadow-tap); }
+.sh-chart { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 3px; align-items: end; height: 150px; padding-top: 6px; border-bottom: 1px solid var(--border); }
+.sh-col { display: flex; flex-direction: column; justify-content: flex-end; height: 100%; min-width: 0; }
+.sh-bars { display: flex; align-items: flex-end; justify-content: center; gap: 2px; height: calc(100% - 18px); }
+.sh-bar { position: relative; flex: 1; max-width: 22px; border-radius: 7px 7px 3px 3px; min-height: 3px; display: flex; justify-content: center; }
+.sh-bar b { position: absolute; top: -17px; font-size: 11px; font-weight: 800; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.sh-bar.sh-empty { height: 3px; background: var(--border); opacity: .6; }
+.sh-you { background: var(--accent-strong); }
+.sh-other { background: var(--plum); }
+.sh-avg { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
+.sh-day { height: 18px; margin-top: 4px; font-size: 10.5px; color: var(--text-muted); text-align: center; white-space: nowrap; overflow: visible; }
+.sh-legend { display: flex; gap: 14px; flex-wrap: wrap; margin: 10px 0 4px; font-size: 12.5px; font-weight: 700; }
+.sh-key { display: inline-flex; align-items: center; gap: 6px; }
+.sh-dot { display: inline-block; width: 11px; height: 11px; border-radius: 4px; flex: none; }
+.sh-sum { margin-top: 8px; font-size: 13.5px; line-height: 1.45; color: var(--text-muted); }
+.sh-sum b { color: var(--text); }
+.sh-details { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+.sh-details summary { cursor: pointer; font-weight: 800; font-size: 14px; padding: 6px 0; }
+.sh-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.sh-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; padding: 10px 12px; background: var(--surface-alt); border-radius: var(--radius-sm); font-size: 13.5px; }
+.sh-li-day { font-weight: 800; min-width: 44px; font-variant-numeric: tabular-nums; }
+.sh-li-val { display: inline-flex; align-items: baseline; gap: 5px; }
+.sh-li-val em { color: var(--text-muted); font-style: normal; font-size: 12.5px; }
+#screen-friends .sh-you { background: var(--friends-accent-strong); }
+#screen-friends .sh-avg { background: var(--friends-accent-soft); box-shadow: inset 0 0 0 2px var(--friends-accent); }
+@media (max-width: 360px) { .sh-bar b { font-size: 9.5px; } }
+
 
 
 

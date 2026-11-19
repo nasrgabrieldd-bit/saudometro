@@ -474,6 +474,13 @@ export const CHANGELOG = [
     title: "A Capi veio de gorro de Natal",
     text: "Nova Capi nos mimos, nos jogos e nas campanhas, banners de Natal, Ano Novo e Black Friday com arte nova e um pisca-pisca discreto no topo do app durante dezembro. Dá para desligar o clima de datas em Promoções, na Lojinha.",
   },
+  {
+    id: "saudade-historico",
+    tag: "geral",
+    emoji: "📈",
+    title: "Histórico da saudade",
+    text: "Na aba Humor, logo abaixo do termômetro, agora tem o histórico: veja como a saudade foi variando nos últimos 7 ou 30 dias, com média, pico e a lista dia a dia.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
