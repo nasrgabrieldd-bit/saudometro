@@ -10,6 +10,7 @@ import { QUESTIONS, questionForWeek, weekIndexSince } from "../js/questions.js";
 import { CHALLENGES, challengeForDay, dayIndexSince } from "../js/challenges.js";
 import { PERKS, PERK_BY_ID, suggestedReward, customToPerk } from "../js/perks.js";
 import { pickSaudadeNudge } from "../js/nudges.js";
+import { lastDays, saudadeSeries, saudadeStats, saudadeChartHTML, saudadeSummaryHTML, saudadeListHTML, shortDay } from "../js/saudade.js";
 
 const reset = () => people.setPeopleSettings(null);
 
@@ -245,4 +246,59 @@ test("ruído sem como consertar não vai pro registro de erros", () => {
   assert.equal(shouldIgnoreError("ResizeObserver loop completed with undelivered notifications."), true);
   assert.equal(shouldIgnoreError(""), true);
   assert.equal(shouldIgnoreError("x is not defined"), false);
+});
+
+
+// ---------- histórico do termômetro de saudade ----------
+test("histórico da saudade: últimos dias em ordem, cruzando mês e ano", () => {
+  assert.deepEqual(lastDays(new Date(2026, 0, 2), 4), ["2025-12-30", "2025-12-31", "2026-01-01", "2026-01-02"]);
+  assert.equal(lastDays(new Date(2026, 10, 19), 30).length, 30);
+  assert.equal(shortDay("2026-11-19"), "19/11");
+});
+
+test("histórico da saudade: série por dia, com buracos como null", () => {
+  const rows = [
+    { day: "2026-11-17", role: "gabriel", level: 3 },
+    { day: "2026-11-18", role: "gabriel", level: 7 },
+    { day: "2026-11-18", role: "tata", level: 9 },
+  ];
+  const defs = [
+    { id: "eu", label: "Eu", cls: "a", pick: (r) => r.find((x) => x.role === "gabriel")?.level ?? null },
+    { id: "par", label: "Par", cls: "b", pick: (r) => r.find((x) => x.role === "tata")?.level ?? null },
+  ];
+  const pts = saudadeSeries(rows, ["2026-11-16", "2026-11-17", "2026-11-18"], defs);
+  assert.deepEqual(pts.map((p) => p.values.eu), [null, 3, 7]);
+  assert.deepEqual(pts.map((p) => p.values.par), [null, null, 9]);
+});
+
+test("histórico da saudade: média, pico, dias marcados e tendência", () => {
+  const mk = (levels) => levels.map((v, i) => ({ day: `2026-11-${String(10 + i).padStart(2, "0")}`, values: { x: v } }));
+  const s = saudadeStats(mk([2, null, 4, 6, 8, 10]), "x");
+  assert.equal(s.days, 5);
+  assert.equal(s.avg, 6);
+  assert.equal(s.peak, 10);
+  assert.equal(s.peakDay, "2026-11-15");
+  assert.equal(s.last, 10);
+  assert.equal(s.trend, "up");
+  assert.equal(saudadeStats(mk([9, 8, 3, 2]), "x").trend, "down");
+  assert.equal(saudadeStats(mk([5, 5, 6, 5]), "x").trend, "flat");
+  assert.equal(saudadeStats(mk([5, 6]), "x").trend, null); // poucos dias: sem tendência
+  assert.deepEqual(saudadeStats(mk([null, null]), "x"), { days: 0, avg: null, peak: null, peakDay: null, last: null, trend: null });
+});
+
+test("histórico da saudade: HTML do gráfico, resumo e lista escapam o texto e mostram os dias", () => {
+  const defs = [{ id: "x", label: "<b>Ana</b>", cls: "sh-you" }];
+  const pts = [
+    { day: "2026-11-18", values: { x: null } },
+    { day: "2026-11-19", values: { x: 8 } },
+  ];
+  const chart = saudadeChartHTML(pts, { series: defs });
+  assert.match(chart, /height:80%/);
+  assert.match(chart, /sh-empty/);
+  assert.ok(!chart.includes("<b>Ana</b>"));
+  assert.match(saudadeSummaryHTML(saudadeStats(pts, "x"), "Ana", 2), /média <b>8<\/b>/);
+  assert.match(saudadeSummaryHTML(saudadeStats([], "x"), "Ana", 7), /nenhuma marcação/);
+  const list = saudadeListHTML(pts, defs);
+  assert.match(list, /19\/11/);
+  assert.ok(!list.includes("18/11")); // dia sem marcação não entra na lista
 });

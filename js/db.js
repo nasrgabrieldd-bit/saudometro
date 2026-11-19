@@ -1181,6 +1181,13 @@ export async function getSaudadeDay(coupleId, day) {
   if (error) throw error;
   return data || [];
 }
+// histórico: todos os níveis desde `sinceDay` (inclusive), do mais antigo pro mais novo
+export async function getSaudadeHistory(coupleId, sinceDay) {
+  const { data, error } = await supabase.from("saudade_checks").select("role, day, level")
+    .eq("couple_id", coupleId).gte("day", sinceDay).order("day", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
 export async function setSaudade(coupleId, role, day, level) {
   const { error } = await supabase.from("saudade_checks")
     .upsert({ couple_id: coupleId, role, day, level, updated_at: new Date().toISOString() }, { onConflict: "couple_id,role,day" });

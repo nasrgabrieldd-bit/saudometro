@@ -665,6 +665,13 @@ export async function getSaudadeDay(groupId, day) {
   if (error) throw error;
   return data || [];
 }
+// histórico da turma: todos os níveis desde `sinceDay` (inclusive), do mais antigo pro mais novo
+export async function getSaudadeHistory(groupId, sinceDay) {
+  const { data, error } = await supabase.from("friend_saudade_checks").select("user_id, day, level")
+    .eq("friend_group_id", groupId).gte("day", sinceDay).order("day", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
 export async function setSaudade(groupId, userId, day, level) {
   const { error } = await supabase.from("friend_saudade_checks")
     .upsert({ friend_group_id: groupId, user_id: userId, day, level, updated_at: new Date().toISOString() }, { onConflict: "friend_group_id,user_id,day" });

@@ -27,7 +27,7 @@ import { cycleInfo, cycleRingSVG, cycleLegendHTML, cycleTilesHTML, cycleHelpHTML
 import { pickSaudadeNudge } from "./nudges.js";
 import { periodStats, monthsStreak, parseTitleList, cleanTag, searchBooks, lookupBook, STATUS, SOURCES, BOOK_MOODS, BOOK_MOOD_BY_ID, MONTHS_PT } from "./books.js";
 import { pickVitrine, vitrineHTML, wireVitrine, perkThumbHTML, slideHTML } from "./vitrine.js";
-import { saudadeLabel, saudadeAverage, thermoBarHTML } from "./saudade.js";
+import { saudadeLabel, saudadeAverage, thermoBarHTML, lastDays, saudadeSeries, saudadeStats, saudadeChartHTML, saudadeSummaryHTML, saudadeListHTML } from "./saudade.js";
 import { buildCards, canvasToBlob, shareOrDownload } from "./bookCards.js";
 import { nameOf, genderOf, emojiOf, gen, genMixed, cleanName, setPeopleSettings, defaultEmojis, legacyPeople, feat, goalTarget, HOME_WIDGETS, homeOrder, homeWidgetOn, togetherSince, coinRule, luckyOn, perkHidden, COIN_DEFAULTS } from "./people.js";
 import {
@@ -1908,11 +1908,12 @@ async function renderFriendsMood() {
   const view = $("#friends-view");
   view.innerHTML = `<div class="center-note">Carregando...</div>`;
   const today = todayISO();
-  const [members, todaysMoods, allMoodReactions, saudadeToday] = await Promise.all([
+  const [members, todaysMoods, allMoodReactions, saudadeToday, saudadeHist] = await Promise.all([
     friends.listGroupMembers(State.friendGroup.id),
     friends.getMoodsForDay(State.friendGroup.id, today).catch(() => []),
     friends.listMoodReactions(State.friendGroup.id).catch(() => []), // sem a tabela nova ainda: só não mostra reações
     friends.getSaudadeDay(State.friendGroup.id, today).catch(() => null), // null = recurso ainda não ativado no banco
+    friends.getSaudadeHistory(State.friendGroup.id, toISODate(addDays(new Date(), -29))).catch(() => null),
   ]);
   const nameById = Object.fromEntries(members.map((m) => [m.user_id, m.display_name]));
   const moodReactions = allMoodReactions.filter((r) => todaysMoods.some((m) => m.id === r.mood_id));
@@ -1955,9 +1956,16 @@ async function renderFriendsMood() {
         extra: avg != null ? `<div class="th-avg">Saudade da turma hoje: <b>${avg}</b> de 10</div>` : "",
       });
     })() : ""}
+    ${saudadeToday && saudadeHist ? saudadeHistoryCardHTML("da turma") : ""}
   `;
   $("#friends-set-mood-btn").addEventListener("click", () => openFriendsMoodPicker(myEntry));
   wireSaudade((level) => friends.setSaudade(State.friendGroup.id, State.userId, today, level), renderFriendsMood);
+  if (saudadeToday && saudadeHist) {
+    wireSaudadeHistory(saudadeHist, [
+      { id: "you", label: "Você", cls: "sh-you", pick: (r) => r.find((x) => x.user_id === State.userId)?.level ?? null },
+      { id: "avg", label: "Média da turma", cls: "sh-avg", pick: (r) => saudadeAverage(r.map((x) => x.level)) },
+    ]);
+  }
   view.querySelectorAll(".react-bar[data-fmood]").forEach((bar) => {
     bar.addEventListener("click", async (ev) => {
       const btn = ev.target.closest(".react-btn");
@@ -5519,6 +5527,7 @@ async function renderMood() {
   const myMoodStreak = countMoodStreakFromHistory(history, State.role);
 
   const saudadeToday = await db.getSaudadeDay(State.coupleId, today).catch(() => null); // null = recurso ainda não ativado no banco
+  const saudadeHist = saudadeToday ? await db.getSaudadeHistory(State.coupleId, toISODate(addDays(new Date(), -29))).catch(() => null) : null;
   const moodReactions = await db.listReactions(State.coupleId, "mood").catch(() => null); // null = recurso ainda não ativado no banco
 
     const myMoodDays = history.filter((h) => h.role === State.role).map((h) => h.day).sort();
@@ -5575,6 +5584,7 @@ ${saudadeToday ? saudadeCardHTML({
       myLevel: saudadeToday.find((r) => r.role === State.role)?.level ?? null,
       question: "Quanta saudade você está sentindo agora?",
     }) : `<div class="card"><div class="card-title">Termômetro de saudade</div><p class="hint-text" style="margin:0;">Ainda não está ativado neste app. Falta rodar o SQL do termômetro no Supabase.</p></div>`}
+${saudadeHist ? saudadeHistoryCardHTML() : ""}
 
     <div class="section-title">Últimos 7 dias</div>
     <div class="card">
@@ -5631,6 +5641,12 @@ ${saudadeToday ? saudadeCardHTML({
   });
 
   wireSaudade((level) => db.setSaudade(State.coupleId, State.role, today, level), renderMood);
+  if (saudadeHist) {
+    wireSaudadeHistory(saudadeHist, [
+      { id: "you", label: "Você", cls: "sh-you", pick: (r) => r.find((x) => x.role === State.role)?.level ?? null },
+      { id: "other", label: partnerDisplayName(), cls: "sh-other", pick: (r) => r.find((x) => x.role !== State.role)?.level ?? null },
+    ]);
+  }
 }
 
 // detalhe dos últimos 7 dias de uma pessoa: humor geral + como está "com o par" + vontade de conversar + recado
@@ -6348,6 +6364,39 @@ function wireSaudade(save, rerender) {
     try { await save(Number(range.value)); await rerender(); }
     catch (e) { alert("Não foi possível salvar. Tente de novo."); setBusy("#th-save", false); }
   });
+}
+
+// histórico do termômetro (casal e turma): barras por dia, resumo e lista dia a dia
+function saudadeHistoryCardHTML(quem = "") {
+  return `
+    <div class="card sh-card" id="sh-card">
+      <div class="card-title">Histórico da saudade${quem ? ` ${quem}` : ""}</div>
+      <div class="card-sub">Como o termômetro foi variando, dia a dia.</div>
+      <div class="sh-tabs" role="group" aria-label="Período">
+        <button type="button" class="sh-tab" data-sh-range="7">7 dias</button>
+        <button type="button" class="sh-tab" data-sh-range="30">30 dias</button>
+      </div>
+      <div id="sh-body"></div>
+      <details class="sh-details"><summary>Ver dia a dia</summary><div id="sh-list"></div></details>
+    </div>`;
+}
+
+function wireSaudadeHistory(rows, defs) {
+  const card = $("#sh-card");
+  if (!card) return;
+  const draw = (n) => {
+    const points = saudadeSeries(rows, lastDays(new Date(), n), defs);
+    $("#sh-body").innerHTML = saudadeChartHTML(points, { series: defs, showNumbers: n <= 10 })
+      + defs.map((d) => saudadeSummaryHTML(saudadeStats(points, d.id), d.label, n)).join("");
+    $("#sh-list").innerHTML = saudadeListHTML(points, defs);
+    card.querySelectorAll("[data-sh-range]").forEach((b) => {
+      const on = Number(b.dataset.shRange) === n;
+      b.classList.toggle("selected", on);
+      b.setAttribute("aria-pressed", String(on));
+    });
+  };
+  card.querySelectorAll("[data-sh-range]").forEach((b) => b.addEventListener("click", () => draw(Number(b.dataset.shRange))));
+  draw(7);
 }
 
 // ================= CONVITES =================
