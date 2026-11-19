@@ -100,7 +100,7 @@ export function saudadeChartHTML(points, { id, label, cls, showNumbers = true })
     const lab = showNumbers
       ? `<span class="sh-wd">${last ? "hoje" : weekdayOf(p.day)}</span><span class="sh-dn">${p.day.slice(8, 10)}</span>`
       : (i % 5 === 0 || last ? `<span class="sh-dn">${shortDay(p.day)}</span>` : "");
-    return `<div class="sh-col${last ? " sh-now" : ""}"><div class="sh-bars">${bar}</div><div class="sh-day">${lab}</div></div>`;
+    return `<button type="button" class="sh-col${last ? " sh-now" : ""}" data-sh-day="${p.day}" aria-label="${escapeAttr(`${weekdayOf(p.day)} ${shortDay(p.day)}: ${v == null ? "não marcou" : `${v} de 10`}. Toque para ver os detalhes.`)}" aria-pressed="false"><div class="sh-bars">${bar}</div><div class="sh-day">${lab}</div></button>`;
   }).join("");
   return `<div class="sh-chart" role="img" aria-label="Saudade de ${escapeAttr(label)} nos últimos ${points.length} dias">${cols}</div>`;
 }
@@ -115,4 +115,13 @@ export function saudadeStatsHTML(stats, total) {
     <div class="sh-stat"><span class="sh-stat-n">${stats.peak}</span><span class="sh-stat-l">maior, em ${shortDay(stats.peakDay)}</span></div>
     <div class="sh-stat"><span class="sh-stat-n">${stats.days}<small>/${total}</small></span><span class="sh-stat-l">dias marcados</span></div>
   </div>${trend}`;
+}
+
+// detalhe de um dia: o que cada pessoa marcou (entries: [{ label, level }]), com a frase do termômetro
+export function saudadeDayDetailHTML(iso, entries, isToday = false) {
+  const title = `${isToday ? "hoje" : weekdayOf(iso)}, ${shortDay(iso)}`;
+  const rows = entries.map((e) => e.level == null
+    ? `<li><span class="sh-d-name">${escapeAttr(e.label)}</span><span class="sh-d-none">não marcou</span></li>`
+    : `<li><span class="sh-d-name">${escapeAttr(e.label)}</span><span class="sh-d-lv">${String(e.level).replace(".", ",")}<small>/10</small></span><span class="sh-d-ph">${escapeAttr(saudadeLabel(Math.round(e.level)))}</span></li>`).join("");
+  return `<div class="sh-d-title">${title}</div><ul class="sh-d-list">${rows}</ul>`;
 }

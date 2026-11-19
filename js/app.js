@@ -27,7 +27,7 @@ import { cycleInfo, cycleRingSVG, cycleLegendHTML, cycleTilesHTML, cycleHelpHTML
 import { pickSaudadeNudge } from "./nudges.js";
 import { periodStats, monthsStreak, parseTitleList, cleanTag, searchBooks, lookupBook, STATUS, SOURCES, BOOK_MOODS, BOOK_MOOD_BY_ID, MONTHS_PT } from "./books.js";
 import { pickVitrine, vitrineHTML, wireVitrine, perkThumbHTML, slideHTML } from "./vitrine.js";
-import { saudadeLabel, saudadeAverage, thermoBarHTML, lastDays, saudadeSeries, saudadeStats, saudadeChartHTML, saudadeStatsHTML } from "./saudade.js";
+import { saudadeLabel, saudadeAverage, thermoBarHTML, lastDays, saudadeSeries, saudadeStats, saudadeChartHTML, saudadeStatsHTML, saudadeDayDetailHTML } from "./saudade.js";
 import { buildCards, canvasToBlob, shareOrDownload } from "./bookCards.js";
 import { nameOf, genderOf, emojiOf, gen, genMixed, cleanName, setPeopleSettings, defaultEmojis, legacyPeople, feat, goalTarget, HOME_WIDGETS, homeOrder, homeWidgetOn, togetherSince, coinRule, luckyOn, perkHidden, COIN_DEFAULTS } from "./people.js";
 import {
@@ -1964,7 +1964,7 @@ async function renderFriendsMood() {
     wireSaudadeHistory(saudadeHist, [
       { id: "you", label: "Você", cls: "sh-you", pick: (r) => r.find((x) => x.user_id === State.userId)?.level ?? null },
       { id: "avg", label: "Média da turma", cls: "sh-avg", pick: (r) => saudadeAverage(r.map((x) => x.level)) },
-    ]);
+    ], members.map((m) => ({ label: m.user_id === State.userId ? "Você" : m.display_name, pick: (r) => r.find((x) => x.user_id === m.user_id)?.level ?? null })));
   }
   view.querySelectorAll(".react-bar[data-fmood]").forEach((bar) => {
     bar.addEventListener("click", async (ev) => {
@@ -6382,19 +6382,32 @@ function saudadeHistoryCardHTML(quem = "") {
     </div>`;
 }
 
-function wireSaudadeHistory(rows, defs) {
+// everyone: quem aparece no detalhe de um dia ([{ label, pick }]); no casal são os dois, na turma todos os membros
+function wireSaudadeHistory(rows, defs, everyone = defs) {
   const card = $("#sh-card");
   if (!card) return;
   let who = defs[0].id;
   let n = 7;
+  let sel = null; // dia aberto no detalhe
   $("#sh-who").innerHTML = defs.map((d) => `<button type="button" data-sh-who="${d.id}">${escapeHTML(d.label)}</button>`).join("");
+  const drawDetail = (days) => {
+    const box = $("#sh-detail");
+    card.querySelectorAll(".sh-col").forEach((c) => { const on = c.dataset.shDay === sel; c.classList.toggle("selected", on); c.setAttribute("aria-pressed", String(on)); });
+    if (!sel || !days.includes(sel)) { sel = null; box.innerHTML = `<p class="sh-hint">Toque em um dia para ver o que cada um marcou.</p>`; return; }
+    const dayRows = rows.filter((r) => r.day === sel);
+    box.innerHTML = saudadeDayDetailHTML(sel, everyone.map((e) => ({ label: e.label, level: e.pick(dayRows) })), sel === todayISO());
+  };
   const draw = () => {
     const def = defs.find((d) => d.id === who);
-    const points = saudadeSeries(rows, lastDays(new Date(), n), defs);
+    const days = lastDays(new Date(), n);
+    const points = saudadeSeries(rows, days, defs);
     $("#sh-body").innerHTML = saudadeChartHTML(points, { id: def.id, label: def.label, cls: def.cls, showNumbers: n <= 10 })
+      + `<div class="sh-detail" id="sh-detail"></div>`
       + saudadeStatsHTML(saudadeStats(points, def.id), n);
     card.querySelectorAll("[data-sh-range]").forEach((b) => { const on = Number(b.dataset.shRange) === n; b.classList.toggle("selected", on); b.setAttribute("aria-pressed", String(on)); });
     card.querySelectorAll("[data-sh-who]").forEach((b) => { const on = b.dataset.shWho === who; b.classList.toggle("selected", on); b.setAttribute("aria-pressed", String(on)); });
+    card.querySelectorAll(".sh-col").forEach((c) => c.addEventListener("click", () => { sel = sel === c.dataset.shDay ? null : c.dataset.shDay; drawDetail(days); }));
+    drawDetail(days);
   };
   card.querySelectorAll("[data-sh-range]").forEach((b) => b.addEventListener("click", () => { n = Number(b.dataset.shRange); draw(); }));
   card.querySelectorAll("[data-sh-who]").forEach((b) => b.addEventListener("click", () => { who = b.dataset.shWho; draw(); }));
