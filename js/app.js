@@ -606,9 +606,50 @@ function tickFlipClock(counterEl, diffMs) {
   counterEl.querySelector("[data-unit='s']").textContent = String(secs).padStart(2, "0");
 }
 
+// ---------- versão desktop (css/desktop.css) ----------
+// Em tela larga (>= 900px) o app vira um painel com menu lateral. As telas "principais" (hubs) ganham uma grade de cartões
+// em colunas; qualquer outra tela interna fica numa coluna central mais larga. Aqui só marcamos qual layout cada tela usa.
+const desktopMQ = window.matchMedia ? window.matchMedia("(min-width: 900px)") : { matches: false };
+function markDesktopLayout() {
+  const kids = [...view.children];
+  const first = kids[0];
+  const tab = State.activeTab;
+  let grid = "";
+  if (!kids.length || (kids.length === 1 && first.classList.contains("center-note"))) grid = "";
+  else if (tab === "home") grid = "home";
+  else if (tab === "mood" && view.querySelector(":scope > .th-card, :scope > .mh")) grid = "mood";
+  else if (tab === "calendar" && first.classList.contains("month-nav")) grid = "calendar";
+  else if (tab === "notes" && State.notesView === "hub") grid = "notes";
+  else if (tab === "shop" && first.classList.contains("shop-bal")) grid = "shop";
+  else if (tab === "profile" && view.querySelector(":scope > .settings-list")) grid = "profile";
+  else if (tab === "shelf" && first.classList.contains("bk-head")) grid = "shelf";
+  if (view.dataset.grid !== grid) view.dataset.grid = grid;
+  if (view.dataset.tab !== tab) view.dataset.tab = tab;
+}
+if (typeof MutationObserver !== "undefined") new MutationObserver(markDesktopLayout).observe(view, { childList: true });
+if (desktopMQ.addEventListener) desktopMQ.addEventListener("change", () => { markDesktopLayout(); refreshDesktopSide(); });
+
+// menu lateral do desktop: nomes do casal e saldo de moedas (no celular essas peças ficam escondidas)
+async function refreshDesktopSide() {
+  if (!desktopMQ.matches || !State.coupleId) return;
+  const couple = document.getElementById("dk-couple");
+  if (couple) couple.innerHTML = `<div class="dk-avs"><span class="dk-av dk-av-1">${escapeHTML((myDisplayName() || "?")[0].toUpperCase())}</span><span class="dk-av dk-av-2">${escapeHTML((partnerDisplayName() || "?")[0].toUpperCase())}</span></div><div class="dk-names"><b>${escapeHTML(myDisplayName())} e ${escapeHTML(partnerDisplayName())}</b></div>`;
+  const wallet = document.getElementById("dk-wallet");
+  if (wallet) {
+    if (!feat("shop")) { wallet.hidden = true; return; }
+    try {
+      const b = await db.getCoinBalances(State.coupleId);
+      const mine = b[State.role] || 0;
+      wallet.hidden = false;
+      wallet.innerHTML = `<small>Suas moedas</small><b><i class="dk-coin"></i>${mine}</b>`;
+    } catch (e) { wallet.hidden = true; }
+  }
+}
+
 function renderActiveTab() {
   if (State.activeTab === "shop" && !feat("shop")) State.activeTab = "home";
   if (!State.coupleId) return;
+  refreshDesktopSide();
   clearKissTimer();
   clearRechargeTimer();
   const map = { home: renderHome, calendar: renderCalendar, mood: renderMood, notes: renderNotes, shelf: renderEstante, shop: renderShop, profile: renderProfile };
@@ -1307,7 +1348,8 @@ async function enterFriendsMode(group) {
     </header>
     <main id="friends-view" style="flex:1; min-height:0; padding:20px 16px 110px; overflow:auto;"></main>
     <nav class="bottom-nav">
-      ${FRIENDS_TABS.map((t) => `<button class="nav-btn" data-friends-tab="${t.tab}"><span class="nav-icon">${icon(t.icon, { size: 22 })}</span><span class="nav-label">${t.label}</span></button>`).join("")}
+      <div class="dk-logo"><img src="icons/icon.png" alt="" /><span>Saudômetro</span></div>
+      ${FRIENDS_TABS.map((t) => `<button class="nav-btn" data-friends-tab="${t.tab}" title="${t.label}" aria-label="${t.label}"><span class="nav-icon">${icon(t.icon, { size: 22 })}</span><span class="nav-label">${t.label}</span></button>`).join("")}
     </nav>
   `;
   setAvatarBadge("#friends-avatar-badge", group.myDisplayName, null);
@@ -4651,7 +4693,7 @@ async function renderHome() {
     <div id="home-campaign">${coinsOn() ? (() => { const c = currentCampaign("casal"); return c ? campaignBannerHTML(c) : campaignTeaserHTML("casal"); })() : ""}</div>
     <div id="home-vitrine"></div>
 ${(() => {
-      const parts = widgetIds.map((id) => html[id] || "");
+      const parts = widgetIds.map((id) => (html[id] ? `<div class="hw" data-w="${id}">${html[id]}</div>` : ""));
       const kissIdx = widgetIds.indexOf("kiss");
       const moodStripIdx = widgetIds.indexOf("moodstrip");
       const gameCard = `<div id="home-game-card"></div>`;
@@ -5542,13 +5584,13 @@ async function renderMood() {
     : "💛 Ainda não tem humor diário registrado por aqui";
 
   view.innerHTML = `
-    <div class="card" style="text-align:center; background:var(--accent-soft);">
+    <div class="card dk-care" style="text-align:center; background:var(--accent-soft);">
       <div style="font-size:15px; font-weight:800; color:var(--accent-strong);">${moodStreakText}</div>
     </div>
 
     ${partnerMoodHeroHTML(theirs)}
 
-    <div class="card">
+    <div class="card dk-moodcard">
       <div class="card-title">Como você está?</div>
       <p class="hint-text" style="margin:-4px 0 10px;">As emoções do seu dia, sem relação com ${ROLE_LABEL[otherRole()]}.</p>
       <div class="mood-grid" id="mood-grid">
@@ -5587,7 +5629,7 @@ ${saudadeToday ? saudadeCardHTML({
 ${saudadeHist ? saudadeHistoryCardHTML() : ""}
 
     <div class="section-title">Últimos 7 dias</div>
-    <div class="card">
+    <div class="card dk-strip">
       ${historyStripHTML(history)}
       <button class="btn btn-secondary btn-block" style="margin-top:14px;" id="btn-mood-history">📅 Ver detalhes de ${ROLE_LABEL[otherRole()]} (com você, conversa, recadinhos)</button>
     </div>
@@ -6581,6 +6623,7 @@ async function renderNotesHub() {
     </div>
     </div>
 
+    <div class="dk-side">
     <div class="section-title">Atalhos</div>
     <div class="settings-list">
 ${(myBirthdayNotes.length || visibleBirthdayNotes.length || pendingBirthdayNotes.length) ? settingsRowHTML({ emoji: "🎂", title: "Recadinho de Aniversário", sub: birthdaySub, dataView: "birthday", dot: visibleBirthdayNotes.some((n) => n.deliver_on === todayStr) }) : ""}
@@ -6591,6 +6634,7 @@ ${settingsRowHTML({ iconName: "mail", title: "Convites", sub: pendingInvites.len
 ${settingsRowHTML({ iconName: "camera", title: "Lembrei de você", sub: memories === null ? "Ver" : memoriesPending ? `${memoriesPending} nova${memoriesPending === 1 ? "" : "s"}` : "Mandar uma foto", dataView: "memories", dot: !!memoriesPending })}
 ${settingsRowHTML({ emoji: "🎯", title: "Fazer juntos", sub: dateIdeas.length ? `${dateIdeas.length} ideia${dateIdeas.length === 1 ? "" : "s"}` : "Adicionar ideia", dataView: "together-ideas", dot: !!dateIdeasPending })}
 ${settingsRowHTML({ emoji: "💌", title: "Capisurpresa", sub: "Um carinho surpresa", id: "btn-open-capisurpresa" })}
+    </div>
     </div>
   `;
 
