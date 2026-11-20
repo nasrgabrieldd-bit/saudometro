@@ -9,6 +9,7 @@
 /* peças que só existem no desktop ficam escondidas no celular */
 .dk-logo, .dk-foot { display: none; }
 .dk-side { display: contents; }
+.dk-switch { display: none; }
 
 @media (min-width: 900px) {
   :root { --dk-side: 88px; --dk-pad: clamp(24px, 3.4vw, 56px); }
@@ -46,6 +47,26 @@
   .dk-logo { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 0 0 22px; font: 800 24px var(--font-display); letter-spacing: -0.02em; color: var(--text); }
   .dk-logo img { width: 42px; height: 42px; border-radius: 13px; box-shadow: var(--shadow-tap); }
   .dk-logo span { display: none; }
+  /* troca rápida de conta (casal e turmas) */
+  .dk-switch { display: block; margin: 0 0 16px; }
+  .dk-switch:empty { display: none; }
+  .dk-sw-btn, .dk-sw-item {
+    display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; padding: 8px; border: 0; border-radius: 16px;
+    background: var(--surface-alt); color: var(--text); text-align: left; cursor: pointer; transition: background 0.15s;
+  }
+  .dk-sw-btn:hover, .dk-sw-item:hover { background: var(--accent-soft); }
+  .dk-sw-btn.is-friends:hover, .dk-sw-item.is-friends:hover { background: var(--friends-accent-soft); }
+  .dk-sw-btn:focus-visible, .dk-sw-item:focus-visible { outline: 3px solid var(--accent-btn); outline-offset: 2px; }
+  .dk-sw-ico { width: 38px; height: 38px; flex: none; border-radius: 12px; display: grid; place-items: center; background: var(--accent-soft); font-size: 20px; line-height: 1; }
+  .is-friends .dk-sw-ico { background: var(--friends-accent-soft); }
+  .dk-sw-txt, .dk-sw-chev, .dk-sw-ok { display: none; }
+  .dk-sw-txt b { display: block; font: 800 14.5px/1.2 var(--font-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dk-sw-txt small { display: block; font-size: 12px; color: var(--text-muted); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dk-sw-list { display: grid; gap: 4px; margin-top: 6px; padding: 6px; border-radius: 18px; background: var(--surface-sunk); }
+  .dk-sw-list[hidden] { display: none; }
+  .dk-sw-item { background: transparent; padding: 6px; }
+  .dk-sw-item.on { background: var(--surface); box-shadow: var(--shadow-tap); }
+  .dk-sw-new .dk-sw-ico { background: var(--surface); border: 1.5px dashed var(--border); color: var(--text-muted); font-size: 18px; }
   .nav-btn {
     flex: none; width: 100%; height: 52px; justify-content: center; gap: 14px; padding: 0; border-radius: 16px;
     color: var(--text-muted); transition: background 0.15s, color 0.15s;
@@ -123,6 +144,12 @@
   #view-container[data-grid="profile"] .settings-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; }
 }
 
+/* banner de mimos em telas médias: texto um pouco menor para não encostar nos botões */
+@media (min-width: 900px) and (max-width: 1279px) {
+  #home-vitrine .vit-title, #view-container[data-grid="shop"] .vit-title { font-size: 30px; max-width: 58%; }
+  #home-vitrine .vit-sub, #view-container[data-grid="shop"] .vit-sub { font-size: 15px; -webkit-line-clamp: 2; max-width: 50%; }
+}
+
 /* ---- tela grande de verdade: menu lateral completo ---- */
 @media (min-width: 1280px) {
   :root { --dk-side: 272px; }
@@ -138,6 +165,11 @@
   .dk-wallet b { justify-content: flex-start; font-size: 24px; }
   .dk-couple { justify-content: flex-start; padding: 12px; }
   .dk-names { display: block; }
+  .dk-sw-btn, .dk-sw-item { justify-content: flex-start; padding: 8px 12px 8px 8px; }
+  .dk-sw-txt { display: block; flex: 1; min-width: 0; }
+  .dk-sw-chev { display: inline; color: var(--text-muted); font-size: 12px; }
+  .dk-sw-ok { display: inline; color: var(--accent-strong); font-weight: 800; }
+  .is-friends .dk-sw-ok { color: var(--friends-accent-strong); }
 }
 
 /* ---- telas grandes: cartões em colunas ---- */
