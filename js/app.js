@@ -316,6 +316,7 @@ function partnerDisplayName() {
 }
 
 async function enterApp(profile) {
+  State.accountMode = "couple";
   State.profile = profile;
   State.coupleId = profile.couple_id;
   State.role = profile.role;
@@ -629,8 +630,73 @@ function markDesktopLayout() {
 if (typeof MutationObserver !== "undefined") new MutationObserver(markDesktopLayout).observe(view, { childList: true });
 if (desktopMQ.addEventListener) desktopMQ.addEventListener("change", () => { markDesktopLayout(); refreshDesktopSide(); });
 
+// troca rápida de conta no menu lateral do desktop (casal e turmas, sem passar pela tela de escolha)
+let quickSwitchOpen = false;
+function quickAccounts() {
+  const list = [];
+  if (State.profile) list.push({ kind: "couple", id: "couple", emoji: "💗", name: "Casal", sub: `${myDisplayName()} e ${partnerDisplayName()}` });
+  (State.friendGroups || []).forEach((g) => list.push({ kind: "friends", id: g.id, emoji: g.emoji || "👥", name: g.name || "Turma", sub: `${g.memberCount || 1} pessoa${(g.memberCount || 1) === 1 ? "" : "s"}` }));
+  return list;
+}
+function renderQuickSwitch() {
+  const holders = document.querySelectorAll(".dk-switch");
+  if (!holders.length || !desktopMQ.matches) return;
+  const list = quickAccounts();
+  const cur = list.find((a) => (State.accountMode === "friends" ? a.kind === "friends" && a.id === State.friendGroup?.id : a.kind === "couple")) || list[0];
+  if (!cur) { holders.forEach((h) => { h.innerHTML = ""; }); return; }
+  const friendsCur = cur.kind === "friends";
+  const html = `
+    <button type="button" class="dk-sw-btn${friendsCur ? " is-friends" : ""}" aria-expanded="${quickSwitchOpen}" aria-haspopup="true" title="Trocar de conta">
+      <span class="dk-sw-ico">${escapeHTML(cur.emoji)}</span>
+      <span class="dk-sw-txt"><b>${escapeHTML(cur.name)}</b><small>${escapeHTML(cur.sub)}</small></span>
+      <span class="dk-sw-chev" aria-hidden="true">${quickSwitchOpen ? "▴" : "▾"}</span>
+    </button>
+    <div class="dk-sw-list" ${quickSwitchOpen ? "" : "hidden"}>
+      ${list.map((a) => `<button type="button" class="dk-sw-item${a === cur ? " on" : ""}${a.kind === "friends" ? " is-friends" : ""}" data-sw-kind="${a.kind}" data-sw-id="${escapeHTML(a.id)}" title="${escapeHTML(a.name)}">
+        <span class="dk-sw-ico">${escapeHTML(a.emoji)}</span><span class="dk-sw-txt"><b>${escapeHTML(a.name)}</b><small>${escapeHTML(a.sub)}</small></span>${a === cur ? `<span class="dk-sw-ok" aria-hidden="true">✓</span>` : ""}
+      </button>`).join("")}
+      <button type="button" class="dk-sw-item dk-sw-new" data-sw-kind="new" title="Criar ou entrar numa turma"><span class="dk-sw-ico">＋</span><span class="dk-sw-txt"><b>Turma</b><small>Criar ou entrar</small></span></button>
+    </div>`;
+  holders.forEach((h) => {
+    h.innerHTML = html;
+    h.querySelector(".dk-sw-btn").addEventListener("click", async () => {
+      quickSwitchOpen = !quickSwitchOpen;
+      renderQuickSwitch();
+      if (quickSwitchOpen) { // atualiza a lista de turmas em segundo plano
+        try { State.friendGroups = await friends.listMyFriendGroups(); renderQuickSwitch(); } catch (e) { /* mantém a lista que já tinha */ }
+      }
+    });
+    h.querySelectorAll(".dk-sw-item").forEach((b) => b.addEventListener("click", () => quickSwitchTo(b.dataset.swKind, b.dataset.swId)));
+  });
+}
+async function quickSwitchTo(kind, id) {
+  quickSwitchOpen = false;
+  if (kind === "new") {
+    if (State.accountMode === "friends") openFriendsGroupModal();
+    else { setActiveTab("profile"); State.profileView = "friendsMode"; renderActiveTab(); }
+    renderQuickSwitch();
+    return;
+  }
+  if (kind === "couple") {
+    if (State.accountMode === "couple" || !State.profile) { renderQuickSwitch(); return; }
+    // sai da turma: mesma limpeza do botão de trocar de conta
+    if (State.friendsGameUnsubscribe) { State.friendsGameUnsubscribe(); State.friendsGameUnsubscribe = null; }
+    closeRoomChannels();
+    $("#screen-friends").style.display = "none";
+    await enterApp(State.profile);
+  } else {
+    const g = (State.friendGroups || []).find((x) => x.id === id);
+    if (!g || (State.accountMode === "friends" && State.friendGroup?.id === g.id)) { renderQuickSwitch(); return; }
+    clearKissTimer();
+    clearRechargeTimer();
+    await enterFriendsMode(g);
+  }
+  renderQuickSwitch();
+}
+
 // menu lateral do desktop: nomes do casal e saldo de moedas (no celular essas peças ficam escondidas)
 async function refreshDesktopSide() {
+  renderQuickSwitch();
   if (!desktopMQ.matches || !State.coupleId) return;
   const couple = document.getElementById("dk-couple");
   if (couple) couple.innerHTML = `<div class="dk-avs"><span class="dk-av dk-av-1">${escapeHTML((myDisplayName() || "?")[0].toUpperCase())}</span><span class="dk-av dk-av-2">${escapeHTML((partnerDisplayName() || "?")[0].toUpperCase())}</span></div><div class="dk-names"><b>${escapeHTML(myDisplayName())} e ${escapeHTML(partnerDisplayName())}</b></div>`;
@@ -1326,6 +1392,7 @@ const FRIENDS_TABS = [
 ];
 
 async function enterFriendsMode(group) {
+  State.accountMode = "friends";
   if (State.unsubscribe) { State.unsubscribe(); State.unsubscribe = null; } // saindo do casal (se estava nele): para de ouvir as mudanças dele
   if (State.friendsGameUnsubscribe) { State.friendsGameUnsubscribe(); State.friendsGameUnsubscribe = null; } // trocando de turma: para de ouvir a turma anterior
   State.friendGroup = group;
@@ -1349,6 +1416,7 @@ async function enterFriendsMode(group) {
     <main id="friends-view" style="flex:1; min-height:0; padding:20px 16px 110px; overflow:auto;"></main>
     <nav class="bottom-nav">
       <div class="dk-logo"><img src="icons/icon.png" alt="" /><span>Saudômetro</span></div>
+      <div class="dk-switch"></div>
       ${FRIENDS_TABS.map((t) => `<button class="nav-btn" data-friends-tab="${t.tab}" title="${t.label}" aria-label="${t.label}"><span class="nav-icon">${icon(t.icon, { size: 22 })}</span><span class="nav-label">${t.label}</span></button>`).join("")}
     </nav>
   `;
@@ -1369,6 +1437,7 @@ async function enterFriendsMode(group) {
   document.querySelectorAll("[data-friends-tab]").forEach((btn) => {
     btn.addEventListener("click", () => setFriendsTab(btn.dataset.friendsTab));
   });
+  renderQuickSwitch();
   setFriendsTab("home");
   updateFriendsStreakBadge();
   applySeasonalDecor(friendsPromosOn());
