@@ -627,8 +627,46 @@ function markDesktopLayout() {
   if (view.dataset.grid !== grid) view.dataset.grid = grid;
   if (view.dataset.tab !== tab) view.dataset.tab = tab;
 }
-if (typeof MutationObserver !== "undefined") new MutationObserver(markDesktopLayout).observe(view, { childList: true });
+// avisos (faixas de lembrete e de promoção "começa em X dias"): no desktop largo saem do meio do conteúdo e ficam
+// no menu lateral, acima das moedas. O nó é movido (não copiado), então os cliques já ligados continuam valendo.
+const wideMQ = window.matchMedia ? window.matchMedia("(min-width: 1280px)") : { matches: false };
+function placeDesktopNotices() {
+  const box = document.getElementById(State.accountMode === "friends" ? "dk-notices-f" : "dk-notices");
+  document.querySelectorAll(".dk-notices").forEach((b) => { if (b !== box) b.innerHTML = ""; });
+  if (!box) return;
+  if (!wideMQ.matches) { box.innerHTML = ""; box.hidden = true; return; }
+  const content = State.accountMode === "friends" ? document.getElementById("friends-view") : view;
+  if (!content) return;
+  const found = [...content.querySelectorAll(".banner, .camp-teaser")].filter((n) => !n.closest(".modal-sheet"));
+  if (found.length) { // tela nova com avisos: troca os de antes pelos novos
+    box.innerHTML = "";
+    found.forEach((n) => { n.classList.add("dk-notice"); box.appendChild(n); });
+  }
+  box.hidden = !box.children.length;
+}
+function clearDesktopNotices() { document.querySelectorAll(".dk-notices").forEach((b) => { b.innerHTML = ""; b.hidden = true; }); }
+// Modo Amigos: mesma ideia, qual grade cada aba usa
+function markFriendsLayout() {
+  const fv = document.getElementById("friends-view");
+  if (!fv) return;
+  const first = fv.firstElementChild;
+  const tab = State.friendsTab;
+  let grid = "";
+  if (!first || (fv.children.length === 1 && first.classList.contains("center-note"))) grid = "";
+  else if (tab === "home") grid = "f-home";
+  else if (tab === "mood" && fv.querySelector(":scope > .th-card")) grid = "f-mood";
+  else if (tab === "roles" && first.classList.contains("month-nav")) grid = "f-roles";
+  else if (tab === "shop" && first.classList.contains("shop-bal")) grid = "f-shop";
+  else if (tab === "group" && first.classList.contains("card")) grid = "f-group";
+  else if (tab === "shelf" && first.classList.contains("bk-head")) grid = "f-shelf";
+  if (fv.dataset.grid !== grid) fv.dataset.grid = grid;
+}
+function markDesktopLayoutAndNotices() { markDesktopLayout(); placeDesktopNotices(); }
+if (typeof MutationObserver !== "undefined") {
+  new MutationObserver(markDesktopLayoutAndNotices).observe(view, { childList: true, subtree: true });
+}
 if (desktopMQ.addEventListener) desktopMQ.addEventListener("change", () => { markDesktopLayout(); refreshDesktopSide(); });
+if (wideMQ.addEventListener) wideMQ.addEventListener("change", () => { if (State.coupleId && State.accountMode === "couple") renderActiveTab(); else if (State.accountMode === "friends") renderFriendsActiveTab(); });
 
 // troca rápida de conta no menu lateral do desktop (casal e turmas, sem passar pela tela de escolha)
 let quickSwitchOpen = false;
@@ -715,6 +753,7 @@ async function refreshDesktopSide() {
 function renderActiveTab() {
   if (State.activeTab === "shop" && !feat("shop")) State.activeTab = "home";
   if (!State.coupleId) return;
+  clearDesktopNotices();
   refreshDesktopSide();
   clearKissTimer();
   clearRechargeTimer();
@@ -1418,8 +1457,10 @@ async function enterFriendsMode(group) {
       <div class="dk-logo"><img src="icons/icon.png" alt="" /><span>Saudômetro</span></div>
       <div class="dk-switch"></div>
       ${FRIENDS_TABS.map((t) => `<button class="nav-btn" data-friends-tab="${t.tab}" title="${t.label}" aria-label="${t.label}"><span class="nav-icon">${icon(t.icon, { size: 22 })}</span><span class="nav-label">${t.label}</span></button>`).join("")}
+      <div class="dk-foot"><div class="dk-notices" id="dk-notices-f" hidden></div></div>
     </nav>
   `;
+  if (typeof MutationObserver !== "undefined") new MutationObserver(() => { markFriendsLayout(); placeDesktopNotices(); }).observe($("#friends-view"), { childList: true, subtree: true });
   setAvatarBadge("#friends-avatar-badge", group.myDisplayName, null);
   $("#friends-avatar-badge").onclick = () => openEditProfileModal("amigos");
   friends.listGroupMembers(group.id).then((members) => {
@@ -1512,6 +1553,7 @@ async function maybeAwardFriendsStreakMilestone(streak) {
 }
 
 function renderFriendsActiveTab() {
+  clearDesktopNotices();
   const map = {
     home: renderFriendsHome,
     roles: renderFriendsRoles,
