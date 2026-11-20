@@ -1,0 +1,165 @@
+/* ==========================================================================
+   Versão desktop do app (telas a partir de 900px)
+   No celular nada muda. Em tela larga o app vira um painel: menu lateral fixo,
+   topo com saudação e tela inteira para o conteúdo, com os cartões em colunas.
+   Tudo aqui usa as mesmas cores (variáveis) do app, então claro e escuro funcionam
+   sozinhos (data-theme="light" | "dark", ou o tema do sistema).
+   ========================================================================== */
+
+/* peças que só existem no desktop ficam escondidas no celular */
+.dk-logo, .dk-foot { display: none; }
+.dk-side { display: contents; }
+
+@media (min-width: 900px) {
+  :root { --dk-side: 88px; --dk-pad: clamp(24px, 3.4vw, 56px); }
+
+  html, body { height: 100%; }
+  body { display: block; height: 100dvh; }
+  #app-shell { max-width: none; width: 100%; height: 100dvh; min-height: 0; }
+
+  /* telas de entrada, login e avisos continuam numa coluna central */
+  #screen-onboarding, #screen-setup { width: 100%; max-width: 520px; margin: 0 auto; overflow-y: auto; }
+
+  /* ---- casca: menu lateral + topo + conteúdo ---- */
+  #screen-app[style*="display: flex"], #screen-friends[style*="display: flex"] {
+    display: grid !important;
+    grid-template-columns: var(--dk-side) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas: "side top" "side main";
+    height: 100dvh; min-height: 0; overflow: hidden;
+  }
+  #screen-app > .topbar, #screen-friends > .topbar { grid-area: top; padding: 26px max(var(--dk-pad), calc((100% - 1480px) / 2)) 10px; }
+  #screen-app > .topbar h1, #screen-friends > .topbar h1 { font-size: 30px; }
+  #screen-app > #view-container, #screen-friends > #friends-view { grid-area: main; min-height: 0; overflow-y: auto; }
+
+  #view-container, #friends-view { padding: 10px var(--dk-pad) 64px !important; }
+  /* qualquer tela interna (sem grade) fica numa coluna central mais larga */
+  #view-container:not([data-grid]) > *, #friends-view > * { max-width: 920px; margin-left: auto; margin-right: auto; }
+
+  /* ---- menu lateral ---- */
+  .bottom-nav {
+    grid-area: side; position: static; transform: none; width: auto; max-width: none; height: 100%;
+    flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 4px;
+    padding: 20px 14px 18px; border-top: 0; border-right: 1px solid var(--border); border-radius: 0;
+    box-shadow: none; overflow-y: auto; z-index: 5;
+  }
+  .dk-logo { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 0 0 22px; font: 800 24px var(--font-display); letter-spacing: -0.02em; color: var(--text); }
+  .dk-logo img { width: 42px; height: 42px; border-radius: 13px; box-shadow: var(--shadow-tap); }
+  .dk-logo span { display: none; }
+  .nav-btn {
+    flex: none; width: 100%; height: 52px; justify-content: center; gap: 14px; padding: 0; border-radius: 16px;
+    color: var(--text-muted); transition: background 0.15s, color 0.15s;
+  }
+  .nav-btn:hover { background: var(--surface-alt); color: var(--text); }
+  .nav-btn:focus-visible { outline: 3px solid var(--accent-btn); outline-offset: 2px; }
+  #screen-friends .nav-btn:focus-visible { outline-color: var(--friends-accent); }
+  .nav-btn.active { flex: none; padding: 0; background: var(--accent-soft); color: var(--accent-strong); }
+  #screen-friends .nav-btn.active { background: var(--friends-accent-soft); color: var(--friends-accent-strong); }
+  .nav-btn .nav-label, .nav-btn.active .nav-label { display: none; }
+  .nav-btn .nav-dot { top: 12px; right: calc(50% - 20px); }
+  .dk-foot { display: flex; flex-direction: column; gap: 10px; margin-top: auto; padding-top: 18px; }
+  .dk-wallet { padding: 10px 6px; border-radius: 16px; background: var(--coin-soft); text-align: center; }
+  .dk-wallet[hidden] { display: none; }
+  .dk-wallet small { display: none; font-size: 12px; font-weight: 700; color: var(--text-muted); }
+  .dk-wallet b { display: flex; align-items: center; justify-content: center; gap: 7px; font: 800 18px var(--font-display); }
+  .dk-coin { width: 15px; height: 15px; border-radius: 50%; background: var(--coin); border: 3px solid #b8841a; display: inline-block; }
+  .dk-couple { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 10px 4px; border-radius: 16px; background: var(--surface-alt); }
+  .dk-avs { display: flex; }
+  .dk-av { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font: 800 14px var(--font-display); color: #fff; border: 3px solid var(--surface-alt); }
+  .dk-av-1 { background: var(--accent-strong); } .dk-av-2 { background: var(--plum, #9b6b9e); margin-left: -12px; }
+  #screen-friends .dk-av-1 { background: var(--friends-accent); }
+  .dk-names { display: none; font-size: 13.5px; line-height: 1.25; }
+
+  /* ---- topo ---- */
+  .topbar-actions { gap: 12px; }
+  .theme-toggle, .avatar { box-shadow: none; border: 1px solid var(--border); }
+
+  /* ---- janelas viram caixas no centro da tela ---- */
+  #modal-root { align-items: center; }
+  .modal-sheet { max-width: 620px; border-radius: 28px; max-height: 88vh; padding: 28px 30px; box-shadow: 0 30px 80px rgba(20, 8, 20, 0.35); animation: dk-pop 0.18s ease; }
+  @keyframes dk-pop { from { transform: translateY(10px) scale(0.98); opacity: 0; } to { transform: none; opacity: 1; } }
+  #seasonal-decor { left: var(--dk-side); width: calc(100% - var(--dk-side)); max-width: none; transform: none; }
+
+  /* ---- grade de cartões ---- */
+  #view-container[data-grid] {
+    display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-flow: row dense;
+    gap: 20px 22px; align-content: start; max-width: 1480px; width: 100%; margin-left: auto; margin-right: auto;
+  }
+  #view-container[data-grid] > * { margin: 0 !important; min-width: 0; grid-column: 1 / -1; }
+  #view-container[data-grid] .card { margin-bottom: 0; }
+
+  /* vitrine de mimos: um cartão por vez, do tamanho da coluna */
+  .vit { margin: 0 0 8px; }
+  .vit-track { padding: 2px 0 10px; }
+  .vit-slide { flex: 0 0 min(100%, 520px); max-width: none; }
+  .mood-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); overflow: visible; }
+  .mood-grid > * { min-width: 0; }
+
+  /* Hoje (telas médias: 2 colunas; telas grandes: abaixo) */
+  #view-container[data-grid="home"] > .banner, #view-container[data-grid="home"] > #home-campaign { grid-column: 1 / -1; }
+  #view-container[data-grid="home"] > #home-campaign:empty, #view-container[data-grid="home"] > #home-vitrine:empty { display: none; }
+  #view-container[data-grid="home"] > .hw { grid-column: span 6; }
+  #view-container[data-grid="home"] > .mh, #view-container[data-grid="home"] > #home-vitrine,
+  #view-container[data-grid="home"] > #home-game-card, #view-container[data-grid="home"] > .hw[data-w="moodstrip"] { grid-column: 1 / -1; }
+  #view-container[data-grid="home"] #home-games-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+  /* Humor, Encontros, Recados, Perfil: telas médias ficam em coluna única, a grade larga vem abaixo */
+  .dk-side { display: block; }
+  #view-container[data-grid="shop"] .shop-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; }
+  #view-container[data-grid="profile"] .settings-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; }
+}
+
+/* ---- tela grande de verdade: menu lateral completo ---- */
+@media (min-width: 1280px) {
+  :root { --dk-side: 272px; }
+  .bottom-nav { padding: 24px 16px 18px; }
+  .dk-logo { justify-content: flex-start; padding: 0 10px 24px; }
+  .dk-logo span { display: inline; }
+  .nav-btn { justify-content: flex-start; padding: 0 16px; font-size: 15.5px; }
+  .nav-btn.active { padding: 0 16px; }
+  .nav-btn .nav-label, .nav-btn.active .nav-label { display: inline; font-size: 15.5px; }
+  .nav-btn .nav-dot { top: 50%; right: 18px; transform: translateY(-50%); }
+  .dk-wallet { text-align: left; padding: 14px 16px; }
+  .dk-wallet small { display: block; }
+  .dk-wallet b { justify-content: flex-start; font-size: 24px; }
+  .dk-couple { justify-content: flex-start; padding: 12px; }
+  .dk-names { display: block; }
+}
+
+/* ---- telas grandes: cartões em colunas ---- */
+@media (min-width: 1280px) {
+  /* Hoje */
+  #view-container[data-grid="home"] > .mh { grid-column: span 8; }
+  #view-container[data-grid="home"] > #home-vitrine { grid-column: span 4; }
+  #view-container[data-grid="home"] > .hw[data-w="kiss"] { grid-column: span 4; }
+  #view-container[data-grid="home"] > .hw[data-w="moodstrip"] { grid-column: span 8; }
+
+  /* Encontros: resumo à esquerda, calendário grande à direita */
+  #view-container[data-grid="calendar"] > .month-nav { grid-column: 1 / -1; grid-row: 1; }
+  #view-container[data-grid="calendar"] > .card:nth-child(2) { grid-column: 1 / span 4; grid-row: 2; align-self: start; }
+  #view-container[data-grid="calendar"] > .card:nth-child(3) { grid-column: 5 / span 8; grid-row: 2 / span 3; }
+  #view-container[data-grid="calendar"] > :nth-child(n + 4) { grid-column: 1 / span 4; }
+
+  /* Humor: escolha do humor à esquerda; par, saudade e histórico à direita */
+  #view-container[data-grid="mood"] > .dk-care { grid-column: 1 / -1; grid-row: 1; }
+  #view-container[data-grid="mood"] > .dk-moodcard { grid-column: 1 / span 7; grid-row: 2 / span 5; align-self: start; }
+  #view-container[data-grid="mood"] > .mh { grid-column: 8 / span 5; grid-row: 2; }
+  #view-container[data-grid="mood"] > .th-card { grid-column: 8 / span 5; grid-row: 3; }
+  #view-container[data-grid="mood"] > .sh-card { grid-column: 8 / span 5; grid-row: 4; }
+  #view-container[data-grid="mood"] > .section-title { grid-column: 8 / span 5; grid-row: 5; margin-bottom: -8px !important; }
+  #view-container[data-grid="mood"] > .dk-strip { grid-column: 8 / span 5; grid-row: 6; }
+
+  /* Recados: desafio e recadinho à esquerda, atalhos à direita */
+  #view-container[data-grid="notes"] > .dq { grid-column: 1 / span 7; grid-row: 1; }
+  #view-container[data-grid="notes"] > .card-tab-wrap { grid-column: 1 / span 7; grid-row: 2; }
+  #view-container[data-grid="notes"] > .dk-side { grid-column: 8 / span 5; grid-row: 1 / span 2; }
+
+  /* Perfil: dois cartões lado a lado */
+  #view-container[data-grid="profile"] > .card:nth-child(1) { grid-column: 1 / span 6; }
+  #view-container[data-grid="profile"] > .card:nth-child(2) { grid-column: 7 / span 6; }
+}
+
+@media (prefers-reduced-motion: reduce) and (min-width: 900px) {
+  .modal-sheet { animation: none; }
+  .nav-btn { transition: none; }
+}

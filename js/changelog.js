@@ -481,6 +481,13 @@ export const CHANGELOG = [
     title: "Histórico da saudade",
     text: "Na aba Humor, logo abaixo do termômetro, agora tem o histórico: escolha você ou seu par e veja como a saudade foi variando nos últimos 7 ou 30 dias.",
   },
+  {
+    id: "versao-desktop-2026-11",
+    tag: "geral",
+    emoji: "🖥️",
+    title: "Agora tem versão para computador",
+    text: "No computador o Saudômetro ocupa a tela inteira, com menu lateral, cartões lado a lado e o mesmo modo claro e escuro. É só abrir o endereço do app no navegador. No celular continua igual.",
+  },
 ];
 
 const SEEN_KEY = "changelogSeen";
