@@ -114,7 +114,16 @@
   #view-container[data-grid] .card { margin-bottom: 0; }
 
   /* vitrine de mimos: banner grande no topo da Hoje (e da Lojinha), como destaque de loja */
-  .vit { margin: 0 0 6px; }
+  .vit { margin: 0 0 6px; --vit-h: 228px; }
+  #home-vitrine .vit, #friends-vitrine .vit, #view-container[data-grid="shop"] .vit, #friends-view[data-grid="f-shop"] .vit { --vit-h: 300px; }
+  .vit-dots { align-items: center; gap: 8px; }
+  .vit-nav {
+    display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    font: 800 22px/1 var(--font-body); padding: 0 0 3px; cursor: pointer; box-shadow: var(--shadow-tap); transition: background 0.15s, transform 0.15s; flex: none;
+  }
+  .vit-prev { margin-right: 6px; } .vit-next { margin-left: 6px; }
+  .vit-nav:hover { background: var(--accent-soft); transform: scale(1.08); }
+  .vit-nav:focus-visible { outline: 3px solid var(--accent-btn); outline-offset: 2px; }
   .vit-track { padding: 2px 0 12px; gap: 18px; }
   .vit-slide { flex: 0 0 min(100%, 520px); max-width: none; }
   #view-container[data-grid="home"] > #home-vitrine { grid-column: 1 / -1; order: -2; }

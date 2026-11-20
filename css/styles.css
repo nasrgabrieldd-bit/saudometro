@@ -1489,7 +1489,10 @@ html.v2 .section-title { text-transform: none; letter-spacing: -0.01em; font-fam
 html.v2 .topbar { background: transparent; }
 
 /* ---------- Capi: vitrine de mimos ---------- */
-.vit { margin: 0 -16px 16px; }
+.vit { margin: 0 -16px 16px; position: relative; }
+.vit-nav { display: none; }
+.vit-dots i { cursor: pointer; position: relative; }
+.vit-dots i::after { content: ""; position: absolute; inset: -8px -3px; }
 .vit-track { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding: 2px 16px 10px; }
 .vit-track::-webkit-scrollbar { display: none; }
 [data-bg="blue"] { --bn: #dfe6ff; --bd: #283057; } [data-bg="peach"] { --bn: #ffe3d2; --bd: #4d3029; } [data-bg="lilac"] { --bn: #ebe2ff; --bd: #3a2f64; }
