@@ -220,6 +220,7 @@ async function boot() {
     myFriendGroups = cached.friendGroups || [];
   }
   State.friendGroups = myFriendGroups;
+  State.cachedProfile = profile || null;
 
   // 2+ contas (casal + turma, ou várias turmas): a pessoa escolhe qual quer usar agora
   if ((profile ? 1 : 0) + myFriendGroups.length > 1) {
@@ -275,36 +276,49 @@ function renderGoogleGate() {
 
 // quando a pessoa tem mais de 1 conta (casal e/ou várias turmas de amigos): escolhe qual usar agora.
 // A troca não pede login de novo — é a mesma conta Google por baixo, só muda a tela.
+// "Quem está aqui?": última conta usada (guardada neste aparelho) ganha destaque
+const LAST_ACC_KEY = "saudometro-last-account";
+function rememberAccount(key) { try { localStorage.setItem(LAST_ACC_KEY, key); } catch (e) { /* sem storage: só não destaca */ } }
+function lastAccount() { try { return localStorage.getItem(LAST_ACC_KEY) || ""; } catch (e) { return ""; } }
+
 function renderAccountSwitcher(profile, groups) {
+  const hour = new Date().getHours();
+  const hello = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+  const last = lastAccount();
+  const people = [];
+  if (profile) people.push({ key: "couple", emoji: "💗", name: "Casal", sub: "Você e seu par", cls: "" });
+  groups.forEach((g) => {
+    const pal = GROUP_PALETTES[g.colorKey] || GROUP_PALETTES.azul;
+    const v = isDarkMode() ? pal.dark : pal.light;
+    people.push({ key: "friends:" + g.id, id: g.id, emoji: g.emoji || "👥", name: g.name || "Turma", sub: `${g.memberCount || 1} pessoa${(g.memberCount || 1) === 1 ? "" : "s"}`, cls: "is-group", soft: v.soft, strong: v.strong });
+  });
   $("#screen-onboarding").style.display = "flex";
+  $("#screen-onboarding").classList.add("acc-choose");
   $("#screen-onboarding").innerHTML = `
-    <div class="logo" style="font-size:40px;">💗</div>
-    <h1 style="font-size:22px;">Como você quer entrar?</h1>
-    <p class="tagline" style="font-size:13px;">Você tem mais de uma conta neste Saudômetro. As moedas e os dados de cada uma são separados.</p>
-    <div class="stack" id="switch-choices">
-      ${profile ? `<button class="btn btn-primary btn-block" data-switch="couple">💗 Casal</button>` : ""}
-      ${groups.map((g) => {
-        const pal = GROUP_PALETTES[g.colorKey] || GROUP_PALETTES.azul;
-        const v = isDarkMode() ? pal.dark : pal.light;
-        return `<button class="btn btn-block" style="background:${v.soft}; color:${v.strong}; display:flex; align-items:center; gap:10px; text-align:left;" data-switch="friends" data-id="${g.id}">
-          <span style="font-size:20px;">${escapeHTML(g.emoji || "👥")}</span>
-          <span style="flex:1;">${escapeHTML(g.name)}</span>
-          <span style="font-size:12px; font-weight:700; opacity:.75;">${g.memberCount || 1} pessoa${g.memberCount === 1 ? "" : "s"}</span>
-        </button>`;
-      }).join("")}
+    <img class="acc-capi" src="img/capi/oi.webp" alt="" width="96" height="112" />
+    <div class="acc-hello">${hello}</div>
+    <h1 class="acc-title">Quem está aqui?</h1>
+    <p class="acc-sub">Toque na sua conta para entrar. As moedas e os dados de cada uma são separados.</p>
+    <div class="acc-grid" id="switch-choices">
+      ${people.map((a) => `<button type="button" class="acc-pick ${a.cls}${a.key === last ? " is-last" : ""}" data-key="${escapeHTML(a.key)}" ${a.soft ? `style="--acc-bg:${a.soft}; --acc-fg:${a.strong};"` : ""}>
+        <span class="acc-av">${escapeHTML(a.emoji)}</span><b>${escapeHTML(a.name)}</b><small>${escapeHTML(a.sub)}</small>
+      </button>`).join("")}
+      <button type="button" class="acc-pick acc-new" id="btn-acc-new"><span class="acc-av">＋</span><b>Nova turma</b><small>Criar ou entrar</small></button>
     </div>
   `;
-  $("#switch-choices").querySelectorAll("[data-switch]").forEach((btn) => {
+  $("#switch-choices").querySelectorAll(".acc-pick[data-key]").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      btn.disabled = true;
-      if (btn.dataset.switch === "couple") {
+      $("#switch-choices").querySelectorAll("button").forEach((b) => { b.disabled = true; });
+      $("#screen-onboarding").classList.remove("acc-choose");
+      if (btn.dataset.key === "couple") {
         await enterApp(profile);
       } else {
-        const g = groups.find((x) => x.id === btn.dataset.id);
+        const g = groups.find((x) => "friends:" + x.id === btn.dataset.key);
         await enterFriendsMode(g);
       }
     });
   });
+  $("#btn-acc-new")?.addEventListener("click", () => openFriendsGroupModal());
 }
 
 // casal com configuração usa o nome dela; casal antigo continua com o nome do perfil, como sempre foi
@@ -317,6 +331,7 @@ function partnerDisplayName() {
 
 async function enterApp(profile) {
   State.accountMode = "couple";
+  rememberAccount("couple");
   State.profile = profile;
   State.coupleId = profile.couple_id;
   State.role = profile.role;
@@ -668,15 +683,58 @@ if (typeof MutationObserver !== "undefined") {
 if (desktopMQ.addEventListener) desktopMQ.addEventListener("change", () => { markDesktopLayout(); refreshDesktopSide(); });
 if (wideMQ.addEventListener) wideMQ.addEventListener("change", () => { if (State.coupleId && State.accountMode === "couple") renderActiveTab(); else if (State.accountMode === "friends") renderFriendsActiveTab(); });
 
+// troca rápida no celular: botão com a conta atual no topo, abre uma folha com todas as contas
+function currentAccount(list) {
+  return list.find((a) => (State.accountMode === "friends" ? a.kind === "friends" && a.id === State.friendGroup?.id : a.kind === "couple")) || list[0];
+}
+function renderAccountPill() {
+  const list = quickAccounts();
+  document.querySelectorAll(".acc-pill").forEach((b) => b.remove());
+  if (list.length < 2) return;
+  const cur = currentAccount(list);
+  ["#screen-app", "#screen-friends"].forEach((sel) => {
+    const actions = document.querySelector(`${sel} > .topbar .topbar-actions`);
+    if (!actions) return;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "acc-pill" + (cur.kind === "friends" ? " is-friends" : "");
+    btn.setAttribute("aria-haspopup", "dialog");
+    btn.title = "Trocar de conta";
+    btn.innerHTML = `<span class="acc-pill-e">${escapeHTML(cur.emoji)}</span><span class="acc-pill-t">${escapeHTML(cur.name)}</span><span class="acc-pill-c" aria-hidden="true">▾</span>`;
+    btn.addEventListener("click", openAccountSheet);
+    actions.prepend(btn);
+  });
+}
+function openAccountSheet() {
+  const list = quickAccounts();
+  const cur = currentAccount(list);
+  openModal(`
+    <h3 class="modal-title">Trocar de conta</h3>
+    <div class="acc-sheet">
+      ${list.map((a) => `<button type="button" class="acc-sheet-it${a === cur ? " on" : ""}${a.kind === "friends" ? " is-friends" : ""}" data-sw-kind="${a.kind}" data-sw-id="${escapeHTML(a.id)}">
+        <span class="acc-sheet-e">${escapeHTML(a.emoji)}</span><span class="acc-sheet-t"><b>${escapeHTML(a.name)}</b><small>${escapeHTML(a.sub)}</small></span>${a === cur ? `<span class="acc-sheet-ok" aria-hidden="true">✓</span>` : ""}
+      </button>`).join("")}
+      <button type="button" class="acc-sheet-it acc-sheet-new" data-sw-kind="new"><span class="acc-sheet-e">＋</span><span class="acc-sheet-t"><b>Turma</b><small>Criar ou entrar</small></span></button>
+    </div>`);
+  document.querySelectorAll(".acc-sheet-it").forEach((b) => b.addEventListener("click", async () => {
+    const kind = b.dataset.swKind, id = b.dataset.swId;
+    if (kind === "new") { openFriendsGroupModal(); return; }
+    closeModal();
+    await quickSwitchTo(kind, id);
+  }));
+}
+
 // troca rápida de conta no menu lateral do desktop (casal e turmas, sem passar pela tela de escolha)
 let quickSwitchOpen = false;
 function quickAccounts() {
   const list = [];
-  if (State.profile) list.push({ kind: "couple", id: "couple", emoji: "💗", name: "Casal", sub: `${myDisplayName()} e ${partnerDisplayName()}` });
+  const prof = State.profile || State.cachedProfile;
+  if (prof) list.push({ kind: "couple", id: "couple", emoji: "💗", name: "Casal", sub: State.profile ? `${myDisplayName()} e ${partnerDisplayName()}` : "Você e seu par" });
   (State.friendGroups || []).forEach((g) => list.push({ kind: "friends", id: g.id, emoji: g.emoji || "👥", name: g.name || "Turma", sub: `${g.memberCount || 1} pessoa${(g.memberCount || 1) === 1 ? "" : "s"}` }));
   return list;
 }
 function renderQuickSwitch() {
+  renderAccountPill();
   const holders = document.querySelectorAll(".dk-switch");
   if (!holders.length || !desktopMQ.matches) return;
   const list = quickAccounts();
@@ -716,12 +774,13 @@ async function quickSwitchTo(kind, id) {
     return;
   }
   if (kind === "couple") {
-    if (State.accountMode === "couple" || !State.profile) { renderQuickSwitch(); return; }
+    const prof = State.profile || State.cachedProfile;
+    if (State.accountMode === "couple" || !prof) { renderQuickSwitch(); return; }
     // sai da turma: mesma limpeza do botão de trocar de conta
     if (State.friendsGameUnsubscribe) { State.friendsGameUnsubscribe(); State.friendsGameUnsubscribe = null; }
     closeRoomChannels();
     $("#screen-friends").style.display = "none";
-    await enterApp(State.profile);
+    await enterApp(prof);
   } else {
     const g = (State.friendGroups || []).find((x) => x.id === id);
     if (!g || (State.accountMode === "friends" && State.friendGroup?.id === g.id)) { renderQuickSwitch(); return; }
@@ -1432,6 +1491,7 @@ const FRIENDS_TABS = [
 
 async function enterFriendsMode(group) {
   State.accountMode = "friends";
+  rememberAccount("friends:" + group.id);
   if (State.unsubscribe) { State.unsubscribe(); State.unsubscribe = null; } // saindo do casal (se estava nele): para de ouvir as mudanças dele
   if (State.friendsGameUnsubscribe) { State.friendsGameUnsubscribe(); State.friendsGameUnsubscribe = null; } // trocando de turma: para de ouvir a turma anterior
   State.friendGroup = group;
