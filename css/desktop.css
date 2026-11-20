@@ -88,10 +88,24 @@
   #view-container[data-grid] > * { margin: 0 !important; min-width: 0; grid-column: 1 / -1; }
   #view-container[data-grid] .card { margin-bottom: 0; }
 
-  /* vitrine de mimos: um cartão por vez, do tamanho da coluna */
-  .vit { margin: 0 0 8px; }
-  .vit-track { padding: 2px 0 10px; }
+  /* vitrine de mimos: banner grande no topo da Hoje (e da Lojinha), como destaque de loja */
+  .vit { margin: 0 0 6px; }
+  .vit-track { padding: 2px 0 12px; gap: 18px; }
   .vit-slide { flex: 0 0 min(100%, 520px); max-width: none; }
+  #view-container[data-grid="home"] > #home-vitrine { grid-column: 1 / -1; order: -2; }
+  #view-container[data-grid="home"] > #home-campaign { order: -1; }
+  #home-vitrine .vit-slide, #view-container[data-grid="shop"] .vit-slide { flex: 0 0 82% !important; height: 300px !important; padding: 30px 34px; border-radius: 32px; }
+  #home-vitrine .vit-slide::before, #view-container[data-grid="shop"] .vit-slide::before { right: -50px; bottom: -80px; width: 400px; height: 400px; }
+  #home-vitrine .vit-kicker, #view-container[data-grid="shop"] .vit-kicker { font-size: 14px; padding: 6px 15px; }
+  #home-vitrine .vit-title, #view-container[data-grid="shop"] .vit-title { font-size: 40px; max-width: 52%; margin-top: 14px; }
+  #home-vitrine .vit-sub, #view-container[data-grid="shop"] .vit-sub { font-size: 17px; line-height: 1.35; max-width: 46%; margin-top: 8px; -webkit-line-clamp: 3; }
+  #home-vitrine .vit-cap, #view-container[data-grid="shop"] .vit-cap { right: 34px; bottom: 10px; max-width: 38%; max-height: 94%; }
+  #home-vitrine .vit-foot, #view-container[data-grid="shop"] .vit-foot { left: 34px; bottom: 30px; gap: 14px; }
+  #home-vitrine .vit-go, #view-container[data-grid="shop"] .vit-go { font-size: 17px; padding: 12px 26px; }
+  #home-vitrine .vit-cost, #view-container[data-grid="shop"] .vit-cost { font-size: 18px; padding: 9px 16px; }
+  #home-vitrine .vit-coin, #view-container[data-grid="shop"] .vit-coin { width: 16px; height: 16px; }
+  #home-vitrine .vit-dots i, #view-container[data-grid="shop"] .vit-dots i { width: 9px; height: 9px; }
+  #home-vitrine .vit-dots i.on, #view-container[data-grid="shop"] .vit-dots i.on { width: 26px; }
   .mood-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); overflow: visible; }
   .mood-grid > * { min-width: 0; }
 
@@ -99,7 +113,7 @@
   #view-container[data-grid="home"] > .banner, #view-container[data-grid="home"] > #home-campaign { grid-column: 1 / -1; }
   #view-container[data-grid="home"] > #home-campaign:empty, #view-container[data-grid="home"] > #home-vitrine:empty { display: none; }
   #view-container[data-grid="home"] > .hw { grid-column: span 6; }
-  #view-container[data-grid="home"] > .mh, #view-container[data-grid="home"] > #home-vitrine,
+  #view-container[data-grid="home"] > .mh,
   #view-container[data-grid="home"] > #home-game-card, #view-container[data-grid="home"] > .hw[data-w="moodstrip"] { grid-column: 1 / -1; }
   #view-container[data-grid="home"] #home-games-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 
@@ -130,7 +144,6 @@
 @media (min-width: 1280px) {
   /* Hoje */
   #view-container[data-grid="home"] > .mh { grid-column: span 8; }
-  #view-container[data-grid="home"] > #home-vitrine { grid-column: span 4; }
   #view-container[data-grid="home"] > .hw[data-w="kiss"] { grid-column: span 4; }
   #view-container[data-grid="home"] > .hw[data-w="moodstrip"] { grid-column: span 8; }
 
