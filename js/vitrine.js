@@ -67,7 +67,7 @@ export function vitrineHTML(items, balance) {
   if (!items.length) return "";
   return `<section class="vit" aria-label="Mimos para trocar por moedas">
     <div class="vit-track" tabindex="0">${items.map((p) => slideHTML(p, balance)).join("")}</div>
-    <div class="vit-dots" aria-hidden="true">${items.map((_, i) => `<i class="${i === 0 ? "on" : ""}"></i>`).join("")}</div>
+    <div class="vit-dots">${items.length > 1 ? `<button type="button" class="vit-nav vit-prev" aria-label="Mimo anterior">‹</button>` : ""}${items.map((_, i) => `<i class="${i === 0 ? "on" : ""}" role="button" aria-label="Ir para o mimo ${i + 1}"></i>`).join("")}${items.length > 1 ? `<button type="button" class="vit-nav vit-next" aria-label="Próximo mimo">›</button>` : ""}</div>
   </section>`;
 }
 
@@ -77,14 +77,27 @@ export function perkThumbHTML(p) {
   return `<span class="vit-th" data-bg="${art.bg}"><img src="img/capi/${art.img}.webp" alt="" width="42" height="42" loading="lazy"></span>`;
 }
 
-// liga o carrossel: pontinhos, avanço automático (sem movimento se a pessoa pediu menos animação) e clique
+// liga o carrossel: pontinhos clicáveis, setas (só no computador, via CSS), teclado e avanço automático.
+// O avanço automático para enquanto o mouse está em cima (computador) ou o teclado está no banner, e recomeça sozinho
+// depois de qualquer toque, rolagem ou clique, então nunca fica parado para sempre. Sem movimento se a pessoa pediu menos animação.
 export function wireVitrine(root, onOpen) {
   const track = root.querySelector(".vit-track");
   if (!track) return;
   const slides = [...track.children];
   const dots = [...root.querySelectorAll(".vit-dots i")];
-  let cur = 0, timer = null;
-  const center = (i) => track.scrollTo({ left: slides[i].offsetLeft - track.offsetLeft - (track.clientWidth - slides[i].clientWidth) / 2, behavior: "smooth" });
+  let cur = 0, timer = null, hovering = false, focused = false;
+  const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const go = (i) => {
+    const n = slides.length;
+    const k = ((i % n) + n) % n;
+    track.scrollTo({ left: slides[k].offsetLeft - track.offsetLeft - (track.clientWidth - slides[k].clientWidth) / 2, behavior: reduce ? "auto" : "smooth" });
+  };
+  const stop = () => { clearInterval(timer); timer = null; };
+  const start = () => {
+    stop();
+    if (reduce || slides.length < 2 || hovering || focused) return;
+    timer = setInterval(() => { if (!root.isConnected) return stop(); go(cur + 1); }, 5000);
+  };
   track.addEventListener("scroll", () => {
     const mid = track.scrollLeft + track.clientWidth / 2;
     let best = 0, dist = Infinity;
@@ -93,14 +106,20 @@ export function wireVitrine(root, onOpen) {
     dots.forEach((d, i) => d.classList.toggle("on", i === best));
   }, { passive: true });
   slides.forEach((s) => s.addEventListener("click", () => onOpen(s.dataset.vit)));
-  const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-  if (reduce || slides.length < 2) return;
-  const stop = () => { clearInterval(timer); timer = null; };
-  const start = () => {
-    stop();
-    timer = setInterval(() => { if (!root.isConnected) return stop(); center((cur + 1) % slides.length); }, 5000);
-  };
-  ["pointerdown", "focusin", "mouseenter"].forEach((ev) => track.addEventListener(ev, stop));
-  ["pointerup", "focusout", "mouseleave"].forEach((ev) => track.addEventListener(ev, start));
+  if (slides.length < 2) return;
+  dots.forEach((d, i) => d.addEventListener("click", () => { go(i); start(); }));
+  root.querySelector(".vit-prev")?.addEventListener("click", () => { go(cur - 1); start(); });
+  root.querySelector(".vit-next")?.addEventListener("click", () => { go(cur + 1); start(); });
+  track.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowRight") { e.preventDefault(); go(cur + 1); start(); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); go(cur - 1); start(); }
+  });
+  // mouse em cima (só ponteiro de mouse): pausa; ao sair, recomeça
+  root.addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse") { hovering = true; stop(); } });
+  root.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") { hovering = false; start(); } });
+  // toque ou rolagem à mão: só reinicia a contagem dos 5 segundos (não pausa)
+  ["pointerdown", "touchstart", "wheel"].forEach((ev) => track.addEventListener(ev, () => { if (!hovering) start(); }, { passive: true }));
+  track.addEventListener("focusin", () => { if (track.matches(":focus-visible")) { focused = true; stop(); } });
+  track.addEventListener("focusout", () => { focused = false; start(); });
   start();
 }
