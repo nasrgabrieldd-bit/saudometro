@@ -20,6 +20,7 @@
 
   /* telas de entrada, login e avisos continuam numa coluna central */
   #screen-onboarding, #screen-setup { width: 100%; max-width: 520px; margin: 0 auto; overflow-y: auto; }
+  #screen-onboarding.acc-choose { max-width: none; margin: 0; }
 
   /* ---- casca: menu lateral + topo + conteúdo ---- */
   #screen-app[style*="display: flex"], #screen-friends[style*="display: flex"] {
@@ -81,6 +82,7 @@
   .dk-foot { display: flex; flex-direction: column; gap: 10px; margin-top: auto; padding-top: 18px; }
   /* avisos no menu lateral (só em tela larga, acima das moedas) */
   .dk-notices { display: none; }
+  .acc-pill { display: none; }
   .dk-wallet { padding: 10px 6px; border-radius: 16px; background: var(--coin-soft); text-align: center; }
   .dk-wallet[hidden] { display: none; }
   .dk-wallet small { display: none; font-size: 12px; font-weight: 700; color: var(--text-muted); }

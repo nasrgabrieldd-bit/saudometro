@@ -1671,3 +1671,50 @@ html.v2 .mood-btn .label { font-size: 10.5px; overflow-wrap: normal; word-break:
 #seasonal-decor i { position: absolute; width: 8px; height: 11px; margin-left: -4px; border-radius: 50% 50% 55% 55%; background: var(--c); box-shadow: 0 0 8px 2px var(--c); animation: xl-blink 1.6s ease-in-out infinite; }
 @keyframes xl-blink { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { #seasonal-decor i { animation: none; } }
+
+/* ---------- escolha de conta ("Quem está aqui?") e troca rápida ---------- */
+#screen-onboarding.acc-choose { justify-content: center; align-items: center; text-align: center; gap: 6px; padding: 28px 22px 36px; background: radial-gradient(120% 60% at 50% 0, var(--accent-soft), transparent 70%); overflow-y: auto; }
+.acc-capi { width: 96px; height: auto; margin: 0 auto -2px; filter: drop-shadow(0 8px 10px rgba(60, 20, 50, 0.18)); }
+.acc-hello { font-size: 13px; font-weight: 800; color: var(--text-muted); }
+.acc-title { font-size: 30px; line-height: 1.05; margin: 0; letter-spacing: -0.02em; }
+.acc-sub { margin: 6px 0 12px; max-width: 30ch; font-size: 13.5px; color: var(--text-muted); }
+.acc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 16px; width: 100%; max-width: 360px; margin: 8px auto 0; }
+.acc-pick { display: flex; flex-direction: column; align-items: center; gap: 8px; background: none; border: 0; padding: 0; cursor: pointer; color: var(--text); font-family: var(--font-body); -webkit-tap-highlight-color: transparent; min-width: 0; }
+.acc-pick:disabled { opacity: 0.6; }
+.acc-av { width: min(132px, 36vw); aspect-ratio: 1; border-radius: 32%; display: grid; place-items: center; font-size: 58px; line-height: 1; background: var(--accent-soft); box-shadow: var(--shadow-soft); border: 3px solid transparent; transition: transform 0.15s, border-color 0.15s; }
+.acc-pick:active .acc-av { transform: scale(0.96); }
+.acc-pick:hover .acc-av { transform: translateY(-3px); }
+.acc-pick:focus-visible .acc-av { outline: 3px solid var(--accent-btn); outline-offset: 3px; }
+.acc-pick.is-last .acc-av { border-color: var(--accent-strong); }
+.acc-pick.is-group .acc-av { background: var(--acc-bg); }
+.acc-pick.is-group.is-last .acc-av { border-color: var(--acc-fg); }
+.acc-pick b { font: 800 17px/1.1 var(--font-display); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acc-pick small { display: block; margin-top: -4px; font-size: 12.5px; color: var(--text-muted); font-weight: 700; }
+.acc-new .acc-av { background: transparent; border: 2.5px dashed var(--border); box-shadow: none; color: var(--text-muted); font-size: 44px; }
+@media (min-width: 900px) {
+  .acc-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); max-width: 760px; gap: 22px 18px; }
+  .acc-pick b { white-space: normal; text-align: center; }
+  .acc-av { width: 104px; font-size: 48px; }
+  .acc-capi { width: 110px; }
+}
+
+.acc-pill { display: inline-flex; align-items: center; gap: 7px; max-width: 150px; padding: 4px 10px 4px 4px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow-tap); color: var(--text); font: 800 13px var(--font-body); cursor: pointer; flex: none; -webkit-tap-highlight-color: transparent; }
+.acc-pill-e { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); font-size: 15px; flex: none; }
+.acc-pill.is-friends .acc-pill-e { background: var(--friends-accent-soft); }
+.acc-pill-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acc-pill-c { color: var(--text-muted); font-size: 11px; }
+.acc-pill:focus-visible { outline: 3px solid var(--accent-btn); outline-offset: 2px; }
+@media (max-width: 380px) { .acc-pill-t { display: none; } .acc-pill { padding-right: 8px; } }
+
+.acc-sheet { display: grid; gap: 10px; margin-top: 6px; }
+.acc-sheet-it { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px; border-radius: 18px; border: 2px solid transparent; background: var(--surface-alt); color: var(--text); text-align: left; cursor: pointer; font-family: var(--font-body); }
+.acc-sheet-it.on { border-color: var(--accent-strong); background: var(--surface); }
+.acc-sheet-it.is-friends.on { border-color: var(--friends-accent); }
+.acc-sheet-e { width: 48px; height: 48px; border-radius: 15px; display: grid; place-items: center; background: var(--accent-soft); font-size: 24px; }
+.is-friends .acc-sheet-e { background: var(--friends-accent-soft); }
+.acc-sheet-t b { display: block; font: 800 16px var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acc-sheet-t small { color: var(--text-muted); font-size: 12.5px; font-weight: 700; }
+.acc-sheet-ok { color: var(--accent-strong); font-weight: 800; }
+.acc-sheet-new .acc-sheet-e { background: transparent; border: 2px dashed var(--border); color: var(--text-muted); font-size: 20px; }
+.acc-pill-t { max-width: 84px; }
+.topbar-actions .acc-pill ~ #friends-switch-btn { display: none; }
